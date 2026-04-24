@@ -25,31 +25,39 @@ export const Route = createFileRoute("/")({
   }),
 });
 
+const COLD_LAUNCH_KEY = "doclens.coldLaunchHandled";
+
 function DashboardPage() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [autoRestore, setAutoRestore] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const list = await listDocs();
+      if (cancelled) return;
       setDocs(list);
       setLoading(false);
 
-      // Auto-restore last opened doc on launch
-      if (autoRestore) {
-        const last = await getLastOpened();
-        if (last && list.some((d) => d.id === last)) {
-          navigate({ to: "/doc/$id", params: { id: last } });
-        }
+      // Auto-restore only on cold launch (first dashboard mount this session).
+      // Any subsequent navigation to "/" must show the dashboard.
+      const alreadyHandled = sessionStorage.getItem(COLD_LAUNCH_KEY);
+      sessionStorage.setItem(COLD_LAUNCH_KEY, "1");
+      if (alreadyHandled) return;
+
+      const last = await getLastOpened();
+      if (last && list.some((d) => d.id === last)) {
+        navigate({ to: "/doc/$id", params: { id: last } });
       }
     })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFile = async (f: File) => {
-    setAutoRestore(false);
     const buf = await f.arrayBuffer();
     const rec = await createDoc(f, buf);
     navigate({ to: "/doc/$id", params: { id: rec.id } });
