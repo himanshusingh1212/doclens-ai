@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { JsonView } from "./JsonView";
-import { MODELS, buildRequestPayload, chunkPages, estimateTokens } from "@/lib/models";
+import { estimateTokens } from "@/lib/models";
 import type { PageExtraction } from "@/lib/pdf";
 import {
   MODE_INSTRUCTIONS,
@@ -44,17 +44,10 @@ export function RightPanel({
   const [tab, setTab] = useState<Tab>("text");
   const [chunkIdx, setChunkIdx] = useState(0);
 
-  // Preview model (kept from original API Request Preview tab)
-  const [previewModelId, setPreviewModelId] = useState(MODELS[0].id);
-  const previewModel = MODELS.find((m) => m.id === previewModelId) ?? MODELS[0];
-  const previewChunks = useMemo(() => chunkPages(pages, previewModel), [pages, previewModel]);
   const totalTokens = useMemo(
     () => pages.reduce((sum, p) => sum + estimateTokens(p.text), 0),
     [pages],
   );
-  const safeChunkIdx = Math.min(chunkIdx, Math.max(0, previewChunks.length - 1));
-  const currentChunk = previewChunks[safeChunkIdx];
-  const payload = currentChunk ? buildRequestPayload(previewModel, currentChunk) : null;
 
   // === AI execution state ===
   const [mode, setMode] = useState<AiMode>("summarize");
@@ -66,6 +59,20 @@ export function RightPanel({
   const [streamBuf, setStreamBuf] = useState("");
   const [runError, setRunError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+
+  // Live request log — every chunk dispatched to OpenRouter is recorded here
+  // so the Request Preview tab shows exactly what was (or will be) sent.
+  interface RequestLogEntry {
+    chunkIndex: number; // 0-based
+    chunkCount: number;
+    payload: Record<string, unknown>;
+    dispatchedAt: number;
+    chars: number;
+    tokens: number;
+  }
+  const [requestLog, setRequestLog] = useState<RequestLogEntry[]>([]);
+  const safeChunkIdx = Math.min(chunkIdx, Math.max(0, requestLog.length - 1));
+  const currentRequest = requestLog[safeChunkIdx];
 
   useEffect(() => {
     const k = getKey();
@@ -91,6 +98,8 @@ export function RightPanel({
     setRunError("");
     setRunning(true);
     setStreamBuf("");
+    setRequestLog([]);
+    setChunkIdx(0);
     setTab("ai");
     abortRef.current = new AbortController();
     setOutputLanguage(language);
@@ -105,6 +114,26 @@ export function RightPanel({
       for (let i = 0; i < chunks.length; i++) {
         if (abortRef.current?.signal.aborted) break;
         setProgress(`Chunk ${i + 1} of ${chunks.length} — Processing…`);
+        const userContent = `${instruction}\n\n${chunks[i]}`;
+        const payload: Record<string, unknown> = {
+          model: orModelId,
+          stream: true,
+          max_tokens: 4000,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userContent },
+          ],
+        };
+        const entry: RequestLogEntry = {
+          chunkIndex: i,
+          chunkCount: chunks.length,
+          payload,
+          dispatchedAt: Date.now(),
+          chars: userContent.length,
+          tokens: estimateTokens(userContent),
+        };
+        setRequestLog((prev) => [...prev, entry]);
+        setChunkIdx(i);
         if (chunks.length > 1) {
           combined += `\n\n--- Chunk ${i + 1}/${chunks.length} ---\n\n`;
           setStreamBuf(combined);
@@ -113,7 +142,7 @@ export function RightPanel({
           key,
           model: orModelId,
           system,
-          user: `${instruction}\n\n${chunks[i]}`,
+          user: userContent,
           signal: abortRef.current.signal,
           onDelta: (d) => {
             combined += d;
@@ -234,7 +263,7 @@ export function RightPanel({
         </TabButton>
         <TabButton active={tab === "request"} onClick={() => setTab("request")}>
           Request Preview
-          <Badge>{previewChunks.length || 0}</Badge>
+          <Badge>{requestLog.length || 0}</Badge>
         </TabButton>
         <div className="ml-auto px-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           {analyzing ? <span className="text-primary">{status}</span> : status || "idle"}
@@ -359,58 +388,54 @@ export function RightPanel({
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b border-border bg-background/40 px-4 py-2">
               <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                <select
-                  value={previewModelId}
-                  onChange={(e) => setPreviewModelId(e.target.value)}
-                  className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[11px] text-foreground outline-none focus:border-primary"
-                >
-                  {MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
                 <button
                   className="rounded border border-border px-2 py-0.5 hover:border-border-strong disabled:opacity-30"
-                  disabled={!currentChunk || safeChunkIdx === 0}
+                  disabled={!currentRequest || safeChunkIdx === 0}
                   onClick={() => setChunkIdx((i) => Math.max(0, i - 1))}
                 >
                   ← prev
                 </button>
                 <span className="text-foreground">
-                  chunk {previewChunks.length === 0 ? 0 : safeChunkIdx + 1} / {previewChunks.length}
+                  chunk {requestLog.length === 0 ? 0 : safeChunkIdx + 1} / {requestLog.length}
                 </span>
                 <button
                   className="rounded border border-border px-2 py-0.5 hover:border-border-strong disabled:opacity-30"
-                  disabled={!currentChunk || safeChunkIdx >= previewChunks.length - 1}
-                  onClick={() => setChunkIdx((i) => Math.min(previewChunks.length - 1, i + 1))}
+                  disabled={!currentRequest || safeChunkIdx >= requestLog.length - 1}
+                  onClick={() => setChunkIdx((i) => Math.min(requestLog.length - 1, i + 1))}
                 >
                   next →
                 </button>
+                {running && (
+                  <span className="rounded bg-primary/15 px-2 py-0.5 text-primary normal-case tracking-normal">
+                    live
+                  </span>
+                )}
               </div>
-              {currentChunk && (
+              {currentRequest && (
                 <div className="flex items-center gap-2 font-mono text-[11px]">
                   <span className="rounded bg-primary/15 px-2 py-0.5 text-primary">
-                    {currentChunk.tokens.toLocaleString()} tok
+                    ~{currentRequest.tokens.toLocaleString()} tok
                   </span>
                   <span className="text-muted-foreground">
-                    pages {currentChunk.pageRange[0]}–{currentChunk.pageRange[1]}
+                    {currentRequest.chars.toLocaleString()} chars
+                  </span>
+                  <span className="text-muted-foreground">
+                    {new Date(currentRequest.dispatchedAt).toLocaleTimeString()}
                   </span>
                 </div>
               )}
             </div>
             <div className="flex-1 overflow-auto px-5 py-4">
-              {payload ? (
-                <JsonView value={payload} />
+              {currentRequest ? (
+                <JsonView value={currentRequest.payload} />
               ) : (
                 <EmptyState>
-                  The exact JSON payload that would be sent to{" "}
-                  <span className="text-primary">{previewModel.label}</span> will appear here.
+                  Click <span className="text-primary">▶ run</span> to dispatch chunks to OpenRouter. The exact JSON payload sent for each chunk will appear here, live.
                 </EmptyState>
               )}
             </div>
             <div className="border-t border-border bg-background/40 px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span className="text-foreground/70">preview only</span> · this is what an LLM would receive
+              <span className="text-foreground/70">live</span> · POST https://openrouter.ai/api/v1/chat/completions
             </div>
           </div>
         )}

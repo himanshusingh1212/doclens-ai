@@ -2,7 +2,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
 const DB_NAME = "doclens";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE = "documents";
 const META = "meta";
 
@@ -47,17 +47,12 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
 function db() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(d, oldVersion) {
+      upgrade(d) {
         if (!d.objectStoreNames.contains(STORE)) {
           d.createObjectStore(STORE, { keyPath: "id" });
         }
         if (!d.objectStoreNames.contains(META)) {
           d.createObjectStore(META);
-        }
-        if (oldVersion < 2 && d.objectStoreNames.contains(STORE)) {
-          // Old single-doc schema used id="current". It will simply be ignored
-          // by listing because it lacks fileName/createdAt expectations — keep
-          // it harmless; users can delete from dashboard if visible.
         }
       },
     });
