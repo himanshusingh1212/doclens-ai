@@ -15,7 +15,6 @@ import {
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
-  ssr: false,
   head: () => ({
     meta: [{ title: "DocLens — Settings" }],
   }),

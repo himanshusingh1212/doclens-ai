@@ -13,7 +13,6 @@ import {
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
-  ssr: false,
   head: () => ({
     meta: [
       { title: "DocLens — Document Library" },

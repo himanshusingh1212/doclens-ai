@@ -2,9 +2,6 @@ import type * as PdfJs from "pdfjs-dist";
 
 let pdfjsPromise: Promise<typeof PdfJs> | null = null;
 async function getPdfjs(): Promise<typeof PdfJs> {
-  if (typeof window === "undefined") {
-    throw new Error("pdf.js can only be used in the browser");
-  }
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
       const lib = await import("pdfjs-dist");

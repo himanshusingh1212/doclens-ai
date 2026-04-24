@@ -17,7 +17,6 @@ import {
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
-  ssr: false,
   head: () => ({
     meta: [{ title: "DocLens — Document" }],
   }),
