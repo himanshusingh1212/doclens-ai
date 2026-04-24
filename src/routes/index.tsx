@@ -7,7 +7,7 @@ import {
   deleteDoc,
   getLastOpened,
   listDocs,
-  setLastOpened,
+  
   type DocSummary,
 } from "@/lib/storage";
 
