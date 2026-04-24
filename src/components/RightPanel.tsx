@@ -98,6 +98,8 @@ export function RightPanel({
     setRunError("");
     setRunning(true);
     setStreamBuf("");
+    setRequestLog([]);
+    setChunkIdx(0);
     setTab("ai");
     abortRef.current = new AbortController();
     setOutputLanguage(language);
@@ -112,6 +114,26 @@ export function RightPanel({
       for (let i = 0; i < chunks.length; i++) {
         if (abortRef.current?.signal.aborted) break;
         setProgress(`Chunk ${i + 1} of ${chunks.length} — Processing…`);
+        const userContent = `${instruction}\n\n${chunks[i]}`;
+        const payload: Record<string, unknown> = {
+          model: orModelId,
+          stream: true,
+          max_tokens: 4000,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userContent },
+          ],
+        };
+        const entry: RequestLogEntry = {
+          chunkIndex: i,
+          chunkCount: chunks.length,
+          payload,
+          dispatchedAt: Date.now(),
+          chars: userContent.length,
+          tokens: estimateTokens(userContent),
+        };
+        setRequestLog((prev) => [...prev, entry]);
+        setChunkIdx(i);
         if (chunks.length > 1) {
           combined += `\n\n--- Chunk ${i + 1}/${chunks.length} ---\n\n`;
           setStreamBuf(combined);
@@ -120,7 +142,7 @@ export function RightPanel({
           key,
           model: orModelId,
           system,
-          user: `${instruction}\n\n${chunks[i]}`,
+          user: userContent,
           signal: abortRef.current.signal,
           onDelta: (d) => {
             combined += d;
