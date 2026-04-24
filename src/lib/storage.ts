@@ -2,7 +2,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
 const DB_NAME = "doclens";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE = "documents";
 const META = "meta";
 
