@@ -71,15 +71,10 @@ function DashboardPage() {
     setDocs((prev) => prev.filter((d) => d.id !== id));
   };
 
-  const stayHere = async () => {
-    setAutoRestore(false);
-    await setLastOpened(null);
-  };
-
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <AppHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8" onClick={stayHere}>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
         <div className="mb-6 flex items-baseline justify-between">
           <div>
             <h2 className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
