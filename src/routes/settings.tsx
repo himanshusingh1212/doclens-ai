@@ -33,6 +33,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 const LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
+const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
 
 type FilterTab = "all" | "free" | "fast" | "popular";
 
