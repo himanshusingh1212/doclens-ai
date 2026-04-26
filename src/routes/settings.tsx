@@ -47,6 +47,11 @@ function SettingsPage() {
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [mode, setModeState] = useState<GlobalMode>("summarize");
+  const [style, setStyleState] = useState("Neutral");
+  const [temperature, setTemp] = useState(0.3);
+  const [memory, setMemoryState] = useState(true);
+  const [sequential, setSequentialState] = useState(true);
 
   useEffect(() => {
     setKeyInput(getKey());
