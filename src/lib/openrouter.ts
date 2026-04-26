@@ -43,6 +43,48 @@ export function setOutputLanguage(lang: string) {
   localStorage.setItem(LANG_LS, lang);
 }
 
+export type GlobalMode = "translate" | "summarize" | "explain" | "keypoints";
+export function getMode(): GlobalMode {
+  if (typeof window === "undefined") return "summarize";
+  return (localStorage.getItem(MODE_LS) as GlobalMode) ?? "summarize";
+}
+export function setMode(m: GlobalMode) {
+  localStorage.setItem(MODE_LS, m);
+}
+
+export function getStyle(): string {
+  if (typeof window === "undefined") return "Neutral";
+  return localStorage.getItem(STYLE_LS) ?? "Neutral";
+}
+export function setStyle(s: string) {
+  localStorage.setItem(STYLE_LS, s);
+}
+
+export function getTemperature(): number {
+  if (typeof window === "undefined") return 0.3;
+  const v = parseFloat(localStorage.getItem(TEMP_LS) ?? "0.3");
+  return Number.isFinite(v) ? v : 0.3;
+}
+export function setTemperature(t: number) {
+  localStorage.setItem(TEMP_LS, String(t));
+}
+
+export function getMemory(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(MEM_LS) !== "false";
+}
+export function setMemory(b: boolean) {
+  localStorage.setItem(MEM_LS, b ? "true" : "false");
+}
+
+export function getSequential(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(SEQ_LS) !== "false";
+}
+export function setSequential(b: boolean) {
+  localStorage.setItem(SEQ_LS, b ? "true" : "false");
+}
+
 const HEADERS_BASE = {
   "HTTP-Referer": "https://doclens.app",
   "X-Title": "DocLens",
