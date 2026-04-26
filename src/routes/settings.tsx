@@ -57,6 +57,11 @@ function SettingsPage() {
     setKeyInput(getKey());
     setSelected(getSelectedModel());
     setLanguage(getOutputLanguage());
+    setModeState(getMode());
+    setStyleState(getStyle());
+    setTemp(getTemperature());
+    setMemoryState(getMemory());
+    setSequentialState(getSequential());
     if (getKey()) {
       setKeyStatus("valid");
       void loadModels(getKey());
