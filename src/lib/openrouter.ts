@@ -112,14 +112,14 @@ export async function fetchModels(key: string): Promise<ORModel[]> {
 
 export interface StreamOpts {
   key: string;
-  model: string;
-  system: string;
-  user: string;
+  /** Full payload sent to OpenRouter — must include `model`, `messages`, `stream: true`. */
+  payload: Record<string, unknown>;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
 }
 
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
+  const body = { ...opts.payload, stream: true };
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     signal: opts.signal,
@@ -128,14 +128,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       "Content-Type": "application/json",
       ...HEADERS_BASE,
     },
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      messages: [
-        { role: "system", content: opts.system },
-        { role: "user", content: opts.user },
-      ],
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok || !res.body) {
     const txt = await res.text().catch(() => "");
@@ -167,6 +160,48 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       }
     }
   }
+}
+
+/** Trailing excerpt from previous page used as memory in next request. */
+export function memoryExcerpt(prev: string | undefined, maxChars = 600): string {
+  if (!prev) return "";
+  const trimmed = prev.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return "…" + trimmed.slice(-maxChars);
+}
+
+export interface BuildPagePayloadInput {
+  modelId: string;
+  mode: GlobalMode;
+  language: string;
+  style: string;
+  temperature: number;
+  pageNumber: number;
+  pageText: string;
+  /** Optional trailing excerpt from previous page's result. */
+  previousExcerpt?: string;
+}
+
+export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
+  const modeInstr = MODE_INSTRUCTIONS[i.mode]?.instruction ?? MODE_INSTRUCTIONS.summarize.instruction;
+  const styleClause = i.style && i.style !== "Neutral" ? ` Use a ${i.style.toLowerCase()} tone.` : "";
+  const system =
+    `You are a document analysis assistant. Always respond in ${i.language}.${styleClause} ` +
+    `Process one page at a time. Output only the final answer — no preamble.`;
+  const memoryBlock = i.previousExcerpt
+    ? `\n\n[Context from end of previous page — for continuity only, do not re-translate or re-summarize]:\n${i.previousExcerpt}\n`
+    : "";
+  const user = `${modeInstr}${memoryBlock}\n\n--- Page ${i.pageNumber} ---\n${i.pageText}`;
+  return {
+    model: i.modelId,
+    stream: true,
+    temperature: i.temperature,
+    max_tokens: 4000,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
 }
 
 export const MODE_INSTRUCTIONS: Record<string, { label: string; instruction: string }> = {
