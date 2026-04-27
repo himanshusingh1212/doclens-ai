@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
@@ -7,10 +7,12 @@ import { RightPanel } from "@/components/RightPanel";
 import { extractPdfPages, type PageExtraction } from "@/lib/pdf";
 import {
   getDoc,
+  getDocBinary,
   setLastOpened,
   touchDoc,
   updateDoc,
   upsertPageAi,
+  toPageExtraction,
   StorageError,
   type DocRecord,
   type PageAi,
@@ -34,6 +36,7 @@ function DocPage() {
   const [status, setStatus] = useState("");
   const [pageAi, setPageAi] = useState<Record<number, PageAi>>({});
 
+  // Load doc metadata (no binary — PdfViewer loads it on-demand)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -44,7 +47,8 @@ function DocPage() {
         return;
       }
       setDoc(rec);
-      setPages(rec.pages ?? []);
+      // Convert StoredPage → PageExtraction (items=[] since stripped)
+      setPages(rec.pages?.map(toPageExtraction) ?? []);
       setTotalPages(rec.pageCount || rec.pages?.length || 0);
       setPageAi(rec.pageAi ?? {});
       await touchDoc(id);
@@ -61,8 +65,15 @@ function DocPage() {
     setPages([]);
     setStatus("extracting…");
     try {
+      // Load binary on-demand just for extraction
+      const binary = await getDocBinary(id);
+      if (!binary) {
+        toast.error("PDF binary not found in storage.");
+        setAnalyzing(false);
+        return;
+      }
       const collected: PageExtraction[] = [];
-      await extractPdfPages(doc.data, (page, total) => {
+      await extractPdfPages(binary, (page, total) => {
         setTotalPages(total);
         collected.push(page);
         setPages([...collected]);
@@ -70,6 +81,7 @@ function DocPage() {
       });
       setStatus(`done · ${collected.length} pages`);
       try {
+        // updateDoc strips items[] automatically via toLeanPages
         await updateDoc(id, { pages: collected, pageCount: collected.length });
         toast.success(`Extracted ${collected.length} pages successfully.`);
       } catch (e) {
@@ -157,7 +169,7 @@ function DocPage() {
       />
       <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
         <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
-          <PdfViewer data={doc.data} />
+          <PdfViewer docId={id} />
         </section>
         <section className="h-full overflow-hidden">
           <RightPanel

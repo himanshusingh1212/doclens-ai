@@ -181,7 +181,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
       setRunningPages((s) => new Set(s).add(pageNumber));
       setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
     }
-    onUpdatePageRef.current(pageNumber, { status: "running", error: undefined, lastSentRequest: payload });
+    onUpdatePageRef.current(pageNumber, { status: "running", error: undefined });
 
     let buf = "";
     try {
