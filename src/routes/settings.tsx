@@ -328,6 +328,59 @@ function SettingsPage() {
           </div>
         </section>
 
+        {/* TTS */}
+        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            text-to-speech
+          </h3>
+          <p className="mt-1 text-sm text-foreground/80">
+            {isTtsSupported()
+              ? "Per-page Play / Pause / Stop reads AI results aloud using your browser's voices."
+              : "Web Speech API is not available in this browser."}
+          </p>
+          {isTtsSupported() && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">voice</span>
+                <select
+                  value={ttsVoice}
+                  onChange={(e) => { setTtsVoiceState(e.target.value); setTtsVoice(e.target.value); }}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
+                >
+                  <option value="">— browser default —</option>
+                  {voices.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.name} ({v.lang}){v.default ? " · default" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  rate · <span className="text-primary">{ttsRate.toFixed(2)}×</span>
+                </span>
+                <input
+                  type="range" min={0.5} max={2} step={0.05}
+                  value={ttsRate}
+                  onChange={(e) => { const v = parseFloat(e.target.value); setTtsRateState(v); setTtsRate(v); }}
+                  className="mt-2 w-full accent-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  pitch · <span className="text-primary">{ttsPitch.toFixed(2)}</span>
+                </span>
+                <input
+                  type="range" min={0} max={2} step={0.05}
+                  value={ttsPitch}
+                  onChange={(e) => { const v = parseFloat(e.target.value); setTtsPitchState(v); setTtsPitch(v); }}
+                  className="mt-2 w-full accent-primary"
+                />
+              </label>
+            </div>
+          )}
+        </section>
+
         {/* OpenRouter API key */}
         <section className="mb-8 rounded-lg border border-border bg-surface p-5">
           <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
