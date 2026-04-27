@@ -1,16 +1,14 @@
-// Lightweight Web Speech API wrapper with chunked queue + global settings.
+// Lightweight Web Speech API wrapper with per-language voice mapping,
+// favorites, chunked queue, and global rate/pitch settings.
 
-const VOICE_LS = "doclens.tts.voice";
+const VOICE_LEGACY_LS = "doclens.tts.voice"; // legacy single-voice setting
+const VOICE_MAP_LS = "doclens.tts.voiceMap"; // per-language voice map
+const FAVS_LS = "doclens.tts.favorites";     // favorited voice names
 const RATE_LS = "doclens.tts.rate";
 const PITCH_LS = "doclens.tts.pitch";
 
-export function getTtsVoice(): string {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem(VOICE_LS) ?? "";
-}
-export function setTtsVoice(v: string) {
-  localStorage.setItem(VOICE_LS, v);
-}
+/* ---------- rate / pitch ---------- */
+
 export function getTtsRate(): number {
   if (typeof window === "undefined") return 1;
   const v = parseFloat(localStorage.getItem(RATE_LS) ?? "1");
@@ -28,6 +26,89 @@ export function setTtsPitch(v: number) {
   localStorage.setItem(PITCH_LS, String(v));
 }
 
+/* ---------- voice map (per-language) ---------- */
+
+function readMap(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(VOICE_MAP_LS);
+    if (raw) return JSON.parse(raw) as Record<string, string>;
+  } catch { /* ignore */ }
+  // migrate legacy single-voice
+  const legacy = localStorage.getItem(VOICE_LEGACY_LS);
+  if (legacy) return { __default: legacy };
+  return {};
+}
+function writeMap(m: Record<string, string>) {
+  localStorage.setItem(VOICE_MAP_LS, JSON.stringify(m));
+}
+
+/** Normalize a UI language label to a BCP-47-ish key (e.g. "English" → "en"). */
+export function langKey(language?: string | null): string {
+  if (!language) return "__default";
+  const l = language.trim().toLowerCase();
+  const map: Record<string, string> = {
+    english: "en", arabic: "ar", french: "fr", hindi: "hi",
+    spanish: "es", japanese: "ja", german: "de", italian: "it",
+    portuguese: "pt", russian: "ru", chinese: "zh", korean: "ko",
+    turkish: "tr", dutch: "nl",
+  };
+  if (map[l]) return map[l];
+  // already a code like "en" or "en-US"
+  if (/^[a-z]{2}(-[a-z0-9]+)?$/i.test(l)) return l.toLowerCase();
+  return l;
+}
+
+export function getTtsVoiceFor(language?: string | null): string {
+  const key = langKey(language);
+  const m = readMap();
+  return m[key] ?? m.__default ?? "";
+}
+export function setTtsVoiceFor(language: string | null | undefined, voiceName: string) {
+  const key = langKey(language);
+  const m = readMap();
+  if (voiceName) m[key] = voiceName;
+  else delete m[key];
+  writeMap(m);
+}
+
+/** Backwards-compat: global default voice. */
+export function getTtsVoice(): string {
+  return getTtsVoiceFor(null);
+}
+export function setTtsVoice(v: string) {
+  setTtsVoiceFor(null, v);
+}
+
+/* ---------- favorites ---------- */
+
+function readFavs(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(FAVS_LS);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch { /* ignore */ }
+  return new Set();
+}
+function writeFavs(s: Set<string>) {
+  localStorage.setItem(FAVS_LS, JSON.stringify(Array.from(s)));
+}
+export function getFavorites(): string[] {
+  return Array.from(readFavs());
+}
+export function isFavorite(voiceName: string): boolean {
+  return readFavs().has(voiceName);
+}
+export function toggleFavorite(voiceName: string): boolean {
+  const s = readFavs();
+  if (s.has(voiceName)) s.delete(voiceName);
+  else s.add(voiceName);
+  writeFavs(s);
+  return s.has(voiceName);
+}
+
+/* ---------- voices ---------- */
+
 export function listVoices(): SpeechSynthesisVoice[] {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
   return window.speechSynthesis.getVoices();
@@ -36,6 +117,16 @@ export function listVoices(): SpeechSynthesisVoice[] {
 export function isTtsSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
+
+/** Voices whose `lang` matches the given language key (loose match: prefix). */
+export function voicesForLanguage(language?: string | null): SpeechSynthesisVoice[] {
+  const key = langKey(language);
+  if (key === "__default") return listVoices();
+  const code = key.split("-")[0].toLowerCase();
+  return listVoices().filter((v) => v.lang.toLowerCase().startsWith(code));
+}
+
+/* ---------- speech ---------- */
 
 function chunkText(text: string, max = 220): string[] {
   const cleaned = text.replace(/\s+/g, " ").trim();
@@ -93,6 +184,8 @@ export function stopAll() {
 export function createTtsController(text: string, opts: {
   onState: (s: "idle" | "playing" | "paused" | "ended") => void;
   onError?: (err: string) => void;
+  /** Language for voice selection (UI label or BCP-47). */
+  language?: string | null;
 }): TtsController {
   const owner = Symbol("tts");
   const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
@@ -108,11 +201,16 @@ export function createTtsController(text: string, opts: {
         opts.onState("ended");
         return;
       }
-      const voiceName = getTtsVoice();
+      const voiceName = getTtsVoiceFor(opts.language);
       const rate = getTtsRate();
       const pitch = getTtsPitch();
       const voices = synth.getVoices();
-      const voice = voices.find((v) => v.name === voiceName) ?? null;
+      let voice = voices.find((v) => v.name === voiceName) ?? null;
+      // Fallback: any voice matching the language code
+      if (!voice && opts.language) {
+        const code = langKey(opts.language).split("-")[0];
+        voice = voices.find((v) => v.lang.toLowerCase().startsWith(code)) ?? null;
+      }
       let i = 0;
       const speakNext = () => {
         if (activeOwner !== owner) return;
