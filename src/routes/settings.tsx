@@ -24,6 +24,16 @@ import {
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
+import {
+  getTtsPitch,
+  getTtsRate,
+  getTtsVoice,
+  isTtsSupported,
+  listVoices,
+  setTtsPitch,
+  setTtsRate,
+  setTtsVoice,
+} from "@/lib/tts";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -35,7 +45,26 @@ export const Route = createFileRoute("/settings")({
 const LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
 const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
 
-type FilterTab = "all" | "free" | "fast" | "popular";
+type FilterTab = "free" | "popular" | "all";
+
+const POPULAR_RX =
+  /gpt-4o|gpt-4\.1|gpt-5|o1|o3|claude-3|claude-3\.5|claude-sonnet|claude-opus|claude-haiku|gemini-1\.5|gemini-2|llama-3|llama-4|deepseek|mistral-large|grok|qwen/i;
+
+/** Filter to text-input → text-output models only. */
+function isTextToText(m: ORModel): boolean {
+  const arch = (m as any).architecture;
+  if (arch && Array.isArray(arch.input_modalities) && Array.isArray(arch.output_modalities)) {
+    const inputs: string[] = arch.input_modalities;
+    const outputs: string[] = arch.output_modalities;
+    const inOk = inputs.includes("text") && !inputs.some((m) => m !== "text" && m !== "file");
+    const outOk = outputs.length === 1 && outputs[0] === "text";
+    return inOk && outOk;
+  }
+  // Fallback: exclude obvious non-text models by id pattern
+  const id = (m.id ?? "").toLowerCase();
+  if (/(image|vision|tts|audio|whisper|dall-e|sora|video|embed|moderation|rerank)/.test(id)) return false;
+  return true;
+}
 
 function SettingsPage() {
   const [keyInput, setKeyInput] = useState("");
@@ -47,7 +76,7 @@ function SettingsPage() {
   const [language, setLanguage] = useState("English");
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<FilterTab>("all");
+  const [tab, setTab] = useState<FilterTab>("free");
   const [mode, setModeState] = useState<GlobalMode>("summarize");
   const [style, setStyleState] = useState("Neutral");
   const [temperature, setTemp] = useState(0.3);
