@@ -14,8 +14,6 @@ interface Props {
   status: string;
   pageAi: Record<number, PageAi>;
   onUpdatePage: (pageNumber: number, patch: Partial<PageAi>) => void;
-  syncToPage?: number | null;
-  onPageChange?: (page: number) => void;
 }
 
 /* ---------- Export helpers ---------- */
@@ -90,8 +88,6 @@ export function RightPanel({
   status,
   pageAi,
   onUpdatePage,
-  syncToPage,
-  onPageChange,
 }: Props) {
   const [tab, setTab] = useState<Tab>("pages");
 
@@ -178,8 +174,6 @@ export function RightPanel({
             pages={pages}
             pageAi={pageAi}
             onUpdatePage={onUpdatePage}
-            syncToPage={syncToPage}
-            onPageChange={onPageChange}
           />
         )}
       </div>

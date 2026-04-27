@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
@@ -33,9 +33,6 @@ function DocPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [status, setStatus] = useState("");
   const [pageAi, setPageAi] = useState<Record<number, PageAi>>({});
-  const [pdfSyncTarget, setPdfSyncTarget] = useState<number | null>(null);
-  const [panelSyncTarget, setPanelSyncTarget] = useState<number | null>(null);
-  const syncLockRef = useRef<number>(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,17 +157,7 @@ function DocPage() {
       />
       <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
         <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
-          <PdfViewer
-            data={doc.data}
-            initialScrollTop={doc.scrollTop}
-            onScroll={(top) => updateDoc(id, { scrollTop: top })}
-            syncToPage={pdfSyncTarget}
-            onPageChange={(p) => {
-              if (Date.now() < syncLockRef.current) return;
-              syncLockRef.current = Date.now() + 600;
-              setPanelSyncTarget(p);
-            }}
-          />
+          <PdfViewer data={doc.data} />
         </section>
         <section className="h-full overflow-hidden">
           <RightPanel
@@ -180,12 +167,6 @@ function DocPage() {
             status={status}
             pageAi={pageAi}
             onUpdatePage={handleUpdatePage}
-            syncToPage={panelSyncTarget}
-            onPageChange={(p) => {
-              if (Date.now() < syncLockRef.current) return;
-              syncLockRef.current = Date.now() + 600;
-              setPdfSyncTarget(p);
-            }}
           />
         </section>
       </main>

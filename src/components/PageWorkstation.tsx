@@ -32,10 +32,6 @@ interface Props {
   pages: PageExtraction[];
   pageAi: Record<number, PageAi>;
   onUpdatePage: (pageNumber: number, patch: Partial<PageAi>) => void;
-  /** Externally-driven scroll target (from PDF viewer). */
-  syncToPage?: number | null;
-  /** Fired when the user scrolls a page card into view. */
-  onPageChange?: (page: number) => void;
 }
 
 const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
@@ -64,7 +60,7 @@ function readGlobals() {
   };
 }
 
-export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPageChange }: Props) {
+export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
   const [globals, setGlobals] = useState(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [runningPages, setRunningPages] = useState<Set<number>>(new Set());
@@ -75,8 +71,6 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const lockEmitUntilRef = useRef<number>(0);
-  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const onFocus = () => setGlobals(readGlobals());
@@ -90,45 +84,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
     fetchModels(k).then(setModels).catch(() => {});
   }, []);
 
-  // External sync → scroll target card
-  useEffect(() => {
-    if (!syncToPage) return;
-    const el = cardRefs.current.get(syncToPage);
-    if (!el || !scrollRef.current) return;
-    lockEmitUntilRef.current = Date.now() + 500;
-    const top = el.offsetTop - 8;
-    scrollRef.current.scrollTo({ top, behavior: "smooth" });
-    if (syncToPage !== currentPage) stopAllTts();
-    setCurrentPage(syncToPage);
-  }, [syncToPage]);
 
-  // Track scroll → emit current page
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    let raf = 0;
-    const compute = () => {
-      const midpoint = el.scrollTop + el.clientHeight / 3;
-      let active = currentPage;
-      for (const [pn, node] of cardRefs.current.entries()) {
-        if (node.offsetTop <= midpoint) active = pn;
-        else break;
-      }
-      if (active !== currentPage) {
-        setCurrentPage(active);
-        if (Date.now() > lockEmitUntilRef.current) onPageChange?.(active);
-      }
-    };
-    const handler = () => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(compute);
-    };
-    el.addEventListener("scroll", handler, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", handler);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [currentPage, onPageChange]);
 
   const hasKey = !!getKey();
 
@@ -391,7 +347,6 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
                 models={models}
                 streamBuf={streamBufs[page.pageNumber] ?? ""}
                 isRunning={runningPages.has(page.pageNumber)}
-                isCurrent={currentPage === page.pageNumber}
                 onUpdate={(patch) => onUpdatePage(page.pageNumber, patch)}
                 onRun={() => runPage(page.pageNumber)}
                 onCancel={() => cancelPage(page.pageNumber)}
@@ -411,13 +366,12 @@ interface CardProps {
   models: ORModel[];
   streamBuf: string;
   isRunning: boolean;
-  isCurrent: boolean;
   onUpdate: (patch: Partial<PageAi>) => void;
   onRun: () => void;
   onCancel: () => void;
 }
 
-function PageCard({ page, state, eff, models, streamBuf, isRunning, isCurrent, onUpdate, onRun, onCancel }: CardProps) {
+function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, onRun, onCancel }: CardProps) {
   const [view, setView] = useState<"request" | "result">(state.status === "done" ? "result" : "request");
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
@@ -513,7 +467,7 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, isCurrent, o
   return (
     <article
       className={`rounded-md border bg-background/40 transition-colors ${
-        isCurrent ? "border-primary/50 ring-1 ring-primary/30" : "border-border"
+        isRunning ? "border-primary/50 ring-1 ring-primary/30" : "border-border"
       }`}
     >
       <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
