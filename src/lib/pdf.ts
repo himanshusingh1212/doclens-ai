@@ -200,10 +200,6 @@ export async function extractPdfPages(
   return pages;
 }
 
-export async function loadPdfDocument(data: ArrayBuffer) {
-  const pdfjsLib = await getPdfjs();
-  return pdfjsLib.getDocument({
-    data: data.slice(0),
-    ...PDF_LOAD_OPTIONS,
-  }).promise;
+export async function loadPdfDocument(data: ArrayBuffer | Blob) {
+  return loadDocFromSource(data);
 }
