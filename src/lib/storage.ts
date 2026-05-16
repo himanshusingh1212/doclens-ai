@@ -233,6 +233,9 @@ function db() {
         if (!d.objectStoreNames.contains(PAGES)) {
           d.createObjectStore(PAGES, { keyPath: "key" });
         }
+        if (!d.objectStoreNames.contains(VOICE_PACKS)) {
+          d.createObjectStore(VOICE_PACKS, { keyPath: "voiceId" });
+        }
 
         // v5→v6: split embedded pages[] and pageAi map into per-page records.
         if (oldVersion > 0 && oldVersion < 6) {
