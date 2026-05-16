@@ -266,6 +266,21 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     abortMap.current.get(pageNumber)?.abort();
   }, []);
 
+  // Listen for PDF-viewer "translate selection" events
+  const runPageRef = useRef(runPage);
+  runPageRef.current = runPage;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ docId: string; pageNumber: number; text: string }>;
+      const d = ev.detail;
+      if (!d || d.docId !== docId || !d.text) return;
+      selectionOverridesRef.current.set(d.pageNumber, d.text);
+      void runPageRef.current(d.pageNumber);
+    };
+    window.addEventListener("doclens:translate-selection", handler);
+    return () => window.removeEventListener("doclens:translate-selection", handler);
+  }, [docId]);
+
   const handleRunAll = async () => {
     const freshGlobals = readGlobals();
     setGlobals(freshGlobals);
