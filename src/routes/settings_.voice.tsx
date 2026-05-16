@@ -4,17 +4,31 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
 import {
-  createTtsController,
+  deleteVoicePack,
+  listVoicePacks,
+  recordVoicePack,
+  type VoicePackRecord,
+} from "@/lib/storage";
+import {
+  createSmartTtsController,
+  downloadPiperVoice,
   getFavorites,
+  getTtsEngine,
   getTtsPitch,
   getTtsRate,
   getTtsVoiceFor,
   isTtsSupported,
+  listInstalledPiperVoices,
+  listPiperVoices,
   listVoices,
+  type PiperVoiceMeta,
+  removePiperVoice,
+  setTtsEngine,
   setTtsPitch,
   setTtsRate,
   setTtsVoiceFor,
   toggleFavorite,
+  type TtsEngine,
 } from "@/lib/tts";
 
 export const Route = createFileRoute("/settings_/voice")({
