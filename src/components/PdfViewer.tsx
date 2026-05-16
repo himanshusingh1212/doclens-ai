@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob } from "@/lib/storage";
-import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import { createSmartTtsController } from "@/lib/tts";
+import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 
 interface Props {
   /** Document ID — binary is loaded on-demand from IndexedDB */
@@ -20,23 +21,39 @@ interface PageMeta {
   scale: number;
 }
 
+interface SelectionInfo {
+  pageNumber: number;
+  text: string;
+  x: number; // viewport coords
+  y: number;
+}
+
 /**
- * PDF viewer with lazy canvas rendering driven by IntersectionObserver.
- * Bitmaps for off-screen pages are released (canvas.width/height = 0)
- * to free GPU memory. At most MAX_RENDERED canvases hold pixel data.
+ * PDF viewer with lazy canvas + text-layer rendering driven by IntersectionObserver.
+ * Bitmaps for off-screen pages are released (canvas.width/height = 0) and
+ * page.cleanup() is called to free the internal operator list. At most
+ * MAX_RENDERED canvases hold pixel data.
+ *
+ * The native pdf.js TextLayer overlays the canvas so users can select,
+ * copy, translate (via "doclens:translate-selection" event), or speak text.
+ * Scanned/image-only pages get no text spans — toolbar simply never appears.
  */
 export function PdfViewer({ docId }: Props) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [pageMetas, setPageMetas] = useState<PageMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [speakState, setSpeakState] = useState<"idle" | "playing">("idle");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
+  const textLayerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const renderedPages = useRef<Set<number>>(new Set());
   const renderingPages = useRef<Set<number>>(new Set());
   const recentlyVisibleOrder = useRef<number[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
 
   // Load PDF on-demand from IndexedDB (as Blob → objectURL)
   useEffect(() => {
@@ -71,6 +88,8 @@ export function PdfViewer({ docId }: Props) {
             cssHeight: Math.round(vp.height * scale),
             scale,
           });
+          // Drop the temporary PageProxy reference — we'll fetch again at render time.
+          page.cleanup();
         }
         if (cancelled) return;
         setPageMetas(metas);
@@ -88,14 +107,24 @@ export function PdfViewer({ docId }: Props) {
     };
   }, [docId]);
 
-  /** Release bitmap memory: width=0 first frees GPU, then restore CSS dims. */
-  const releasePage = useCallback((pageNumber: number) => {
-    const canvas = canvasRefs.current.get(pageNumber);
-    if (!canvas) return;
-    canvas.width = 0;
-    canvas.height = 0;
-    renderedPages.current.delete(pageNumber);
-  }, []);
+  /** Release bitmap memory + clear text layer + call page.cleanup() to free operator list. */
+  const releasePage = useCallback(
+    (pageNumber: number) => {
+      const canvas = canvasRefs.current.get(pageNumber);
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      const tl = textLayerRefs.current.get(pageNumber);
+      if (tl) tl.innerHTML = "";
+      renderedPages.current.delete(pageNumber);
+      // Free pdf.js internal operator list for this page.
+      if (doc) {
+        doc.getPage(pageNumber).then((p) => p.cleanup()).catch(() => {});
+      }
+    },
+    [doc],
+  );
 
   const renderPage = useCallback(
     async (pageNumber: number) => {
@@ -104,6 +133,7 @@ export function PdfViewer({ docId }: Props) {
       if (renderedPages.current.has(pageNumber)) return;
 
       const canvas = canvasRefs.current.get(pageNumber);
+      const textLayer = textLayerRefs.current.get(pageNumber);
       if (!canvas) return;
       const meta = pageMetas[pageNumber - 1];
       if (!meta) return;
@@ -112,7 +142,8 @@ export function PdfViewer({ docId }: Props) {
       try {
         const page: PDFPageProxy = await doc.getPage(pageNumber);
         const renderScale = meta.scale * DPR;
-        const viewport = page.getViewport({ scale: renderScale });
+        const viewport: PageViewport = page.getViewport({ scale: renderScale });
+        const cssViewport = page.getViewport({ scale: meta.scale });
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -122,7 +153,30 @@ export function PdfViewer({ docId }: Props) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+        await page.render({ canvasContext: ctx, viewport, canvas } as never).promise;
+
+        // Render selectable text layer aligned to the css viewport
+        if (textLayer) {
+          textLayer.innerHTML = "";
+          textLayer.style.width = `${meta.cssWidth}px`;
+          textLayer.style.height = `${meta.cssHeight}px`;
+          // Required by pdf.js stylesheet to size text spans correctly
+          textLayer.style.setProperty("--scale-factor", String(meta.scale));
+          try {
+            const pdfjs = await import("pdfjs-dist");
+            const textContent = await page.getTextContent();
+            const tl = new pdfjs.TextLayer({
+              textContentSource: textContent,
+              container: textLayer,
+              viewport: cssViewport,
+            });
+            await tl.render();
+          } catch (e) {
+            // Scanned / image-only pages: silently leave the text layer empty.
+            console.debug("TextLayer render skipped", e);
+          }
+        }
+
         renderedPages.current.add(pageNumber);
 
         // Cap rendered set: drop oldest entries past MAX_RENDERED.
@@ -155,14 +209,12 @@ export function PdfViewer({ docId }: Props) {
           const pn = Number((entry.target as HTMLElement).dataset.pageNumber);
           if (!Number.isFinite(pn) || pn <= 0) continue;
           if (entry.isIntersecting) {
-            // Track LRU-style for cap eviction
             const order = recentlyVisibleOrder.current;
             const idx = order.indexOf(pn);
             if (idx !== -1) order.splice(idx, 1);
             order.push(pn);
             renderPage(pn);
           } else {
-            // Outside viewport (and 200px buffer) → release bitmap
             releasePage(pn);
           }
         }
@@ -170,7 +222,6 @@ export function PdfViewer({ docId }: Props) {
       { root, rootMargin: "200px 0px", threshold: 0 },
     );
     observerRef.current = obs;
-
     canvasRefs.current.forEach((el) => obs.observe(el.parentElement ?? el));
 
     return () => {
@@ -184,16 +235,77 @@ export function PdfViewer({ docId }: Props) {
     return () => {
       renderedPages.current.forEach((pn) => {
         const c = canvasRefs.current.get(pn);
-        if (c) {
-          c.width = 0;
-          c.height = 0;
-        }
+        if (c) { c.width = 0; c.height = 0; }
+        const tl = textLayerRefs.current.get(pn);
+        if (tl) tl.innerHTML = "";
       });
       renderedPages.current.clear();
       renderingPages.current.clear();
       recentlyVisibleOrder.current = [];
+      ttsRef.current?.destroy();
+      ttsRef.current = null;
     };
   }, [docId]);
+
+  /* ---------- Selection toolbar ---------- */
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const onSelChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) { setSelection(null); return; }
+      const text = sel.toString().trim();
+      if (!text) { setSelection(null); return; }
+      // Verify selection lives inside one of our text layers
+      const anchor = sel.anchorNode as Node | null;
+      if (!anchor) { setSelection(null); return; }
+      const el = (anchor.nodeType === 1 ? anchor : anchor.parentElement) as HTMLElement | null;
+      const tlEl = el?.closest<HTMLElement>("[data-text-layer]");
+      if (!tlEl) { setSelection(null); return; }
+      const pn = Number(tlEl.dataset.pageNumber);
+      if (!Number.isFinite(pn)) { setSelection(null); return; }
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const rootRect = root.getBoundingClientRect();
+      setSelection({
+        pageNumber: pn,
+        text,
+        x: rect.left + rect.width / 2 - rootRect.left + root.scrollLeft,
+        y: rect.top - rootRect.top + root.scrollTop,
+      });
+    };
+    document.addEventListener("selectionchange", onSelChange);
+    return () => document.removeEventListener("selectionchange", onSelChange);
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    if (!selection) return;
+    try {
+      await navigator.clipboard.writeText(selection.text);
+    } catch {
+      // ignore
+    }
+  }, [selection]);
+
+  const handleTranslate = useCallback(() => {
+    if (!selection) return;
+    window.dispatchEvent(
+      new CustomEvent("doclens:translate-selection", {
+        detail: { docId, pageNumber: selection.pageNumber, text: selection.text },
+      }),
+    );
+  }, [selection, docId]);
+
+  const handleSpeak = useCallback(() => {
+    if (!selection) return;
+    ttsRef.current?.destroy();
+    ttsRef.current = createSmartTtsController(selection.text, {
+      onState: (s) => setSpeakState(s === "playing" ? "playing" : "idle"),
+      language: null,
+    });
+    ttsRef.current.play();
+  }, [selection]);
 
   if (loading) {
     return (
@@ -217,7 +329,7 @@ export function PdfViewer({ docId }: Props) {
   }
 
   return (
-    <div ref={scrollRef} className="h-full overflow-auto" style={{ background: "#404040" }}>
+    <div ref={scrollRef} className="relative h-full overflow-auto" style={{ background: "#404040" }}>
       <div className="flex flex-col items-center gap-3 py-4">
         {pageMetas.map((meta) => (
           <div
@@ -243,12 +355,60 @@ export function PdfViewer({ docId }: Props) {
                 background: "#fff",
               }}
             />
-            <div className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[10px] text-white/80">
+            <div
+              data-text-layer
+              data-page-number={meta.pageNumber}
+              ref={(el) => {
+                if (el) textLayerRefs.current.set(meta.pageNumber, el);
+                else textLayerRefs.current.delete(meta.pageNumber);
+              }}
+              className="textLayer absolute inset-0"
+              style={{
+                width: meta.cssWidth,
+                height: meta.cssHeight,
+                opacity: 1,
+                lineHeight: 1,
+              }}
+            />
+            <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[10px] text-white/80">
               {meta.pageNumber}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Floating selection toolbar */}
+      {selection && (
+        <div
+          className="absolute z-30 -translate-x-1/2 -translate-y-full"
+          style={{ left: selection.x, top: selection.y - 6 }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1 py-1 font-mono text-[10px] uppercase tracking-widest shadow-lg">
+            <button
+              onClick={handleCopy}
+              className="rounded px-2 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              title="Copy selection"
+            >
+              copy
+            </button>
+            <button
+              onClick={handleTranslate}
+              className="rounded px-2 py-0.5 text-primary hover:bg-primary/10"
+              title="Send to AI workstation for this page"
+            >
+              translate
+            </button>
+            <button
+              onClick={handleSpeak}
+              className="rounded px-2 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              title={speakState === "playing" ? "speaking…" : "Read aloud"}
+            >
+              {speakState === "playing" ? "■ stop" : "speak"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
