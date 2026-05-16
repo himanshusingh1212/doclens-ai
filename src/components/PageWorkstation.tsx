@@ -154,6 +154,11 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
       stopAllTts();
 
+      // One-shot selection override (from PDF text selection → "Translate")
+      const selOverride = selectionOverridesRef.current.get(pageNumber);
+      if (selOverride) selectionOverridesRef.current.delete(pageNumber);
+      const effectiveText = selOverride ?? pageRec.text;
+
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
         payload = { ...state.customRequest, stream: true };
@@ -165,7 +170,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
           style: eff.style,
           temperature: eff.temperature,
           pageNumber,
-          pageText: pageRec.text,
+          pageText: effectiveText,
           previousExcerpt: eff.memory ? prevExcerpt : undefined,
         });
       }
