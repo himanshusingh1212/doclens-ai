@@ -4,12 +4,6 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
 import {
-  deleteVoicePack,
-  listVoicePacks,
-  recordVoicePack,
-  type VoicePackRecord,
-} from "@/lib/storage";
-import {
   createSmartTtsController,
   downloadPiperVoice,
   getFavorites,
@@ -136,7 +130,7 @@ function VoicePage() {
   const [ttsPitch, setTtsPitchLocal] = useState(1);
   const [engine, setEngineLocal] = useState<TtsEngine>("auto");
   const [piperVoices, setPiperVoices] = useState<PiperVoiceMeta[] | null>(null);
-  const [installed, setInstalled] = useState<VoicePackRecord[]>([]);
+  const [installed, setInstalled] = useState<string[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [dlProgress, setDlProgress] = useState(0);
   const [showPiperCatalog, setShowPiperCatalog] = useState(false);
@@ -155,40 +149,35 @@ function VoicePage() {
   }, []);
 
   async function refreshInstalled() {
-    const recs = await listVoicePacks();
-    setInstalled(recs);
+    const ids = await listInstalledPiperVoices();
+    setInstalled(ids);
   }
 
   async function openPiperCatalog() {
     setShowPiperCatalog(true);
     if (piperVoices) return;
     try {
-      const ids = await listInstalledPiperVoices();
-      const list = await listPiperVoices(ids);
+      const list = await listPiperVoices();
       setPiperVoices(list);
     } catch (e) {
-      toast.error("Failed to load neural voice catalog.");
+      toast.error("Failed to load voice catalog.");
       console.error(e);
     }
   }
 
   async function handleInstallPiper(v: PiperVoiceMeta) {
-    setDownloading(v.voiceId);
+    setDownloading(v.key);
     setDlProgress(0);
     try {
-      await downloadPiperVoice(v.voiceId, (loaded, total) => {
+      await downloadPiperVoice(v.key, (loaded, total) => {
         setDlProgress(total > 0 ? Math.round((loaded / total) * 100) : 0);
       });
-      await recordVoicePack({
-        voiceId: v.voiceId,
-        language: v.langName || v.language,
-        installedAt: Date.now(),
-      });
       await refreshInstalled();
+      // Mark installed in catalog cache
       if (piperVoices) {
-        setPiperVoices(piperVoices.map((p) => p.voiceId === v.voiceId ? { ...p, installed: true } : p));
+        setPiperVoices(piperVoices.map((p) => p.key === v.key ? { ...p, installed: true } : p));
       }
-      toast.success(`Installed ${v.voiceId}`);
+      toast.success(`Installed ${v.name} (${v.language.name_english})`);
     } catch (e) {
       toast.error(`Install failed: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
@@ -200,10 +189,9 @@ function VoicePage() {
   async function handleRemovePiper(voiceId: string) {
     try {
       await removePiperVoice(voiceId);
-      await deleteVoicePack(voiceId);
       await refreshInstalled();
       if (piperVoices) {
-        setPiperVoices(piperVoices.map((p) => p.voiceId === voiceId ? { ...p, installed: false } : p));
+        setPiperVoices(piperVoices.map((p) => p.key === voiceId ? { ...p, installed: false } : p));
       }
       if (preferredPiper === voiceId) {
         localStorage.removeItem("doclens.piper.preferredVoice");
@@ -350,7 +338,7 @@ function VoicePage() {
           </div>
         </section>
 
-        {/* Voice Models (Piper, offline neural) */}
+        {/* Neural Voice Models (Piper) */}
         <section className="mb-5 rounded-lg border border-border bg-surface p-5">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -387,28 +375,31 @@ function VoicePage() {
             </div>
           ) : (
             <ul className="divide-y divide-border rounded border border-border">
-              {installed.map((r) => (
-                <li key={r.voiceId} className="flex items-center gap-3 px-3 py-2">
-                  <input
-                    type="radio"
-                    name="preferred-piper"
-                    checked={preferredPiper === r.voiceId}
-                    onChange={() => handleSetPreferredPiper(r.voiceId)}
-                    className="accent-primary"
-                    aria-label="Set preferred"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-mono text-[12px] text-foreground">{r.voiceId}</div>
-                    <div className="font-mono text-[10px] text-muted-foreground">{r.language}</div>
-                  </div>
-                  <button
-                    onClick={() => handleRemovePiper(r.voiceId)}
-                    className="rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"
-                  >
-                    remove
-                  </button>
-                </li>
-              ))}
+              {installed.map((id) => {
+                const meta = piperVoices?.find((v) => v.key === id);
+                return (
+                  <li key={id} className="flex items-center gap-3 px-3 py-2">
+                    <input
+                      type="radio"
+                      name="preferred-piper"
+                      checked={preferredPiper === id}
+                      onChange={() => handleSetPreferredPiper(id)}
+                      className="accent-primary"
+                      aria-label="Set preferred"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate font-mono text-[12px] text-foreground">{id}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">{meta?.language.name_english || ""}</div>
+                    </div>
+                    <button
+                      onClick={() => handleRemovePiper(id)}
+                      className="rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"
+                    >
+                      remove
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -656,18 +647,24 @@ function VoicePage() {
               {piperVoices?.filter((v) => {
                 const q = piperSearch.trim().toLowerCase();
                 if (!q) return true;
-                return v.voiceId.toLowerCase().includes(q) || v.langName.toLowerCase().includes(q);
+                return (
+                  v.key.toLowerCase().includes(q) ||
+                  v.name.toLowerCase().includes(q) ||
+                  v.language.name_english.toLowerCase().includes(q) ||
+                  v.language.name_native.toLowerCase().includes(q) ||
+                  v.language.country_english.toLowerCase().includes(q)
+                );
               }).map((v) => (
-                <li key={v.voiceId} className="flex items-center gap-3 px-5 py-3">
+                <li key={v.key} className="flex items-center gap-3 px-5 py-3">
                   <div className="flex-1 min-w-0">
-                    <div className="truncate font-mono text-[12px] text-foreground">{v.voiceId}</div>
+                    <div className="truncate font-mono text-[12px] text-foreground">{v.name} [{v.quality}]</div>
                     <div className="font-mono text-[10px] text-muted-foreground">
-                      {v.langName} · {v.language} · {v.quality}
+                      {v.language.name_native} ({v.language.country_english}) · {v.quality} · {((v.sizeBytes || 0) / 1e6).toFixed(1)} MB
                     </div>
                   </div>
-                  {v.installed ? (
+                  {v.installed || installed.includes(v.key) ? (
                     <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-primary">installed</span>
-                  ) : downloading === v.voiceId ? (
+                  ) : downloading === v.key ? (
                     <span className="font-mono text-[10px] text-primary">{dlProgress}%</span>
                   ) : (
                     <button
@@ -684,6 +681,7 @@ function VoicePage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

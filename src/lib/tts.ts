@@ -177,8 +177,10 @@ export function getActiveOwner(): symbol | null {
 
 /** Stop any active playback (used on page change / re-run). */
 export function stopAll() {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
+  if (typeof window === "undefined") return;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  // Also stop neural TTS if it's playing
+  import("./neural-tts/piper-engine").then((p) => p.stop()).catch(() => {});
   activeOwner = null;
   notify();
 }
@@ -273,9 +275,12 @@ export function createTtsController(text: string, opts: {
 }
 
 /* ============================================================
- * Local neural TTS (Piper via @mintplex-labs/piper-tts-web)
- * Lazy-loaded only on first use. Falls back to speechSynthesis
- * when no piper voice is installed for the requested language.
+ * Local neural TTS — Piper WASM via piper-tts-web
+ *
+ * Uses piper-tts-web (Poket-Jony) for in-browser ONNX + phonemize.
+ * Voice catalog fetched from HuggingFace rhasspy/piper-voices.
+ * Models cached in IndexedDB. Falls back to speechSynthesis if
+ * no Piper voice is installed or synthesis fails.
  * ============================================================ */
 
 const ENGINE_PREF_LS = "doclens.tts.engine"; // "auto" | "neural" | "browser"
@@ -291,113 +296,38 @@ export function setTtsEngine(e: TtsEngine) {
   localStorage.setItem(ENGINE_PREF_LS, e);
 }
 
-/** Map UI language label to a Piper country_code prefix (e.g. "Hindi" → unsupported, "English" → "en"). */
-function piperLangPrefix(language?: string | null): string {
-  const k = langKey(language).split("-")[0].toLowerCase();
-  return k;
+/** Lazy-import the Piper engine (keeps main bundle lean). */
+function loadPiperEngine() {
+  return import("./neural-tts/piper-engine");
 }
 
-type PiperModule = typeof import("@mintplex-labs/piper-tts-web");
-let piperPromise: Promise<PiperModule> | null = null;
-function loadPiper(): Promise<PiperModule> {
-  if (!piperPromise) {
-    piperPromise = import("@mintplex-labs/piper-tts-web");
-  }
-  return piperPromise;
+// Re-export catalog/management functions for the settings UI
+export async function listPiperVoices() {
+  const engine = await loadPiperEngine();
+  return engine.fetchCatalog();
 }
-
-export interface PiperVoiceMeta {
-  voiceId: string;
-  language: string; // country code like en_US
-  langName: string; // english name
-  quality: string;
-  installed: boolean;
-}
-
-/** List all available Piper voices (from CDN catalog) merged with installed state. */
-export async function listPiperVoices(installedIds: string[]): Promise<PiperVoiceMeta[]> {
-  const mod = await loadPiper();
-  const installed = new Set(installedIds);
-  const all = await mod.voices();
-  return all
-    .map((v) => ({
-      voiceId: String(v.key),
-      language: v.language?.code ?? "",
-      langName: v.language?.name_english ?? "",
-      quality: String(v.quality ?? ""),
-      installed: installed.has(String(v.key)),
-    }))
-    .sort((a, b) => a.voiceId.localeCompare(b.voiceId));
-}
-
 export async function downloadPiperVoice(
   voiceId: string,
   onProgress?: (loaded: number, total: number) => void,
-): Promise<void> {
-  const mod = await loadPiper();
-  await mod.download(voiceId as never, (p) => onProgress?.(p.loaded, p.total));
+) {
+  const engine = await loadPiperEngine();
+  return engine.downloadVoice(voiceId, onProgress);
+}
+export async function removePiperVoice(voiceId: string) {
+  const engine = await loadPiperEngine();
+  return engine.removeVoice(voiceId);
+}
+export async function listInstalledPiperVoices() {
+  const engine = await loadPiperEngine();
+  return engine.listInstalled();
 }
 
-export async function removePiperVoice(voiceId: string): Promise<void> {
-  const mod = await loadPiper();
-  await mod.remove(voiceId as never);
-}
-
-export async function listInstalledPiperVoices(): Promise<string[]> {
-  const mod = await loadPiper();
-  return (await mod.stored()) as string[];
-}
-
-/** Best installed piper voice for a language, or null. */
-function pickPiperVoiceFor(language: string | null | undefined, installed: string[], preferred?: string | null): string | null {
-  if (preferred && installed.includes(preferred)) return preferred;
-  const code = piperLangPrefix(language);
-  // installed voiceIds look like "en_US-amy-low"
-  const match = installed.find((id) => id.toLowerCase().startsWith(code + "_"));
-  return match ?? null;
-}
-
-/* ---------- Neural utterance playback ---------- */
-
-async function speakWithPiper(opts: {
-  text: string;
-  voiceId: string;
-  rate: number;
-  signal: AbortSignal;
-  onState: (s: "playing" | "ended") => void;
-}): Promise<void> {
-  const mod = await loadPiper();
-  const chunks = chunkText(opts.text, 280);
-  opts.onState("playing");
-  const audio = new Audio();
-  audio.playbackRate = Math.max(0.25, Math.min(4, opts.rate));
-  const cleanup: { url: string | null } = { url: null };
-  const stop = () => {
-    audio.pause();
-    if (cleanup.url) URL.revokeObjectURL(cleanup.url);
-  };
-  opts.signal.addEventListener("abort", stop, { once: true });
-  for (const c of chunks) {
-    if (opts.signal.aborted) break;
-    const blob = await mod.predict({ text: c, voiceId: opts.voiceId as never });
-    if (opts.signal.aborted) break;
-    if (cleanup.url) URL.revokeObjectURL(cleanup.url);
-    cleanup.url = URL.createObjectURL(blob);
-    audio.src = cleanup.url;
-    await new Promise<void>((resolve) => {
-      const onEnd = () => { audio.removeEventListener("ended", onEnd); audio.removeEventListener("error", onEnd); resolve(); };
-      audio.addEventListener("ended", onEnd);
-      audio.addEventListener("error", onEnd);
-      void audio.play().catch(() => resolve());
-    });
-  }
-  if (cleanup.url) URL.revokeObjectURL(cleanup.url);
-  opts.onState("ended");
-}
+export type { PiperVoiceMeta } from "./neural-tts/piper-engine";
 
 /**
- * Create a controller that tries neural first (if a matching installed voice exists
- * and engine pref ≠ "browser"), and falls back to speechSynthesis otherwise.
+ * Create a controller that tries neural first (via Piper WASM when
+ * engine pref ≠ "browser" and a voice is installed) then falls back
+ * to speechSynthesis.
  */
 export function createSmartTtsController(text: string, opts: {
   onState: (s: "idle" | "playing" | "paused" | "ended") => void;
@@ -419,33 +349,44 @@ export function createSmartTtsController(text: string, opts: {
   return {
     play: () => {
       if (destroyed) return;
+      // If user explicitly wants browser engine, skip neural entirely
       if (enginePref === "browser") { startBrowser(); return; }
-      // try neural
+
+      // Try neural via Piper WASM engine
       (async () => {
         try {
-          const installed = await listInstalledPiperVoices();
-          const preferred = localStorage.getItem("doclens.piper.preferredVoice");
-          const v = pickPiperVoiceFor(opts.language, installed, preferred);
-          if (!v && enginePref === "neural") {
-            opts.onError?.("No neural voice installed for this language.");
-            opts.onState("idle");
+          const engine = await loadPiperEngine();
+          // Find an installed voice that matches the language
+          const voiceId = await engine.pickVoiceForLanguage(
+            opts.language || "English",
+          );
+          if (!voiceId) {
+            // No installed voice — fall back or error
+            if (enginePref === "neural") {
+              opts.onError?.(
+                "No Piper voice installed. Go to Settings → Voice to install one.",
+              );
+              opts.onState("idle");
+              return;
+            }
+            startBrowser();
             return;
           }
-          if (!v) { startBrowser(); return; }
           mode = "neural";
           abort = new AbortController();
-          await speakWithPiper({
-            text,
-            voiceId: v,
-            rate: getTtsRate(),
-            signal: abort.signal,
-            onState: (s) => opts.onState(s),
-          });
+          opts.onState("playing");
+          await engine.speakChunked(text, voiceId, abort.signal);
+          if (!destroyed && !abort.signal.aborted) {
+            opts.onState("ended");
+          }
         } catch (e) {
+          if ((e as Error)?.name === "AbortError") return;
+          console.warn("[smart-tts] Neural failed, falling back:", e);
           if (enginePref === "neural") {
             opts.onError?.(e instanceof Error ? e.message : "Neural TTS failed");
             opts.onState("idle");
           } else {
+            // "auto" mode: silent fallback to browser
             startBrowser();
           }
         }
@@ -461,12 +402,18 @@ export function createSmartTtsController(text: string, opts: {
     },
     stop: () => {
       if (mode === "browser") browserCtrl?.stop();
-      else { abort?.abort(); opts.onState("idle"); }
+      else {
+        abort?.abort();
+        loadPiperEngine().then((p) => p.stop()).catch(() => {});
+        opts.onState("idle");
+      }
     },
     destroy: () => {
       destroyed = true;
       browserCtrl?.destroy();
       abort?.abort();
+      loadPiperEngine().then((p) => p.stop()).catch(() => {});
     },
   };
 }
+
