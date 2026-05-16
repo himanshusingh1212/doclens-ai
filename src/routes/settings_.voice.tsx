@@ -626,6 +626,64 @@ function VoicePage() {
           </div>
         </div>
       )}
+
+      {/* Piper catalog modal */}
+      {showPiperCatalog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowPiperCatalog(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-border px-5 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Piper neural voices</h3>
+                <button onClick={() => setShowPiperCatalog(false)} className="rounded-md p-1 text-muted-foreground hover:text-foreground">✕</button>
+              </div>
+              <input
+                value={piperSearch}
+                onChange={(e) => setPiperSearch(e.target.value)}
+                placeholder="Search voices…"
+                className="mt-3 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+            <ul className="flex-1 divide-y divide-border overflow-auto">
+              {piperVoices === null && (
+                <li className="px-5 py-10 text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">loading catalog…</li>
+              )}
+              {piperVoices?.filter((v) => {
+                const q = piperSearch.trim().toLowerCase();
+                if (!q) return true;
+                return v.voiceId.toLowerCase().includes(q) || v.langName.toLowerCase().includes(q);
+              }).map((v) => (
+                <li key={v.voiceId} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-mono text-[12px] text-foreground">{v.voiceId}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground">
+                      {v.langName} · {v.language} · {v.quality}
+                    </div>
+                  </div>
+                  {v.installed ? (
+                    <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-primary">installed</span>
+                  ) : downloading === v.voiceId ? (
+                    <span className="font-mono text-[10px] text-primary">{dlProgress}%</span>
+                  ) : (
+                    <button
+                      onClick={() => handleInstallPiper(v)}
+                      disabled={!!downloading}
+                      className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-40"
+                    >
+                      install
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
