@@ -2,11 +2,12 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
 const DB_NAME = "doclens";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const STORE = "documents";
 const BLOBS = "blobs";
 const META = "meta";
 const PAGES = "pageData";
+const VOICE_PACKS = "voicePacks";
 
 export type AiMode = "translate" | "summarize" | "explain" | "keypoints";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
