@@ -321,6 +321,10 @@ export async function listInstalledPiperVoices() {
   const engine = await loadPiperEngine();
   return engine.listInstalled();
 }
+export async function testPiperVoice(voiceId: string) {
+  const engine = await loadPiperEngine();
+  return engine.testVoice(voiceId);
+}
 
 export type { PiperVoiceMeta } from "./neural-tts/piper-engine";
 

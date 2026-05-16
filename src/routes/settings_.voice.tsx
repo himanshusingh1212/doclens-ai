@@ -21,6 +21,7 @@ import {
   setTtsPitch,
   setTtsRate,
   setTtsVoiceFor,
+  testPiperVoice,
   toggleFavorite,
   type TtsEngine,
 } from "@/lib/tts";
@@ -136,6 +137,7 @@ function VoicePage() {
   const [showPiperCatalog, setShowPiperCatalog] = useState(false);
   const [piperSearch, setPiperSearch] = useState("");
   const [preferredPiper, setPreferredPiper] = useState<string>("");
+  const [testingPiper, setTestingPiper] = useState<string | null>(null);
 
   // Initialize from stored settings
   useEffect(() => {
@@ -207,6 +209,18 @@ function VoicePage() {
     if (voiceId) localStorage.setItem("doclens.piper.preferredVoice", voiceId);
     else localStorage.removeItem("doclens.piper.preferredVoice");
     setPreferredPiper(voiceId);
+  }
+
+  async function handleTestPiper(voiceId: string) {
+    if (testingPiper === voiceId) return;
+    setTestingPiper(voiceId);
+    try {
+      await testPiperVoice(voiceId);
+    } catch (e) {
+      toast.error(`Test failed: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setTestingPiper(null);
+    }
   }
 
   // Update selected voice when language changes
@@ -391,6 +405,13 @@ function VoicePage() {
                       <div className="truncate font-mono text-[12px] text-foreground">{id}</div>
                       <div className="font-mono text-[10px] text-muted-foreground">{meta?.language.name_english || ""}</div>
                     </div>
+                    <button
+                      onClick={() => handleTestPiper(id)}
+                      disabled={testingPiper === id}
+                      className="flex items-center gap-1 rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-primary disabled:opacity-50"
+                    >
+                      {testingPiper === id ? "⏳" : "▶"} test
+                    </button>
                     <button
                       onClick={() => handleRemovePiper(id)}
                       className="rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"

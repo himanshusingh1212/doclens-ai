@@ -4,6 +4,9 @@
  * Uses `piper-tts-web` (Poket-Jony) for WASM-based ONNX inference.
  * Voice catalog + models fetched from HuggingFace rhasspy/piper-voices.
  * Models cached in IndexedDB for offline use.
+ *
+ * Key fix: A custom LocalVoiceProvider feeds cached IndexedDB models
+ * to the engine, avoiding the 60 MB re-download on every `generate()`.
  */
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ const IDB_STORE = "models";
 // ─── State ─────────────────────────────────────────────────────────────────
 
 let catalogCache: PiperVoiceMeta[] | null = null;
-let engineInstance: any = null; // PiperWebWorkerEngine
+let engineInstance: any = null;
 let engineStatus: EngineStatus = "idle";
 const statusListeners = new Set<() => void>();
 
@@ -128,10 +131,10 @@ export async function fetchCatalog(): Promise<PiperVoiceMeta[]> {
   const installed = new Set(await listInstalled());
 
   const voices: PiperVoiceMeta[] = Object.values(raw).map((v: any) => {
-    // Sum the .onnx file size (skip .json and MODEL_CARD)
     let sizeBytes = 0;
     for (const [path, meta] of Object.entries(v.files ?? {})) {
-      if (path.endsWith(".onnx")) sizeBytes = (meta as any).size_bytes;
+      if (path.endsWith(".onnx") && !path.endsWith(".onnx.json"))
+        sizeBytes = (meta as any).size_bytes;
     }
     return {
       key: v.key,
@@ -179,12 +182,10 @@ export async function downloadVoice(
   voiceId: string,
   onProgress?: (loaded: number, total: number) => void,
 ): Promise<void> {
-  // Fetch catalog to get file paths
   const catalog = await fetchCatalog();
   const voice = catalog.find((v) => v.key === voiceId);
   if (!voice) throw new Error(`Voice "${voiceId}" not found in catalog`);
 
-  // Find the .onnx and .onnx.json file paths
   let onnxPath = "";
   let configPath = "";
   for (const path of Object.keys(voice.files)) {
@@ -218,7 +219,6 @@ export async function downloadVoice(
     onProgress?.(loaded, contentLength);
   }
 
-  // Merge chunks
   const onnxData = new Uint8Array(loaded);
   let offset = 0;
   for (const chunk of chunks) {
@@ -226,7 +226,6 @@ export async function downloadVoice(
     offset += chunk.length;
   }
 
-  // Store in IndexedDB
   await idbPut(voiceId, {
     onnx: onnxData.buffer,
     config,
@@ -244,22 +243,64 @@ export async function removeVoice(voiceId: string): Promise<void> {
   invalidateCatalog();
 }
 
+// ─── Custom VoiceProvider for IndexedDB ────────────────────────────────────
+
+/**
+ * A voice provider that reads models from IndexedDB instead of downloading
+ * from HuggingFace on every generate() call.  Mimics the return format of
+ * piper-tts-web's RemoteVoiceProvider: [configJson, onnxBlobUrl].
+ */
+class LocalVoiceProvider {
+  private blobUrls: string[] = [];
+
+  destroy() {
+    for (const url of this.blobUrls) URL.revokeObjectURL(url);
+    this.blobUrls = [];
+  }
+
+  async fetch(voiceId: string): Promise<[any, string]> {
+    const record = await idbGet<{
+      onnx: ArrayBuffer;
+      config: any;
+    }>(voiceId);
+
+    if (!record) {
+      throw new Error(
+        `Voice "${voiceId}" is not installed. Install it from Settings → Voice.`,
+      );
+    }
+
+    // Return [configJson, onnxBlobUrl] — matches piper-tts-web's format
+    const blob = new Blob([record.onnx], { type: "application/octet-stream" });
+    const blobUrl = URL.createObjectURL(blob);
+    this.blobUrls.push(blobUrl);
+    return [record.config, blobUrl];
+  }
+
+  async list() {
+    return [];
+  }
+}
+
 // ─── Engine / Synthesis ────────────────────────────────────────────────────
 
 let currentAudio: HTMLAudioElement | null = null;
 
 /**
  * Initialize the PiperWebWorkerEngine (lazy, once).
- * Uses piper-tts-web's PiperWebWorkerEngine which runs
- * ONNX + phonemize in Web Workers automatically.
+ * Passes our LocalVoiceProvider so models come from IndexedDB,
+ * not from a slow HuggingFace re-download.
  */
 async function getEngine(): Promise<any> {
   if (engineInstance) return engineInstance;
 
   setStatus("loading");
   try {
-    const { PiperWebWorkerEngine } = await import("piper-tts-web");
-    engineInstance = new PiperWebWorkerEngine();
+    const mod = await import("piper-tts-web");
+    // Use PiperWebWorkerEngine with our custom local provider
+    engineInstance = new mod.PiperWebWorkerEngine({
+      voiceProvider: new LocalVoiceProvider(),
+    });
     setStatus("ready");
     return engineInstance;
   } catch (e) {
@@ -272,6 +313,10 @@ async function getEngine(): Promise<any> {
 /**
  * Synthesize text using an installed Piper voice.
  * Returns an HTMLAudioElement that is already playing.
+ * Includes a timeout to prevent infinite hangs.
+ *
+ * piper-tts-web generate() returns:
+ *   { phonemeData, file: Blob (WAV), duration: number (ms) }
  */
 export async function synthesize(
   text: string,
@@ -280,15 +325,33 @@ export async function synthesize(
 ): Promise<HTMLAudioElement> {
   const engine = await getEngine();
 
-  // engine.generate returns { audio: Float32Array, sampleRate: number, phonemes: ... }
-  const result = await engine.generate(text, voiceId, speakerId);
+  // Wrap generate() in a timeout to prevent infinite hangs
+  const result = await Promise.race([
+    engine.generate(text, voiceId, speakerId),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
+    ),
+  ]);
 
-  // Encode audio to WAV
-  const wav = encodeWav(result.audio, result.sampleRate);
-  const blob = new Blob([wav], { type: "audio/wav" });
+  // piper-tts-web returns { phonemeData, file: Blob, duration }
+  // The `file` is already a WAV Blob ready to play.
+  let blob: Blob;
+
+  if (result?.file instanceof Blob) {
+    blob = result.file;
+  } else if (result instanceof Blob) {
+    blob = result;
+  } else if (result?.audio instanceof Float32Array) {
+    // Fallback: raw Float32 audio data
+    const wav = encodeWav(result.audio, result.sampleRate ?? 22050);
+    blob = new Blob([wav], { type: "audio/wav" });
+  } else {
+    console.error("[piper-engine] Unexpected generate() result:", result);
+    throw new Error("Unexpected generate() result format");
+  }
+
   const url = URL.createObjectURL(blob);
 
-  // Stop previous
   stop();
 
   const audio = new Audio(url);
@@ -308,6 +371,31 @@ export function stop() {
     currentAudio.src = "";
     currentAudio = null;
   }
+}
+
+/**
+ * Quick test: synthesize a short sentence and play it.
+ * Returns a promise that resolves when playback ends.
+ */
+export async function testVoice(voiceId: string): Promise<void> {
+  const sampleTexts: Record<string, string> = {
+    en: "This is a test of the Piper neural text-to-speech engine.",
+    hi: "यह पाइपर न्यूरल टेक्स्ट-टू-स्पीच इंजन का परीक्षण है।",
+    ar: "هذا اختبار لمحرك بايبر للتحويل النصي إلى كلام.",
+    de: "Dies ist ein Test der Piper-Sprachsynthese.",
+    fr: "Ceci est un test du moteur de synthèse vocale Piper.",
+    es: "Esta es una prueba del motor de síntesis de voz Piper.",
+  };
+
+  // Try to match language from voiceId (e.g. "hi_IN-rohan-medium" → "hi")
+  const lang = voiceId.split("_")[0] || "en";
+  const text = sampleTexts[lang] || sampleTexts.en;
+
+  const audio = await synthesize(text, voiceId);
+  return new Promise<void>((resolve) => {
+    audio.onended = () => resolve();
+    audio.onerror = () => resolve();
+  });
 }
 
 /**
@@ -340,12 +428,10 @@ export async function speakChunked(
 
 /**
  * Pick the best installed voice for a language name.
- * Prefers medium quality, then low, then any.
  */
 export async function pickVoiceForLanguage(
   lang: string,
 ): Promise<string | null> {
-  // Check preferred voice first
   const preferred = localStorage.getItem("doclens.piper.preferredVoice");
   if (preferred) {
     if (await isInstalled(preferred)) return preferred;
@@ -354,14 +440,11 @@ export async function pickVoiceForLanguage(
   const installed = await listInstalled();
   if (installed.length === 0) return null;
 
-  // Get metadata for installed voices
   const catalog = await fetchCatalog();
   const installedVoices = catalog.filter((v) => installed.includes(v.key));
 
-  // Normalize language for matching
   const langLower = lang.toLowerCase();
 
-  // Try exact language match
   const langMatches = installedVoices.filter(
     (v) =>
       v.language.name_english.toLowerCase() === langLower ||
@@ -369,13 +452,11 @@ export async function pickVoiceForLanguage(
   );
 
   if (langMatches.length > 0) {
-    // Prefer medium quality
     const medium = langMatches.find((v) => v.quality === "medium");
     if (medium) return medium.key;
     return langMatches[0].key;
   }
 
-  // Fallback: return any installed voice
   return installed[0];
 }
 
@@ -391,18 +472,17 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   const bitsPerSample = 16;
   const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
   const blockAlign = (numChannels * bitsPerSample) / 8;
-  const dataSize = samples.length * 2; // 16-bit = 2 bytes per sample
+  const dataSize = samples.length * 2;
 
   const buffer = new ArrayBuffer(44 + dataSize);
   const view = new DataView(buffer);
 
-  // WAV header
   writeString(view, 0, "RIFF");
   view.setUint32(4, 36 + dataSize, true);
   writeString(view, 8, "WAVE");
   writeString(view, 12, "fmt ");
-  view.setUint32(16, 16, true);           // chunk size
-  view.setUint16(20, 1, true);            // PCM format
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, byteRate, true);
@@ -411,12 +491,11 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   writeString(view, 36, "data");
   view.setUint32(40, dataSize, true);
 
-  // Audio data: float32 → int16
-  let offset = 44;
+  let off = 44;
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    offset += 2;
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
   }
 
   return buffer;
