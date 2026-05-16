@@ -102,6 +102,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   const [runAllActive, setRunAllActive] = useState(false);
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const mountedRef = useRef(true);
+  /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
+  const selectionOverridesRef = useRef<Map<number, string>>(new Map());
 
   const aiSummaryRef = useRef(aiSummary);
   aiSummaryRef.current = aiSummary;
