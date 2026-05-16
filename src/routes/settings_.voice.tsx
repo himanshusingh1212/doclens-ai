@@ -350,6 +350,69 @@ function VoicePage() {
           </div>
         </section>
 
+        {/* Voice Models (Piper, offline neural) */}
+        <section className="mb-5 rounded-lg border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">neural voice models</div>
+              <div className="mt-1 text-sm text-foreground">
+                Offline Piper voices · Brave-safe · {installed.length} installed
+              </div>
+            </div>
+            <button
+              onClick={openPiperCatalog}
+              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            >
+              browse catalog
+            </button>
+          </div>
+
+          {/* Engine preference */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <span>engine</span>
+            {(["auto", "neural", "browser"] as TtsEngine[]).map((e) => (
+              <button
+                key={e}
+                onClick={() => { setTtsEngine(e); setEngineLocal(e); }}
+                className={`rounded px-2 py-0.5 ${engine === e ? "bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+
+          {installed.length === 0 ? (
+            <div className="rounded border border-dashed border-border bg-background/40 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+              No neural voices installed. Click "browse catalog" to download a Piper voice (~20–60 MB each, cached offline).
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded border border-border">
+              {installed.map((r) => (
+                <li key={r.voiceId} className="flex items-center gap-3 px-3 py-2">
+                  <input
+                    type="radio"
+                    name="preferred-piper"
+                    checked={preferredPiper === r.voiceId}
+                    onChange={() => handleSetPreferredPiper(r.voiceId)}
+                    className="accent-primary"
+                    aria-label="Set preferred"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-mono text-[12px] text-foreground">{r.voiceId}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground">{r.language}</div>
+                  </div>
+                  <button
+                    onClick={() => handleRemovePiper(r.voiceId)}
+                    className="rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"
+                  >
+                    remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* Rate and Pitch controls */}
         <section className="mb-5 rounded-lg border border-border bg-surface p-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
