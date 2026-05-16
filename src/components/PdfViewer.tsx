@@ -299,13 +299,18 @@ export function PdfViewer({ docId }: Props) {
 
   const handleSpeak = useCallback(() => {
     if (!selection) return;
+    if (speakState === "playing") {
+      ttsRef.current?.stop();
+      setSpeakState("idle");
+      return;
+    }
     ttsRef.current?.destroy();
     ttsRef.current = createSmartTtsController(selection.text, {
       onState: (s) => setSpeakState(s === "playing" ? "playing" : "idle"),
       language: null,
     });
     ttsRef.current.play();
-  }, [selection]);
+  }, [selection, speakState]);
 
   if (loading) {
     return (
