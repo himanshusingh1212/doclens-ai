@@ -30,7 +30,7 @@ import {
   type PageOverrides,
 } from "@/lib/storage";
 import {
-  createTtsController,
+  createSmartTtsController,
   isTtsSupported,
   stopAll as stopAllTts,
 } from "@/lib/tts";
@@ -102,6 +102,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   const [runAllActive, setRunAllActive] = useState(false);
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const mountedRef = useRef(true);
+  /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
+  const selectionOverridesRef = useRef<Map<number, string>>(new Map());
 
   const aiSummaryRef = useRef(aiSummary);
   aiSummaryRef.current = aiSummary;
@@ -152,6 +154,11 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
       stopAllTts();
 
+      // One-shot selection override (from PDF text selection → "Translate")
+      const selOverride = selectionOverridesRef.current.get(pageNumber);
+      if (selOverride) selectionOverridesRef.current.delete(pageNumber);
+      const effectiveText = selOverride ?? pageRec.text;
+
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
         payload = { ...state.customRequest, stream: true };
@@ -163,7 +170,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
           style: eff.style,
           temperature: eff.temperature,
           pageNumber,
-          pageText: pageRec.text,
+          pageText: effectiveText,
           previousExcerpt: eff.memory ? prevExcerpt : undefined,
         });
       }
@@ -258,6 +265,21 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   const cancelPage = useCallback((pageNumber: number) => {
     abortMap.current.get(pageNumber)?.abort();
   }, []);
+
+  // Listen for PDF-viewer "translate selection" events
+  const runPageRef = useRef(runPage);
+  runPageRef.current = runPage;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ docId: string; pageNumber: number; text: string }>;
+      const d = ev.detail;
+      if (!d || d.docId !== docId || !d.text) return;
+      selectionOverridesRef.current.set(d.pageNumber, d.text);
+      void runPageRef.current(d.pageNumber);
+    };
+    window.addEventListener("doclens:translate-selection", handler);
+    return () => window.removeEventListener("doclens:translate-selection", handler);
+  }, [docId]);
 
   const handleRunAll = async () => {
     const freshGlobals = readGlobals();
@@ -637,7 +659,7 @@ function PageCard({
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
   const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
-  const ttsRef = useRef<ReturnType<typeof createTtsController> | null>(null);
+  const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
 
   useEffect(() => {
     if (state.status === "done") setView("result");
@@ -704,7 +726,7 @@ function PageCard({
       return;
     }
     ttsRef.current?.destroy();
-    const ctrl = createTtsController(state.result, {
+    const ctrl = createSmartTtsController(state.result, {
       onState: setTtsState,
       language: eff.language,
     });

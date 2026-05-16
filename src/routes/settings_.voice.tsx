@@ -4,17 +4,31 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
 import {
-  createTtsController,
+  deleteVoicePack,
+  listVoicePacks,
+  recordVoicePack,
+  type VoicePackRecord,
+} from "@/lib/storage";
+import {
+  createSmartTtsController,
+  downloadPiperVoice,
   getFavorites,
+  getTtsEngine,
   getTtsPitch,
   getTtsRate,
   getTtsVoiceFor,
   isTtsSupported,
+  listInstalledPiperVoices,
+  listPiperVoices,
   listVoices,
+  type PiperVoiceMeta,
+  removePiperVoice,
+  setTtsEngine,
   setTtsPitch,
   setTtsRate,
   setTtsVoiceFor,
   toggleFavorite,
+  type TtsEngine,
 } from "@/lib/tts";
 
 export const Route = createFileRoute("/settings_/voice")({
@@ -120,6 +134,14 @@ function VoicePage() {
   const [langSearch, setLangSearch] = useState("");
   const [ttsRate, setTtsRateLocal] = useState(1);
   const [ttsPitch, setTtsPitchLocal] = useState(1);
+  const [engine, setEngineLocal] = useState<TtsEngine>("auto");
+  const [piperVoices, setPiperVoices] = useState<PiperVoiceMeta[] | null>(null);
+  const [installed, setInstalled] = useState<VoicePackRecord[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [dlProgress, setDlProgress] = useState(0);
+  const [showPiperCatalog, setShowPiperCatalog] = useState(false);
+  const [piperSearch, setPiperSearch] = useState("");
+  const [preferredPiper, setPreferredPiper] = useState<string>("");
 
   // Initialize from stored settings
   useEffect(() => {
@@ -127,7 +149,77 @@ function VoicePage() {
     setFavs(new Set(getFavorites()));
     setTtsRateLocal(getTtsRate());
     setTtsPitchLocal(getTtsPitch());
+    setEngineLocal(getTtsEngine());
+    setPreferredPiper(localStorage.getItem("doclens.piper.preferredVoice") ?? "");
+    void refreshInstalled();
   }, []);
+
+  async function refreshInstalled() {
+    const recs = await listVoicePacks();
+    setInstalled(recs);
+  }
+
+  async function openPiperCatalog() {
+    setShowPiperCatalog(true);
+    if (piperVoices) return;
+    try {
+      const ids = await listInstalledPiperVoices();
+      const list = await listPiperVoices(ids);
+      setPiperVoices(list);
+    } catch (e) {
+      toast.error("Failed to load neural voice catalog.");
+      console.error(e);
+    }
+  }
+
+  async function handleInstallPiper(v: PiperVoiceMeta) {
+    setDownloading(v.voiceId);
+    setDlProgress(0);
+    try {
+      await downloadPiperVoice(v.voiceId, (loaded, total) => {
+        setDlProgress(total > 0 ? Math.round((loaded / total) * 100) : 0);
+      });
+      await recordVoicePack({
+        voiceId: v.voiceId,
+        language: v.langName || v.language,
+        installedAt: Date.now(),
+      });
+      await refreshInstalled();
+      if (piperVoices) {
+        setPiperVoices(piperVoices.map((p) => p.voiceId === v.voiceId ? { ...p, installed: true } : p));
+      }
+      toast.success(`Installed ${v.voiceId}`);
+    } catch (e) {
+      toast.error(`Install failed: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setDownloading(null);
+      setDlProgress(0);
+    }
+  }
+
+  async function handleRemovePiper(voiceId: string) {
+    try {
+      await removePiperVoice(voiceId);
+      await deleteVoicePack(voiceId);
+      await refreshInstalled();
+      if (piperVoices) {
+        setPiperVoices(piperVoices.map((p) => p.voiceId === voiceId ? { ...p, installed: false } : p));
+      }
+      if (preferredPiper === voiceId) {
+        localStorage.removeItem("doclens.piper.preferredVoice");
+        setPreferredPiper("");
+      }
+      toast.success(`Removed ${voiceId}`);
+    } catch (e) {
+      toast.error(`Remove failed: ${e instanceof Error ? e.message : "unknown"}`);
+    }
+  }
+
+  function handleSetPreferredPiper(voiceId: string) {
+    if (voiceId) localStorage.setItem("doclens.piper.preferredVoice", voiceId);
+    else localStorage.removeItem("doclens.piper.preferredVoice");
+    setPreferredPiper(voiceId);
+  }
 
   // Update selected voice when language changes
   useEffect(() => {
@@ -210,9 +302,9 @@ function VoicePage() {
     const sample = sampleFor(language);
     const prev = getTtsVoiceFor(language);
     setTtsVoiceFor(language, v.name);
-    const ctrl = createTtsController(sample, {
+    const ctrl = createSmartTtsController(sample, {
       language,
-      onState: (s) => {
+      onState: (s: "idle" | "playing" | "paused" | "ended") => {
         if (s === "ended" || s === "idle") setPreviewing(null);
       },
     });
@@ -256,6 +348,69 @@ function VoicePage() {
               change language
             </button>
           </div>
+        </section>
+
+        {/* Voice Models (Piper, offline neural) */}
+        <section className="mb-5 rounded-lg border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">neural voice models</div>
+              <div className="mt-1 text-sm text-foreground">
+                Offline Piper voices · Brave-safe · {installed.length} installed
+              </div>
+            </div>
+            <button
+              onClick={openPiperCatalog}
+              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            >
+              browse catalog
+            </button>
+          </div>
+
+          {/* Engine preference */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <span>engine</span>
+            {(["auto", "neural", "browser"] as TtsEngine[]).map((e) => (
+              <button
+                key={e}
+                onClick={() => { setTtsEngine(e); setEngineLocal(e); }}
+                className={`rounded px-2 py-0.5 ${engine === e ? "bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+
+          {installed.length === 0 ? (
+            <div className="rounded border border-dashed border-border bg-background/40 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+              No neural voices installed. Click "browse catalog" to download a Piper voice (~20–60 MB each, cached offline).
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded border border-border">
+              {installed.map((r) => (
+                <li key={r.voiceId} className="flex items-center gap-3 px-3 py-2">
+                  <input
+                    type="radio"
+                    name="preferred-piper"
+                    checked={preferredPiper === r.voiceId}
+                    onChange={() => handleSetPreferredPiper(r.voiceId)}
+                    className="accent-primary"
+                    aria-label="Set preferred"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-mono text-[12px] text-foreground">{r.voiceId}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground">{r.language}</div>
+                  </div>
+                  <button
+                    onClick={() => handleRemovePiper(r.voiceId)}
+                    className="rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-destructive"
+                  >
+                    remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Rate and Pitch controls */}
@@ -467,6 +622,64 @@ function VoicePage() {
                   no languages match "{langSearch}"
                 </li>
               )}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Piper catalog modal */}
+      {showPiperCatalog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowPiperCatalog(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-border px-5 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Piper neural voices</h3>
+                <button onClick={() => setShowPiperCatalog(false)} className="rounded-md p-1 text-muted-foreground hover:text-foreground">✕</button>
+              </div>
+              <input
+                value={piperSearch}
+                onChange={(e) => setPiperSearch(e.target.value)}
+                placeholder="Search voices…"
+                className="mt-3 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+            <ul className="flex-1 divide-y divide-border overflow-auto">
+              {piperVoices === null && (
+                <li className="px-5 py-10 text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">loading catalog…</li>
+              )}
+              {piperVoices?.filter((v) => {
+                const q = piperSearch.trim().toLowerCase();
+                if (!q) return true;
+                return v.voiceId.toLowerCase().includes(q) || v.langName.toLowerCase().includes(q);
+              }).map((v) => (
+                <li key={v.voiceId} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-mono text-[12px] text-foreground">{v.voiceId}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground">
+                      {v.langName} · {v.language} · {v.quality}
+                    </div>
+                  </div>
+                  {v.installed ? (
+                    <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-primary">installed</span>
+                  ) : downloading === v.voiceId ? (
+                    <span className="font-mono text-[10px] text-primary">{dlProgress}%</span>
+                  ) : (
+                    <button
+                      onClick={() => handleInstallPiper(v)}
+                      disabled={!!downloading}
+                      className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-40"
+                    >
+                      install
+                    </button>
+                  )}
+                </li>
+              ))}
             </ul>
           </div>
         </div>

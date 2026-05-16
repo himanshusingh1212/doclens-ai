@@ -2,11 +2,12 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
 const DB_NAME = "doclens";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const STORE = "documents";
 const BLOBS = "blobs";
 const META = "meta";
 const PAGES = "pageData";
+const VOICE_PACKS = "voicePacks";
 
 export type AiMode = "translate" | "summarize" | "explain" | "keypoints";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
@@ -231,6 +232,9 @@ function db() {
         }
         if (!d.objectStoreNames.contains(PAGES)) {
           d.createObjectStore(PAGES, { keyPath: "key" });
+        }
+        if (!d.objectStoreNames.contains(VOICE_PACKS)) {
+          d.createObjectStore(VOICE_PACKS, { keyPath: "voiceId" });
         }
 
         // v5→v6: split embedded pages[] and pageAi map into per-page records.
@@ -549,4 +553,51 @@ export async function setLastOpened(id: string | null) {
   const d = await db();
   if (id === null) await d.delete(META, LAST_OPENED_KEY);
   else await safePut(d, META, id, LAST_OPENED_KEY);
+}
+
+/* ---------- Voice packs (Piper TTS) ---------- */
+
+export interface VoicePackRecord {
+  voiceId: string;
+  language: string;
+  installedAt: number;
+  sizeBytes?: number;
+}
+
+export async function listVoicePacks(): Promise<VoicePackRecord[]> {
+  const d = await db();
+  return ((await d.getAll(VOICE_PACKS)) as VoicePackRecord[]).sort(
+    (a, b) => a.voiceId.localeCompare(b.voiceId),
+  );
+}
+export async function recordVoicePack(rec: VoicePackRecord) {
+  const d = await db();
+  await safePut(d, VOICE_PACKS, rec);
+}
+export async function deleteVoicePack(voiceId: string) {
+  const d = await db();
+  await d.delete(VOICE_PACKS, voiceId);
+}
+
+const PIPER_PREF_KEY = "piper.preferredVoice";
+export async function getPiperPreferred(): Promise<string | null> {
+  const d = await db();
+  return ((await d.get(META, PIPER_PREF_KEY)) as string | null) ?? null;
+}
+export async function setPiperPreferred(voiceId: string | null) {
+  const d = await db();
+  if (!voiceId) await d.delete(META, PIPER_PREF_KEY);
+  else await safePut(d, META, voiceId, PIPER_PREF_KEY);
+}
+
+/* ---------- IDB quota estimate ---------- */
+
+export async function estimateStorage(): Promise<{ usage: number; quota: number } | null> {
+  if (typeof navigator === "undefined" || !navigator.storage?.estimate) return null;
+  try {
+    const e = await navigator.storage.estimate();
+    return { usage: e.usage ?? 0, quota: e.quota ?? 0 };
+  } catch {
+    return null;
+  }
 }
