@@ -78,8 +78,8 @@ function SettingsPage() {
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("free");
-  const [mode, setModeState] = useState<GlobalMode>("summarize");
-  const [style, setStyleState] = useState("Neutral");
+  const [mode, setModeState] = useState<GlobalMode>("explain");
+  const [style, setStyleState] = useState<ExplanationStyle>("Standard");
   const [temperature, setTemp] = useState(0.3);
   const [memory, setMemoryState] = useState(true);
   const [sequential, setSequentialState] = useState(true);
