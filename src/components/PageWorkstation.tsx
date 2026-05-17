@@ -17,6 +17,7 @@ import {
   getTemperature,
   memoryExcerpt,
   MODE_INSTRUCTIONS,
+  EXPLANATION_STYLES,
   streamCompletion,
   type GlobalMode,
   type ORModel,
@@ -42,7 +43,7 @@ interface Props {
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
 }
 
-const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
+const STYLES = EXPLANATION_STYLES.map((s) => s.id);
 const QUICK_LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
 
 /** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
