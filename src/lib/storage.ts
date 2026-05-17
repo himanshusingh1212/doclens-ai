@@ -21,7 +21,7 @@ const META = "meta";
 const PAGES = "pageData";
 const VOICE_PACKS = "voicePacks";
 
-export type AiMode = "translate" | "summarize" | "explain" | "keypoints";
+export type AiMode = "translate" | "explain";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
 
 export interface AiResult {
