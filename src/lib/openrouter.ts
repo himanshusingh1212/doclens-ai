@@ -43,20 +43,26 @@ export function setOutputLanguage(lang: string) {
   localStorage.setItem(LANG_LS, lang);
 }
 
-export type GlobalMode = "translate" | "summarize" | "explain" | "keypoints";
+export type GlobalMode = "translate" | "explain";
+/** Legacy values ("summarize", "keypoints") collapse into "explain". */
+function normalizeMode(v: string | null): GlobalMode {
+  if (v === "translate") return "translate";
+  return "explain";
+}
 export function getMode(): GlobalMode {
-  if (typeof window === "undefined") return "summarize";
-  return (localStorage.getItem(MODE_LS) as GlobalMode) ?? "summarize";
+  if (typeof window === "undefined") return "explain";
+  return normalizeMode(localStorage.getItem(MODE_LS));
 }
 export function setMode(m: GlobalMode) {
   localStorage.setItem(MODE_LS, m);
 }
 
-export function getStyle(): string {
-  if (typeof window === "undefined") return "Neutral";
-  return localStorage.getItem(STYLE_LS) ?? "Neutral";
+export function getStyle(): ExplanationStyle {
+  if (typeof window === "undefined") return "Standard";
+  const v = localStorage.getItem(STYLE_LS) as ExplanationStyle | null;
+  return v && EXPLANATION_STYLES.some((s) => s.id === v) ? v : "Standard";
 }
-export function setStyle(s: string) {
+export function setStyle(s: ExplanationStyle) {
   localStorage.setItem(STYLE_LS, s);
 }
 
