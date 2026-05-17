@@ -17,6 +17,7 @@ import {
   getTemperature,
   memoryExcerpt,
   MODE_INSTRUCTIONS,
+  EXPLANATION_STYLES,
   streamCompletion,
   type GlobalMode,
   type ORModel,
