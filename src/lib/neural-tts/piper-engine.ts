@@ -240,25 +240,42 @@ export async function downloadVoice(
 /** Remove an installed voice. */
 export async function removeVoice(voiceId: string): Promise<void> {
   await idbDelete(voiceId);
+  localProviderInstance?.evict(voiceId);
   invalidateCatalog();
 }
 
 // ─── Custom VoiceProvider for IndexedDB ────────────────────────────────────
 
 /**
- * A voice provider that reads models from IndexedDB instead of downloading
- * from HuggingFace on every generate() call.  Mimics the return format of
- * piper-tts-web's RemoteVoiceProvider: [configJson, onnxBlobUrl].
+ * A voice provider that reads models from IndexedDB and caches the ONNX
+ * Blob URL per voiceId. Without this cache, every `generate()` would create
+ * a fresh 20-60 MB Blob URL and leak it — `piper-tts-web` calls fetch()
+ * on every synthesis request.
+ *
+ * URLs are only revoked when the voice is removed or the provider is
+ * destroyed, so the engine can reuse the same ONNX session indefinitely.
  */
 class LocalVoiceProvider {
-  private blobUrls: string[] = [];
+  private cache = new Map<string, { config: unknown; blobUrl: string }>();
 
   destroy() {
-    for (const url of this.blobUrls) URL.revokeObjectURL(url);
-    this.blobUrls = [];
+    for (const { blobUrl } of this.cache.values()) URL.revokeObjectURL(blobUrl);
+    this.cache.clear();
+  }
+
+  /** Drop a single voice from cache (called after removeVoice). */
+  evict(voiceId: string) {
+    const entry = this.cache.get(voiceId);
+    if (entry) {
+      URL.revokeObjectURL(entry.blobUrl);
+      this.cache.delete(voiceId);
+    }
   }
 
   async fetch(voiceId: string): Promise<[any, string]> {
+    const cached = this.cache.get(voiceId);
+    if (cached) return [cached.config, cached.blobUrl];
+
     const record = await idbGet<{
       onnx: ArrayBuffer;
       config: any;
@@ -270,10 +287,9 @@ class LocalVoiceProvider {
       );
     }
 
-    // Return [configJson, onnxBlobUrl] — matches piper-tts-web's format
     const blob = new Blob([record.onnx], { type: "application/octet-stream" });
     const blobUrl = URL.createObjectURL(blob);
-    this.blobUrls.push(blobUrl);
+    this.cache.set(voiceId, { config: record.config, blobUrl });
     return [record.config, blobUrl];
   }
 
@@ -281,6 +297,8 @@ class LocalVoiceProvider {
     return [];
   }
 }
+
+let localProviderInstance: LocalVoiceProvider | null = null;
 
 // ─── Engine / Synthesis ────────────────────────────────────────────────────
 
@@ -297,9 +315,9 @@ async function getEngine(): Promise<any> {
   setStatus("loading");
   try {
     const mod = await import("piper-tts-web");
-    // Use PiperWebWorkerEngine with our custom local provider
+    if (!localProviderInstance) localProviderInstance = new LocalVoiceProvider();
     engineInstance = new mod.PiperWebWorkerEngine({
-      voiceProvider: new LocalVoiceProvider(),
+      voiceProvider: localProviderInstance,
     });
     setStatus("ready");
     return engineInstance;
@@ -311,21 +329,16 @@ async function getEngine(): Promise<any> {
 }
 
 /**
- * Synthesize text using an installed Piper voice.
- * Returns an HTMLAudioElement that is already playing.
- * Includes a timeout to prevent infinite hangs.
- *
- * piper-tts-web generate() returns:
- *   { phonemeData, file: Blob (WAV), duration: number (ms) }
+ * Low-level: synthesize a chunk and return the raw WAV Blob.
+ * Caller is responsible for playback and memory.
  */
-export async function synthesize(
+export async function synthesizeBlob(
   text: string,
   voiceId: string,
   speakerId = 0,
-): Promise<HTMLAudioElement> {
+): Promise<Blob> {
   const engine = await getEngine();
 
-  // Wrap generate() in a timeout to prevent infinite hangs
   const result = await Promise.race([
     engine.generate(text, voiceId, speakerId),
     new Promise<never>((_, reject) =>
@@ -333,49 +346,56 @@ export async function synthesize(
     ),
   ]);
 
-  // piper-tts-web returns { phonemeData, file: Blob, duration }
-  // The `file` is already a WAV Blob ready to play.
-  let blob: Blob;
-
-  if (result?.file instanceof Blob) {
-    blob = result.file;
-  } else if (result instanceof Blob) {
-    blob = result;
-  } else if (result?.audio instanceof Float32Array) {
-    // Fallback: raw Float32 audio data
+  if (result?.file instanceof Blob) return result.file;
+  if (result instanceof Blob) return result;
+  if (result?.audio instanceof Float32Array) {
     const wav = encodeWav(result.audio, result.sampleRate ?? 22050);
-    blob = new Blob([wav], { type: "audio/wav" });
-  } else {
-    console.error("[piper-engine] Unexpected generate() result:", result);
-    throw new Error("Unexpected generate() result format");
+    return new Blob([wav], { type: "audio/wav" });
   }
+  console.error("[piper-engine] Unexpected generate() result:", result);
+  throw new Error("Unexpected generate() result format");
+}
 
+/**
+ * Synthesize text using an installed Piper voice via HTMLAudioElement.
+ * Used by testVoice — for long-form playback use speakChunked which uses
+ * an AudioContext pipeline for gapless output.
+ */
+export async function synthesize(
+  text: string,
+  voiceId: string,
+  speakerId = 0,
+): Promise<HTMLAudioElement> {
+  const blob = await synthesizeBlob(text, voiceId, speakerId);
   const url = URL.createObjectURL(blob);
 
   stop();
 
   const audio = new Audio(url);
   currentAudio = audio;
-  audio.onended = () => {
+  const cleanup = () => {
     URL.revokeObjectURL(url);
     if (currentAudio === audio) currentAudio = null;
   };
+  audio.onended = cleanup;
+  audio.onerror = cleanup;
   await audio.play();
   return audio;
 }
 
-/** Stop any current Piper playback. */
+/** Stop any current Piper playback (HTMLAudio + AudioContext pipeline). */
 export function stop() {
   if (currentAudio) {
     currentAudio.pause();
-    currentAudio.src = "";
+    try { currentAudio.removeAttribute("src"); currentAudio.load(); } catch { /* ignore */ }
     currentAudio = null;
   }
+  stopAudioContextPlayback();
 }
 
 /**
  * Quick test: synthesize a short sentence and play it.
- * Returns a promise that resolves when playback ends.
+ * Resolves when playback ends.
  */
 export async function testVoice(voiceId: string): Promise<void> {
   const sampleTexts: Record<string, string> = {
@@ -387,7 +407,6 @@ export async function testVoice(voiceId: string): Promise<void> {
     es: "Esta es una prueba del motor de síntesis de voz Piper.",
   };
 
-  // Try to match language from voiceId (e.g. "hi_IN-rohan-medium" → "hi")
   const lang = voiceId.split("_")[0] || "en";
   const text = sampleTexts[lang] || sampleTexts.en;
 
@@ -398,31 +417,177 @@ export async function testVoice(voiceId: string): Promise<void> {
   });
 }
 
+// ─── AudioContext gapless playback pipeline ────────────────────────────────
+
+let audioCtx: AudioContext | null = null;
+let activePipeline: { stop: () => void } | null = null;
+
+function getAudioCtx(): AudioContext {
+  if (!audioCtx || audioCtx.state === "closed") {
+    const Ctor =
+      (window as any).AudioContext || (window as any).webkitAudioContext;
+    audioCtx = new Ctor();
+  }
+  return audioCtx!;
+}
+
+function stopAudioContextPlayback() {
+  if (activePipeline) {
+    activePipeline.stop();
+    activePipeline = null;
+  }
+}
+
 /**
- * Speak text in chunks (for long text), using an installed voice.
- * Resolves when all chunks finish or the AbortSignal fires.
+ * Speak text gaplessly using a 2-deep pre-render pipeline.
+ *
+ *  - Inference of chunk N+1 starts while chunk N plays (eliminates the
+ *    sequential synth-then-play gap).
+ *  - Decoded AudioBuffers feed an AudioBufferSourceNode scheduled at the
+ *    previous buffer's exact endTime → sample-accurate, no element-teardown
+ *    audible gap.
+ *  - The queue is bounded by *decoded buffers* (not just pending promises),
+ *    so a slow listener with fast inference can't accumulate WAV blobs.
  */
 export async function speakChunked(
   text: string,
   voiceId: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const chunks = splitIntoSentences(text);
-  for (const chunk of chunks) {
-    if (signal?.aborted) return;
-    const trimmed = chunk.trim();
-    if (!trimmed) continue;
+  const chunks = splitIntoSentences(text)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  if (chunks.length === 0) return;
 
-    const audio = await synthesize(trimmed, voiceId);
-    await new Promise<void>((resolve) => {
-      const cleanup = () => resolve();
-      audio.onended = cleanup;
-      audio.onerror = cleanup;
-      signal?.addEventListener("abort", () => {
-        stop();
-        cleanup();
-      }, { once: true });
+  stop(); // cancel any prior playback
+
+  const ctx = getAudioCtx();
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch { /* ignore */ }
+  }
+
+  const MAX_BUFFERED = 2; // depth of decoded buffers kept ready
+
+  let aborted = false;
+  const sources = new Set<AudioBufferSourceNode>();
+  const decoded: AudioBuffer[] = [];
+  let prefetchIndex = 0;
+  let resolveSlot: (() => void) | null = null;
+
+  const waitForSlot = () =>
+    new Promise<void>((res) => {
+      if (decoded.length < MAX_BUFFERED || aborted) { res(); return; }
+      resolveSlot = res;
     });
+
+  const notifySlot = () => {
+    if (resolveSlot) { const r = resolveSlot; resolveSlot = null; r(); }
+  };
+
+  let resolveBuffer: (() => void) | null = null;
+  const notifyConsumer = () => {
+    if (resolveBuffer) { const r = resolveBuffer; resolveBuffer = null; r(); }
+  };
+  const waitForBuffer = () =>
+    new Promise<void>((res) => {
+      if (decoded.length > 0 || prefetchIndex >= chunks.length || aborted) {
+        res();
+        return;
+      }
+      resolveBuffer = res;
+    });
+
+  // Producer: pre-render chunks, bounded by MAX_BUFFERED decoded buffers.
+  const producer = (async () => {
+    while (prefetchIndex < chunks.length && !aborted) {
+      await waitForSlot();
+      if (aborted) return;
+      try {
+        const blob = await synthesizeBlob(chunks[prefetchIndex], voiceId);
+        if (aborted) return;
+        const arrayBuffer = await blob.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(arrayBuffer);
+        if (aborted) return;
+        decoded.push(buffer);
+        prefetchIndex++;
+        notifyConsumer();
+      } catch (e) {
+        if (aborted) return;
+        throw e;
+      }
+    }
+  })();
+
+  let nextStartTime = ctx.currentTime;
+  let playedCount = 0;
+
+  activePipeline = {
+    stop: () => {
+      aborted = true;
+      for (const s of sources) {
+        try { s.stop(); } catch { /* ignore */ }
+        try { s.disconnect(); } catch { /* ignore */ }
+      }
+      sources.clear();
+      decoded.length = 0;
+      notifySlot();
+      notifyConsumer();
+    },
+  };
+
+  const onAbort = () => activePipeline?.stop();
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    while (playedCount < chunks.length && !aborted) {
+      if (decoded.length === 0) {
+        if (prefetchIndex >= chunks.length) break;
+        await waitForBuffer();
+        if (aborted) break;
+        if (decoded.length === 0) continue;
+      }
+
+      const buffer = decoded.shift()!;
+      notifySlot(); // free a producer slot
+
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+
+      const startAt = Math.max(nextStartTime, ctx.currentTime);
+      src.start(startAt);
+      nextStartTime = startAt + buffer.duration;
+      sources.add(src);
+
+      const thisBuffer = buffer;
+      src.onended = () => {
+        sources.delete(src);
+        try { src.disconnect(); } catch { /* ignore */ }
+        void thisBuffer; // released for GC after source disconnects
+      };
+
+      playedCount++;
+
+      // Wait until the previous chunk is *almost* done before scheduling next.
+      // 50ms headroom keeps the scheduler ahead of the playhead without
+      // building up an unbounded set of live nodes.
+      const waitMs = Math.max(
+        0,
+        (nextStartTime - ctx.currentTime) * 1000 - 50,
+      );
+      if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+    }
+
+    // Wait for the final scheduled buffer to finish.
+    if (!aborted) {
+      const tail = Math.max(0, (nextStartTime - ctx.currentTime) * 1000);
+      if (tail > 0) await new Promise((r) => setTimeout(r, tail));
+    }
+
+    await producer.catch(() => {});
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    if (activePipeline) activePipeline = null;
   }
 }
 
