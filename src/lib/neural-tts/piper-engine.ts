@@ -240,25 +240,42 @@ export async function downloadVoice(
 /** Remove an installed voice. */
 export async function removeVoice(voiceId: string): Promise<void> {
   await idbDelete(voiceId);
+  localProviderInstance?.evict(voiceId);
   invalidateCatalog();
 }
 
 // ─── Custom VoiceProvider for IndexedDB ────────────────────────────────────
 
 /**
- * A voice provider that reads models from IndexedDB instead of downloading
- * from HuggingFace on every generate() call.  Mimics the return format of
- * piper-tts-web's RemoteVoiceProvider: [configJson, onnxBlobUrl].
+ * A voice provider that reads models from IndexedDB and caches the ONNX
+ * Blob URL per voiceId. Without this cache, every `generate()` would create
+ * a fresh 20-60 MB Blob URL and leak it — `piper-tts-web` calls fetch()
+ * on every synthesis request.
+ *
+ * URLs are only revoked when the voice is removed or the provider is
+ * destroyed, so the engine can reuse the same ONNX session indefinitely.
  */
 class LocalVoiceProvider {
-  private blobUrls: string[] = [];
+  private cache = new Map<string, { config: unknown; blobUrl: string }>();
 
   destroy() {
-    for (const url of this.blobUrls) URL.revokeObjectURL(url);
-    this.blobUrls = [];
+    for (const { blobUrl } of this.cache.values()) URL.revokeObjectURL(blobUrl);
+    this.cache.clear();
+  }
+
+  /** Drop a single voice from cache (called after removeVoice). */
+  evict(voiceId: string) {
+    const entry = this.cache.get(voiceId);
+    if (entry) {
+      URL.revokeObjectURL(entry.blobUrl);
+      this.cache.delete(voiceId);
+    }
   }
 
   async fetch(voiceId: string): Promise<[any, string]> {
+    const cached = this.cache.get(voiceId);
+    if (cached) return [cached.config, cached.blobUrl];
+
     const record = await idbGet<{
       onnx: ArrayBuffer;
       config: any;
@@ -270,10 +287,9 @@ class LocalVoiceProvider {
       );
     }
 
-    // Return [configJson, onnxBlobUrl] — matches piper-tts-web's format
     const blob = new Blob([record.onnx], { type: "application/octet-stream" });
     const blobUrl = URL.createObjectURL(blob);
-    this.blobUrls.push(blobUrl);
+    this.cache.set(voiceId, { config: record.config, blobUrl });
     return [record.config, blobUrl];
   }
 
@@ -281,6 +297,8 @@ class LocalVoiceProvider {
     return [];
   }
 }
+
+let localProviderInstance: LocalVoiceProvider | null = null;
 
 // ─── Engine / Synthesis ────────────────────────────────────────────────────
 
