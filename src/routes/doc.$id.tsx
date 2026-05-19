@@ -18,7 +18,7 @@ import {
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 
-const extractPdfPagesClient = createClientOnlyFn(() => async (
+const extractPdfPagesClient = createClientOnlyFn(async (
   blob: Blob,
   onPage: (page: { pageNumber: number; text: string; columns: number; garbageRatio: number }, total: number) => void,
 ) => {
