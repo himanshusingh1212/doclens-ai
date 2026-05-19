@@ -1,10 +1,10 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createClientOnlyFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
-import { extractPdfPages } from "@/lib/pdf";
 import {
   getDoc,
   getDocBlob,
@@ -17,6 +17,14 @@ import {
   type DocRecord,
   type PageAiSummaryEntry,
 } from "@/lib/storage";
+
+const extractPdfPagesClient = createClientOnlyFn(async (
+  blob: Blob,
+  onPage: (page: { pageNumber: number; text: string; columns: number; garbageRatio: number }, total: number) => void,
+) => {
+  const { extractPdfPages } = await import("@/lib/pdf");
+  return extractPdfPages(blob, onPage);
+});
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
@@ -76,7 +84,7 @@ function DocPage() {
       }
       let lastTotal = 0;
       const collected: { pageNumber: number; text: string; columns: number; garbageRatio: number }[] = [];
-      await extractPdfPages(blob, (page, total) => {
+      await extractPdfPagesClient(blob, (page, total) => {
         lastTotal = total;
         collected.push({
           pageNumber: page.pageNumber,
@@ -179,21 +187,29 @@ function DocPage() {
           </>
         }
       />
-      <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-        <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
-          <PdfViewer docId={id} />
-        </section>
-        <section className="h-full overflow-hidden">
-          <RightPanel
-            docId={id}
-            pageCount={pageCount}
-            analyzing={analyzing}
-            status={status}
-            aiSummary={aiSummary}
-            onPageAiChange={handlePageAiChange}
-          />
-        </section>
-      </main>
+      <ClientOnly
+        fallback={
+          <main className="flex flex-1 items-center justify-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+            loading workstation…
+          </main>
+        }
+      >
+        <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
+          <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
+            <PdfViewer docId={id} />
+          </section>
+          <section className="h-full overflow-hidden">
+            <RightPanel
+              docId={id}
+              pageCount={pageCount}
+              analyzing={analyzing}
+              status={status}
+              aiSummary={aiSummary}
+              onPageAiChange={handlePageAiChange}
+            />
+          </section>
+        </main>
+      </ClientOnly>
     </div>
   );
 }
