@@ -1,3 +1,5 @@
+import "@tanstack/react-start/client-only";
+
 /**
  * Piper TTS Engine — Full local neural TTS with HuggingFace voice catalog.
  *
