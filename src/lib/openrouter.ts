@@ -150,12 +150,23 @@ const HEADERS_BASE = {
 };
 
 export async function validateKey(key: string): Promise<boolean> {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    setKeyStatus("missing");
+    return false;
+  }
+  if (!isKeyFormatValid(trimmed)) {
+    setKeyStatus("invalid");
+    return false;
+  }
   try {
     const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-      headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
+      headers: { Authorization: `Bearer ${trimmed}`, ...HEADERS_BASE },
     });
+    setKeyStatus(res.ok ? "valid" : "invalid");
     return res.ok;
   } catch {
+    // Network error — don't mark invalid; status stays unknown.
     return false;
   }
 }
@@ -168,6 +179,67 @@ export async function fetchModels(key: string): Promise<ORModel[]> {
   const json = await res.json();
   return (json.data ?? []) as ORModel[];
 }
+
+/* -------- Friendly errors -------- */
+
+export type OpenRouterErrorKind =
+  | "auth"
+  | "credits"
+  | "rate_limit"
+  | "server"
+  | "network"
+  | "unknown";
+
+export class OpenRouterError extends Error {
+  readonly status: number;
+  readonly kind: OpenRouterErrorKind;
+  constructor(message: string, status: number, kind: OpenRouterErrorKind) {
+    super(message);
+    this.name = "OpenRouterError";
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
+function friendlyOpenRouterError(status: number, body: string): OpenRouterError {
+  if (status === 401)
+    return new OpenRouterError(
+      "Your OpenRouter API key is invalid or expired. Add a valid key to continue.",
+      401,
+      "auth",
+    );
+  if (status === 403)
+    return new OpenRouterError(
+      "OpenRouter rejected this key for the selected model. Check key permissions or pick another model.",
+      403,
+      "auth",
+    );
+  if (status === 402)
+    return new OpenRouterError(
+      "Your OpenRouter account is out of credits. Add credits or switch to a free model.",
+      402,
+      "credits",
+    );
+  if (status === 429)
+    return new OpenRouterError(
+      "Rate limit reached on OpenRouter. Please wait a moment and try again.",
+      429,
+      "rate_limit",
+    );
+  if (status >= 500)
+    return new OpenRouterError(
+      "OpenRouter is having trouble right now. Please retry shortly.",
+      status,
+      "server",
+    );
+  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 160);
+  return new OpenRouterError(
+    `Request failed (${status})${snippet ? `: ${snippet}` : "."}`,
+    status,
+    "unknown",
+  );
+}
+
 
 /** Default timeout for a single streaming request (ms). */
 const STREAM_TIMEOUT_MS = 60_000;
