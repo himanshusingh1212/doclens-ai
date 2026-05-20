@@ -313,10 +313,14 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
 
     if (!res.ok || !res.body) {
       const txt = await res.text().catch(() => "");
-      lastError = new Error(`OpenRouter error ${res.status}: ${txt.slice(0, 200)}`);
+      const friendly = friendlyOpenRouterError(res.status, txt);
+      // Persist key-status side effects for auth failures.
+      if (friendly.kind === "auth") setKeyStatus("invalid");
+      lastError = friendly;
       if (isRetryable(res.status) && attempt < MAX_RETRIES) continue;
-      throw lastError;
+      throw friendly;
     }
+
 
     // Stream reading — no retry once streaming starts
     const reader = res.body.getReader();
