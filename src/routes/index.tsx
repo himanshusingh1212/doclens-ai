@@ -50,6 +50,13 @@ function DashboardPage() {
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<DocSummary | null>(null);
+  const [keyStatus, setKeyStatus] = useState<KeyStatus>("unknown");
+
+  useEffect(() => {
+    setKeyStatus(getKeyStatus());
+    return onKeyChange(() => setKeyStatus(getKeyStatus()));
+  }, []);
+
 
   useEffect(() => {
     let cancelled = false;
