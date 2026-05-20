@@ -278,7 +278,14 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
           const err = e instanceof Error ? e.message : "Unknown error";
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
+          if (e instanceof OpenRouterError && e.kind === "auth") {
+            toast.error(err);
+            openApiKeyModal(err);
+          } else if (e instanceof OpenRouterError) {
+            toast.error(err);
+          }
         }
+
       } finally {
         clearInterval(flushTimer);
         abortMap.current.delete(pageNumber);
