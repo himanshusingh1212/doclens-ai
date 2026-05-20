@@ -44,6 +44,8 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
           </span>
         )}
         {right}
+        <ApiKeyStatusBadge />
+
         <Link
           to="/settings"
           className="rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground hover:border-border-strong"
