@@ -15,6 +15,17 @@ const STYLE_LS = "doclens.style";
 const TEMP_LS = "doclens.temperature";
 const MEM_LS = "doclens.memory";
 const SEQ_LS = "doclens.sequential";
+const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
+const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
+export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
+
+export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
+
+function emitKeyChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(KEY_CHANGE_EVT));
+  }
+}
 
 export function getKey(): string {
   if (typeof window === "undefined") return "";
@@ -22,10 +33,52 @@ export function getKey(): string {
 }
 export function setKey(k: string) {
   localStorage.setItem(KEY_LS, k);
+  emitKeyChange();
 }
 export function clearKey() {
   localStorage.removeItem(KEY_LS);
+  localStorage.removeItem(KEY_STATUS_LS);
+  emitKeyChange();
 }
+
+/** Heuristic: OpenRouter keys are prefixed with sk-or-... */
+export function isKeyFormatValid(k: string): boolean {
+  return /^sk-or-[A-Za-z0-9_-]{20,}$/.test(k.trim());
+}
+
+export function getKeyStatus(): KeyStatus {
+  if (typeof window === "undefined") return "unknown";
+  const k = getKey();
+  if (!k) return "missing";
+  const v = localStorage.getItem(KEY_STATUS_LS);
+  return v === "valid" || v === "invalid" ? v : "unknown";
+}
+
+export function setKeyStatus(s: KeyStatus): void {
+  if (typeof window === "undefined") return;
+  if (s === "missing" || s === "unknown") localStorage.removeItem(KEY_STATUS_LS);
+  else localStorage.setItem(KEY_STATUS_LS, s);
+  emitKeyChange();
+}
+
+/** Subscribe to any key/status change (cross-tab + in-tab). */
+export function onKeyChange(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const h = () => cb();
+  window.addEventListener(KEY_CHANGE_EVT, h);
+  window.addEventListener("storage", h);
+  return () => {
+    window.removeEventListener(KEY_CHANGE_EVT, h);
+    window.removeEventListener("storage", h);
+  };
+}
+
+/** Ask the app to open the API key modal (mounted in __root.tsx). */
+export function openApiKeyModal(reason?: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(OPEN_API_KEY_MODAL_EVT, { detail: { reason } }));
+}
+
 
 export function getSelectedModel(): string {
   if (typeof window === "undefined") return "";
