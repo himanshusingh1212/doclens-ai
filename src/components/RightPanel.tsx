@@ -192,7 +192,9 @@ function ExtractedTextTab({ docId, pageCount }: { docId: string; pageCount: numb
               paddingBottom: 16,
             }}
           >
-            <ExtractedPageRow docId={docId} pageNumber={virtualRow.index + 1} />
+            <div data-index={virtualRow.index + 1} className="right-panel-item-wrap w-full">
+              <ExtractedPageRow docId={docId} pageNumber={virtualRow.index + 1} />
+            </div>
           </div>
         ))}
       </div>

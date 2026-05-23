@@ -247,6 +247,46 @@ export function PdfViewer({ docId }: Props) {
     };
   }, [docId]);
 
+  // Scroll to corresponding page on clicking right-side panel items
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // 1. Check for 1-based page-scroll target wrap
+      const itemWrap = target.closest(".right-panel-item-wrap");
+      if (itemWrap) {
+        const pageNum = parseInt(itemWrap.getAttribute("data-index") || "", 10);
+        if (pageNum > 0) {
+          const pageEl = scrollRef.current?.querySelector(`[data-page-number="${pageNum}"]`);
+          if (pageEl) {
+            pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
+        return;
+      }
+
+      // 2. Fallback: check for outer virtualized element with 0-based data-index
+      const indexEl = target.closest("[data-index]");
+      if (indexEl && !scrollRef.current?.contains(indexEl)) {
+        const val = indexEl.getAttribute("data-index");
+        if (val) {
+          const idx = parseInt(val, 10);
+          if (!isNaN(idx) && idx >= 0) {
+            const pageNum = idx + 1;
+            const pageEl = scrollRef.current?.querySelector(`[data-page-number="${pageNum}"]`);
+            if (pageEl) {
+              pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, []);
+
   /* ---------- Selection toolbar ---------- */
 
   useEffect(() => {

@@ -597,18 +597,20 @@ function VirtualPageList(props: ListProps) {
                 paddingBottom: 16,
               }}
             >
-              <PageCardLoader
-                docId={props.docId}
-                pageNumber={pageNumber}
-                globals={props.globals}
-                models={props.models}
-                summary={props.aiSummary[pageNumber]}
-                isRunning={props.runningPages.has(pageNumber)}
-                streamBuf={props.streamBufs[pageNumber] ?? ""}
-                onPageAiChange={props.onPageAiChange}
-                onRun={() => props.onRun(pageNumber)}
-                onCancel={() => props.onCancel(pageNumber)}
-              />
+              <div data-index={pageNumber} className="right-panel-item-wrap w-full">
+                <PageCardLoader
+                  docId={props.docId}
+                  pageNumber={pageNumber}
+                  globals={props.globals}
+                  models={props.models}
+                  summary={props.aiSummary[pageNumber]}
+                  isRunning={props.runningPages.has(pageNumber)}
+                  streamBuf={props.streamBufs[pageNumber] ?? ""}
+                  onPageAiChange={props.onPageAiChange}
+                  onRun={() => props.onRun(pageNumber)}
+                  onCancel={() => props.onCancel(pageNumber)}
+                />
+              </div>
             </div>
           );
         })}
