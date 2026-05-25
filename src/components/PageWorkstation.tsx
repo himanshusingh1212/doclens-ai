@@ -24,6 +24,7 @@ import {
   openApiKeyModal,
   streamCompletion,
   mapLimit,
+  validateKey,
   type GlobalMode,
   type KeyStatus,
   type ORModel,
@@ -170,6 +171,23 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     }
     return true;
   }, []);
+
+  const ensureRunAllKeyReady = useCallback(async (): Promise<boolean> => {
+    const key = getKey().trim();
+    if (!ensureKeyReady() || !key) return false;
+
+    const valid = await validateKey(key);
+    setKeyStatusState(getKeyStatus());
+    if (valid) return true;
+
+    const invalid = getKeyStatus() === "invalid";
+    const message = invalid
+      ? "Your OpenRouter API key is invalid or expired. Run All stopped before processing pages."
+      : "Could not verify your OpenRouter API key. Run All stopped before processing pages.";
+    toast.error(message);
+    if (invalid) openApiKeyModal(message);
+    return false;
+  }, [ensureKeyReady]);
 
   /* ---------- Per-page execution ---------- */
 
@@ -327,7 +345,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   }, [docId]);
 
   const handleRunAll = async () => {
-    if (!ensureKeyReady()) return;
+    if (!(await ensureRunAllKeyReady())) return;
     const freshGlobals = readGlobals();
     setGlobals(freshGlobals);
 
