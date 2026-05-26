@@ -132,6 +132,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
       if (runAllRef.current) runAllRef.current.cancelled = true;
+      // Fully tear down Piper engine to reclaim WASM/AudioContext memory
+      import("@/lib/neural-tts/piper-engine").then((p) => p.destroyEngine()).catch(() => {});
     };
   }, []);
 

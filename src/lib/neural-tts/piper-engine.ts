@@ -86,8 +86,8 @@ async function idbGet<T>(key: string): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readonly");
     const req = tx.objectStore(IDB_STORE).get(key);
-    req.onsuccess = () => resolve(req.result as T | undefined);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { db.close(); resolve(req.result as T | undefined); };
+    req.onerror = () => { db.close(); reject(req.error); };
   });
 }
 
@@ -96,8 +96,8 @@ async function idbPut(key: string, value: unknown): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readwrite");
     tx.objectStore(IDB_STORE).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
   });
 }
 
@@ -106,8 +106,8 @@ async function idbDelete(key: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readwrite");
     tx.objectStore(IDB_STORE).delete(key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
   });
 }
 
@@ -116,8 +116,8 @@ async function idbAllKeys(): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readonly");
     const req = tx.objectStore(IDB_STORE).getAllKeys();
-    req.onsuccess = () => resolve(req.result as string[]);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { db.close(); resolve(req.result as string[]); };
+    req.onerror = () => { db.close(); reject(req.error); };
   });
 }
 
@@ -418,6 +418,7 @@ export function stop() {
     currentAudio = null;
   }
   stopAudioContextPlayback();
+  closeAudioContext();
 }
 
 /**
@@ -456,6 +457,14 @@ function getAudioCtx(): AudioContext {
     audioCtx = new Ctor();
   }
   return audioCtx!;
+}
+
+/** Close the AudioContext to release native audio thread + decoded buffer pool memory. */
+function closeAudioContext() {
+  if (audioCtx && audioCtx.state !== "closed") {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
 }
 
 function stopAudioContextPlayback() {
@@ -561,6 +570,7 @@ export async function speakChunked(
       aborted = true;
       for (const s of sources) {
         try { s.stop(); } catch { /* ignore */ }
+        try { (s as any).buffer = null; } catch { /* ignore */ }
         try { s.disconnect(); } catch { /* ignore */ }
       }
       sources.clear();
@@ -594,11 +604,10 @@ export async function speakChunked(
       nextStartTime = startAt + buffer.duration;
       sources.add(src);
 
-      const thisBuffer = buffer;
       src.onended = () => {
         sources.delete(src);
+        try { (src as any).buffer = null; } catch { /* ignore */ }
         try { src.disconnect(); } catch { /* ignore */ }
-        void thisBuffer; // released for GC after source disconnects
       };
 
       playedCount++;
@@ -623,7 +632,29 @@ export async function speakChunked(
   } finally {
     signal?.removeEventListener("abort", onAbort);
     if (activePipeline) activePipeline = null;
+    // Close AudioContext after playback completes to release native memory
+    closeAudioContext();
   }
+}
+
+/**
+ * Fully tear down the Piper engine to reclaim all browser-native memory:
+ * WASM heap, AudioContext, Blob URLs for cached ONNX models.
+ * Call on route change / component unmount. The engine will lazily
+ * re-initialize on the next synthesis request.
+ */
+export function destroyEngine() {
+  stop();
+  closeAudioContext();
+  if (localProviderInstance) {
+    localProviderInstance.destroy();
+    localProviderInstance = null;
+  }
+  if (engineInstance) {
+    try { engineInstance.dispose?.(); } catch { /* ignore */ }
+    engineInstance = null;
+  }
+  setStatus("idle");
 }
 
 /**
