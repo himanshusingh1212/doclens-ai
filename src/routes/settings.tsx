@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import {
@@ -26,7 +26,7 @@ import {
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
-import { estimateStorage, clearAllAiResults } from "@/lib/storage";
+import { estimateStorage, clearAllAiResults, createDoc, StorageError } from "@/lib/storage";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
@@ -61,6 +61,8 @@ function isTextToText(m: ORModel): boolean {
 }
 
 function SettingsPage() {
+  const navigate = useNavigate();
+
   const [keyInput, setKeyInput] = useState("");
   const [keyStatus, setKeyStatus] = useState<"unknown" | "valid" | "invalid" | "checking">("unknown");
   const [showKey, setShowKey] = useState(false);
@@ -187,6 +189,21 @@ function SettingsPage() {
   return (
     <SidebarLayout
       pageTitle="General Settings"
+      onNewDocument={async (f) => {
+        try {
+          const buf = await f.arrayBuffer();
+          const rec = await createDoc(f, buf);
+          toast.success(`"${f.name}" added to library.`);
+          navigate({ to: "/doc/$id", params: { id: rec.id } });
+        } catch (e) {
+          if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
+            toast.error(e.message);
+          } else {
+            toast.error("Failed to save document. Please try again.");
+            console.error(e);
+          }
+        }
+      }}
       topBarRight={
         <span className="rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-xs font-bold text-primary">
           System Online

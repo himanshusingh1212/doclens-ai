@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { createDoc, StorageError } from "@/lib/storage";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
 import {
@@ -118,6 +119,8 @@ function sampleFor(language: string): string {
 /* ---------- Component ---------- */
 
 function VoicePage() {
+  const navigate = useNavigate();
+
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [language, setLanguage] = useState("English");
   const [selected, setSelected] = useState("");
@@ -316,7 +319,24 @@ function VoicePage() {
   };
 
   return (
-    <SidebarLayout pageTitle="Voices">
+    <SidebarLayout
+      pageTitle="Voices"
+      onNewDocument={async (f) => {
+        try {
+          const buf = await f.arrayBuffer();
+          const rec = await createDoc(f, buf);
+          toast.success(`"${f.name}" added to library.`);
+          navigate({ to: "/doc/$id", params: { id: rec.id } });
+        } catch (e) {
+          if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
+            toast.error(e.message);
+          } else {
+            toast.error("Failed to save document. Please try again.");
+            console.error(e);
+          }
+        }
+      }}
+    >
       <div className="mx-auto w-full max-w-4xl px-8 py-6">
 
         {/* Language selector card */}
