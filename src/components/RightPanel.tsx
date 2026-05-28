@@ -159,6 +159,18 @@ function ExtractedTextTab({ docId, pageCount }: { docId: string; pageCount: numb
     overscan: 3,
   });
 
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const ev = e as CustomEvent<{ pageNumber: number }>;
+      const pageNum = ev.detail?.pageNumber;
+      if (typeof pageNum === "number" && pageNum > 0 && pageNum <= pageCount) {
+        rowVirtualizer.scrollToIndex(pageNum - 1, { align: "start", behavior: "smooth" });
+      }
+    };
+    window.addEventListener("doclens:scroll-to-workstation", handleScroll);
+    return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
+  }, [pageCount, rowVirtualizer]);
+
   if (pageCount === 0) {
     return (
       <div className="flex h-full items-center justify-center px-5 py-4">

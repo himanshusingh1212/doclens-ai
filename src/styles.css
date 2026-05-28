@@ -205,4 +205,19 @@
     border: none;
     box-shadow: 0 0 10px rgba(78, 222, 163, 0.4);
   }
+
+  /* Workstation card highlight animation */
+  .highlight-card {
+    animation: pulse-border 1.5s ease-in-out;
+  }
+  @keyframes pulse-border {
+    0% {
+      border-color: var(--primary);
+      box-shadow: 0 0 16px rgba(78, 222, 163, 0.4);
+    }
+    100% {
+      border-color: var(--border);
+      box-shadow: none;
+    }
+  }
 }

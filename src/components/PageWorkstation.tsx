@@ -628,6 +628,18 @@ function VirtualPageList(props: ListProps) {
     measureElement: (el) => el?.getBoundingClientRect().height ?? 280,
   });
 
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const ev = e as CustomEvent<{ pageNumber: number }>;
+      const pageNum = ev.detail?.pageNumber;
+      if (typeof pageNum === "number" && pageNum > 0 && pageNum <= props.pageCount) {
+        rowVirtualizer.scrollToIndex(pageNum - 1, { align: "start", behavior: "smooth" });
+      }
+    };
+    window.addEventListener("doclens:scroll-to-workstation", handleScroll);
+    return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
+  }, [props.pageCount, rowVirtualizer]);
+
   return (
     <div ref={parentRef} className="flex-1 overflow-auto px-4 py-4">
       <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
@@ -784,6 +796,20 @@ function PageCard({
   const [draftError, setDraftError] = useState("");
   const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
   const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
+  const [highlighted, setHighlighted] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const ev = e as CustomEvent<{ pageNumber: number }>;
+      if (ev.detail?.pageNumber === pageNumber) {
+        setHighlighted(true);
+        const timer = setTimeout(() => setHighlighted(false), 1500);
+        return () => clearTimeout(timer);
+      }
+    };
+    window.addEventListener("doclens:scroll-to-workstation", handleScroll);
+    return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
+  }, [pageNumber]);
 
   useEffect(() => {
     if (state.status === "done") setView("result");
@@ -877,7 +903,7 @@ function PageCard({
     <article
       className={`rounded-md border bg-background/40 transition-colors ${
         isRunning ? "border-primary/50 ring-1 ring-primary/30" : "border-border"
-      }`}
+      } ${highlighted ? "highlight-card" : ""}`}
     >
       <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
         <span className="text-foreground">page {pageNumber}</span>

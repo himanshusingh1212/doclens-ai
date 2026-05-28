@@ -373,9 +373,29 @@ export function PdfViewer({ docId }: Props) {
     );
   }
 
+  const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const pageDiv = target.closest("[data-page-number]");
+    if (pageDiv) {
+      const pageNumber = parseInt(pageDiv.getAttribute("data-page-number") || "", 10);
+      if (!isNaN(pageNumber) && pageNumber > 0) {
+        window.dispatchEvent(
+          new CustomEvent("doclens:scroll-to-workstation", {
+            detail: { pageNumber },
+          })
+        );
+      }
+    }
+  };
+
   return (
     <div ref={scrollRef} className="relative h-full overflow-auto" style={{ background: "#404040" }}>
-      <div className="flex flex-col items-center gap-3 py-4">
+      <div className="flex flex-col items-center gap-3 py-4" onClick={handlePageClick}>
         {pageMetas.map((meta) => (
           <div
             key={meta.pageNumber}
