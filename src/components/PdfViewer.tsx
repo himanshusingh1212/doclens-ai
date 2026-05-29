@@ -60,6 +60,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   // Load PDF on-demand from IndexedDB (as Blob → objectURL)
   useEffect(() => {
     let cancelled = false;
+    let loadedDoc: PDFDocumentProxy | null = null;
     setLoading(true);
     setError(null);
     setDoc(null);
@@ -76,7 +77,12 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
         }
 
         const pdfDoc = await loadPdfDocument(blob);
-        if (cancelled) return;
+        if (cancelled) {
+          // Loaded after cancel — destroy immediately to prevent leak.
+          pdfDoc.destroy();
+          return;
+        }
+        loadedDoc = pdfDoc;
         setDoc(pdfDoc);
 
         const metas: PageMeta[] = [];
@@ -106,10 +112,16 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
     return () => {
       cancelled = true;
+      // Destroy previous PDFDocumentProxy to free decoded fonts, CMap tables,
+      // internal page caches, and operator lists (~200-500MB for large PDFs).
+      if (loadedDoc) {
+        loadedDoc.destroy();
+        loadedDoc = null;
+      }
     };
   }, [docId]);
 
-  /** Release bitmap memory + clear text layer + call page.cleanup() to free operator list. */
+  /** Release bitmap memory + clear text layer for an off-screen page. */
   const releasePage = useCallback(
     (pageNumber: number) => {
       const canvas = canvasRefs.current.get(pageNumber);
@@ -120,12 +132,12 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       const tl = textLayerRefs.current.get(pageNumber);
       if (tl) tl.innerHTML = "";
       renderedPages.current.delete(pageNumber);
-      // Free pdf.js internal operator list for this page.
-      if (doc) {
-        doc.getPage(pageNumber).then((p) => p.cleanup()).catch(() => {});
-      }
+      // Note: We intentionally do NOT call doc.getPage(n).cleanup() here.
+      // That call re-fetches the page proxy into pdf.js's internal cache,
+      // counterproductively increasing memory. doc.destroy() on unmount
+      // handles full cleanup.
     },
-    [doc],
+    [],
   );
 
   const renderPage = useCallback(
@@ -232,7 +244,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     };
   }, [pageMetas, renderPage, releasePage]);
 
-  // Cleanup all bitmaps on unmount / doc change
+  // Cleanup all bitmaps + destroy PDF document on unmount / doc change
   useEffect(() => {
     return () => {
       renderedPages.current.forEach((pn) => {
@@ -246,8 +258,15 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       recentlyVisibleOrder.current = [];
       ttsRef.current?.destroy();
       ttsRef.current = null;
+      // Destroy the PDFDocumentProxy to release all native memory
+      // (decoded fonts, CMap tables, page caches, operator lists).
+      // The load effect cleanup also handles this, but this is a safety net
+      // for cases where the doc was set in state before the effect re-ran.
+      if (doc) {
+        doc.destroy();
+      }
     };
-  }, [docId]);
+  }, [doc, docId]);
 
   // Scroll to corresponding page when activePage changes from outside (e.g. right-side panel)
   useEffect(() => {

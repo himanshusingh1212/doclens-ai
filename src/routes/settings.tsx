@@ -259,35 +259,39 @@ function SettingsPage() {
             </div>
           </section>
 
-          {/* Storage & Database */}
-          <section className="glass-panel flex flex-col justify-between rounded-xl p-6">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-xl text-yellow-500">💾</span>
-                <h3 className="text-lg font-semibold text-foreground">Storage & Database</h3>
-              </div>
-              {storageStats && (
-                <div className="mt-2">
-                  <div className="mb-2 flex justify-between text-xs font-bold text-muted-foreground">
-                    <span>Workspace Usage</span>
-                    <span className="text-foreground">{storageStats.usage} / {storageStats.quota}</span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-background">
-                    <div
-                      className="h-full rounded-full bg-yellow-500 transition-all"
-                      style={{ width: `${Math.min(storageStats.pctNum, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+          {/* Storage & Memory Diagnostics */}
+          <section className="glass-panel flex flex-col rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xl text-yellow-500">💾</span>
+              <h3 className="text-lg font-semibold text-foreground">Storage & Memory Diagnostics</h3>
             </div>
-            <div className="mt-6 flex justify-end">
+
+            {/* IDB Storage Bar */}
+            {storageStats && (
+              <div className="mb-5">
+                <div className="mb-2 flex justify-between text-xs font-bold text-muted-foreground">
+                  <span>IndexedDB Usage</span>
+                  <span className="text-foreground">{storageStats.usage} / {storageStats.quota}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-background">
+                  <div
+                    className="h-full rounded-full bg-yellow-500 transition-all"
+                    style={{ width: `${Math.min(storageStats.pctNum, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Runtime Memory Diagnostics */}
+            <MemoryDiagnostics />
+
+            <div className="mt-5 flex justify-end">
               <button
                 onClick={handleClearCache}
                 disabled={clearing}
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 disabled:opacity-50"
               >
-                🗑️ {clearing ? "Clearing…" : "Clear Cache"}
+                🗑️ {clearing ? "Clearing…" : "Clear AI Cache"}
               </button>
             </div>
           </section>
@@ -532,5 +536,198 @@ function SettingsPage() {
         </div>
       </div>
     </SidebarLayout>
+  );
+}
+
+/* ---------- Runtime Memory Diagnostics ---------- */
+
+interface MemorySnapshot {
+  jsHeapUsed: number;
+  jsHeapTotal: number;
+  jsHeapLimit: number;
+  canvasCount: number;
+  canvasActiveCount: number;
+  canvasMemory: number;
+  domNodes: number;
+  textLayerSpans: number;
+  dataUrlImgCount: number;
+  dataUrlImgBytes: number;
+  blobUrlCount: number;
+  localStorageBytes: number;
+  styleSheets: number;
+  cssRules: number;
+}
+
+function collectMemorySnapshot(): MemorySnapshot {
+  const mem = (performance as any).memory;
+  const snap: MemorySnapshot = {
+    jsHeapUsed: mem?.usedJSHeapSize ?? 0,
+    jsHeapTotal: mem?.totalJSHeapSize ?? 0,
+    jsHeapLimit: mem?.jsHeapSizeLimit ?? 0,
+    canvasCount: 0,
+    canvasActiveCount: 0,
+    canvasMemory: 0,
+    domNodes: document.querySelectorAll("*").length,
+    textLayerSpans: document.querySelectorAll(".textLayer span").length,
+    dataUrlImgCount: 0,
+    dataUrlImgBytes: 0,
+    blobUrlCount: 0,
+    localStorageBytes: 0,
+    styleSheets: document.styleSheets.length,
+    cssRules: 0,
+  };
+
+  // Canvas memory
+  const canvases = document.querySelectorAll("canvas");
+  snap.canvasCount = canvases.length;
+  canvases.forEach((c) => {
+    if (c.width > 0 && c.height > 0) {
+      snap.canvasActiveCount++;
+      snap.canvasMemory += c.width * c.height * 4; // RGBA
+    }
+  });
+
+  // Data URL images
+  document.querySelectorAll("img").forEach((img) => {
+    if (img.src?.startsWith("data:")) {
+      snap.dataUrlImgCount++;
+      snap.dataUrlImgBytes += img.src.length;
+    }
+  });
+
+  // Blob URLs
+  document.querySelectorAll("*").forEach((el) => {
+    for (const attr of ["src", "href"]) {
+      const val = el.getAttribute(attr);
+      if (val?.startsWith("blob:")) snap.blobUrlCount++;
+    }
+  });
+
+  // LocalStorage
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) snap.localStorageBytes += key.length + (localStorage.getItem(key) || "").length;
+  }
+
+  // CSS rules
+  for (let i = 0; i < document.styleSheets.length; i++) {
+    try { snap.cssRules += document.styleSheets[i].cssRules.length; } catch { /* cross-origin */ }
+  }
+
+  return snap;
+}
+
+function fmtMB(bytes: number): string {
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+const DIAG_COLORS: Record<string, string> = {
+  "JS Heap": "#4edea3",
+  "Canvas Buffers": "#f59e0b",
+  "Data URL Images": "#818cf8",
+  "DOM Overhead": "#38bdf8",
+  "LocalStorage": "#a78bfa",
+};
+
+function MemoryDiagnostics() {
+  const [snap, setSnap] = useState<MemorySnapshot | null>(null);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    setSnap(collectMemorySnapshot());
+    if (paused) return;
+    const id = setInterval(() => setSnap(collectMemorySnapshot()), 3000);
+    return () => clearInterval(id);
+  }, [paused]);
+
+  if (!snap) return null;
+
+  // Build breakdown rows: each contributes to the stacked bar
+  const rows = [
+    { label: "JS Heap", bytes: snap.jsHeapUsed, detail: `${fmtMB(snap.jsHeapUsed)} / ${fmtMB(snap.jsHeapTotal)} (limit ${fmtMB(snap.jsHeapLimit)})` },
+    { label: "Canvas Buffers", bytes: snap.canvasMemory, detail: `${snap.canvasActiveCount} active / ${snap.canvasCount} total` },
+    { label: "Data URL Images", bytes: snap.dataUrlImgBytes, detail: `${snap.dataUrlImgCount} image${snap.dataUrlImgCount === 1 ? "" : "s"}` },
+    { label: "DOM Overhead", bytes: snap.domNodes * 256, detail: `${snap.domNodes.toLocaleString()} nodes · ${snap.textLayerSpans} text spans` },
+    { label: "LocalStorage", bytes: snap.localStorageBytes * 2, detail: `${localStorage.length} keys` },
+  ];
+
+  const totalTracked = rows.reduce((s, r) => s + r.bytes, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Runtime Memory</span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">LIVE</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-foreground">{fmtMB(totalTracked)} tracked</span>
+          <button
+            onClick={() => setPaused(!paused)}
+            className="rounded border border-border bg-background px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {paused ? "▶ Resume" : "⏸ Pause"}
+          </button>
+          <button
+            onClick={() => setSnap(collectMemorySnapshot())}
+            className="rounded border border-border bg-background px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Stacked bar */}
+      <div className="h-4 w-full overflow-hidden rounded-full bg-background flex">
+        {rows.map((row) => {
+          const pct = totalTracked > 0 ? (row.bytes / totalTracked) * 100 : 0;
+          if (pct < 0.5) return null;
+          return (
+            <div
+              key={row.label}
+              title={`${row.label}: ${fmtMB(row.bytes)}`}
+              className="h-full transition-all duration-500"
+              style={{
+                width: `${pct}%`,
+                backgroundColor: DIAG_COLORS[row.label] ?? "#6b7280",
+                minWidth: pct > 0.5 ? "3px" : 0,
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Legend + breakdown rows */}
+      <div className="grid grid-cols-1 gap-1.5">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 px-3 py-1.5">
+            <div className="flex items-center gap-2.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm"
+                style={{ backgroundColor: DIAG_COLORS[row.label] ?? "#6b7280" }}
+              />
+              <span className="text-xs font-bold text-foreground">{row.label}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-muted-foreground">{row.detail}</span>
+              <span className="min-w-[5rem] text-right text-xs font-bold tabular-nums text-foreground">
+                {fmtMB(row.bytes)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Additional stats */}
+      <div className="flex flex-wrap gap-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <span>Blob URLs: {snap.blobUrlCount}</span>
+        <span>·</span>
+        <span>Stylesheets: {snap.styleSheets}</span>
+        <span>·</span>
+        <span>CSS Rules: {snap.cssRules.toLocaleString()}</span>
+      </div>
+    </div>
   );
 }

@@ -70,12 +70,22 @@ export function useThumbnail(docId: string): {
         canvas.height = Math.round(vp.height);
         const ctx = canvas.getContext("2d");
         if (!ctx) {
+          pdf.destroy();
           if (!cancelled) setLoading(false);
           return;
         }
 
         await page.render({ canvasContext: ctx, viewport: vp, canvas } as any).promise;
         const dataUrl = canvas.toDataURL("image/png");
+
+        // Release canvas bitmap memory
+        canvas.width = 0;
+        canvas.height = 0;
+
+        // Destroy PDF.js document proxy to free decoded fonts, CMap tables,
+        // and internal page caches (~50-200MB per document if left alive).
+        page.cleanup();
+        pdf.destroy();
 
         if (cancelled) return;
 
