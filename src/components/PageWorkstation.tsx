@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { estimateTokens } from "@/lib/models";
+import { ExplainSetupDialog } from "@/components/ExplainSetupDialog";
 import { TtsVoiceSetupDialog } from "@/components/TtsVoiceSetupDialog";
 import {
   buildPagePayload,
@@ -22,9 +23,13 @@ import {
   onKeyChange,
   OpenRouterError,
   openApiKeyModal,
+  setMode as saveMode,
+  setOutputLanguage,
+  setStyle as saveStyle,
   streamCompletion,
   mapLimit,
   validateKey,
+  type ExplanationStyle,
   type GlobalMode,
   type KeyStatus,
   type ORModel,
@@ -64,6 +69,10 @@ interface RunAllBatch {
   cancelled: boolean;
 }
 
+type PendingExplainAction =
+  | { type: "page"; pageNumber: number }
+  | { type: "all" };
+
 interface Globals {
   mode: GlobalMode;
   language: string;
@@ -97,6 +106,14 @@ function readGlobals(): Globals {
   };
 }
 
+async function readEffectiveGlobals(): Promise<Globals> {
+  const globals = readGlobals();
+  return {
+    ...globals,
+    modelId: globals.modelId || (await getEffectiveSelectedModel()),
+  };
+}
+
 function summarize(ai: PageAi): PageAiSummaryEntry {
   return {
     status: ai.status,
@@ -117,6 +134,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   const runAllRef = useRef<RunAllBatch | null>(null);
   const [runAllActive, setRunAllActive] = useState(false);
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
+  const [explainSetupOpen, setExplainSetupOpen] = useState(false);
+  const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(null);
   const mountedRef = useRef(true);
   /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
   const selectionOverridesRef = useRef<Map<number, string>>(new Map());
@@ -127,6 +146,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   globalsRef.current = globals;
   const onPageAiChangeRef = useRef(onPageAiChange);
   onPageAiChangeRef.current = onPageAiChange;
+  const explainSetupKey = `doclens.explain.setup.${docId}`;
 
   // Cleanup: abort everything on unmount
   useEffect(() => {
@@ -147,11 +167,21 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
+  const shouldShowExplainSetup = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    return globalsRef.current.mode === "explain" && localStorage.getItem(explainSetupKey) !== "1";
+  }, [explainSetupKey]);
+
   useEffect(() => {
     if (globalsRef.current.modelId) return;
     void getEffectiveSelectedModel().then((modelId) => {
       if (!modelId || getSelectedModel()) return;
-      setGlobals((current) => current.modelId ? current : { ...current, modelId });
+      setGlobals((current) => {
+        if (current.modelId) return current;
+        const next = { ...current, modelId };
+        globalsRef.current = next;
+        return next;
+      });
     });
   }, []);
 
@@ -372,9 +402,19 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     return () => window.removeEventListener("doclens:translate-selection", handler);
   }, [docId]);
 
-  const handleRunAll = async () => {
+  const runPageWithSetup = useCallback((pageNumber: number) => {
+    if (shouldShowExplainSetup()) {
+      setPendingExplainAction({ type: "page", pageNumber });
+      setExplainSetupOpen(true);
+      return;
+    }
+    void runPage(pageNumber);
+  }, [runPage, shouldShowExplainSetup]);
+
+  const runAllPages = async () => {
     if (!(await ensureRunAllKeyReady())) return;
-    const freshGlobals = readGlobals();
+    const freshGlobals = await readEffectiveGlobals();
+    globalsRef.current = freshGlobals;
     setGlobals(freshGlobals);
 
 
@@ -492,6 +532,37 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     if (runAllRef.current === batch) runAllRef.current = null;
   };
 
+  const handleRunAll = () => {
+    if (shouldShowExplainSetup()) {
+      setPendingExplainAction({ type: "all" });
+      setExplainSetupOpen(true);
+      return;
+    }
+    void runAllPages();
+  };
+
+  const handleExplainSetupConfirm = async (settings: { language: string; style: ExplanationStyle }) => {
+    saveMode("explain");
+    setOutputLanguage(settings.language);
+    saveStyle(settings.style);
+    localStorage.setItem(explainSetupKey, "1");
+
+    const nextGlobals = {
+      ...(await readEffectiveGlobals()),
+      mode: "explain" as const,
+      language: settings.language,
+      style: settings.style,
+    };
+    globalsRef.current = nextGlobals;
+    setGlobals(nextGlobals);
+    setExplainSetupOpen(false);
+
+    const action = pendingExplainAction;
+    setPendingExplainAction(null);
+    if (action?.type === "all") void runAllPages();
+    else if (action?.type === "page") void runPage(action.pageNumber);
+  };
+
   const cancelRunAll = () => {
     if (runAllRef.current) runAllRef.current.cancelled = true;
     abortMap.current.forEach((c) => c.abort());
@@ -555,6 +626,16 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
 
   return (
     <div className="flex h-full flex-col">
+      <ExplainSetupDialog
+        open={explainSetupOpen}
+        language={globals.language}
+        style={globals.style as ExplanationStyle}
+        onOpenChange={(open) => {
+          setExplainSetupOpen(open);
+          if (!open) setPendingExplainAction(null);
+        }}
+        onConfirm={handleExplainSetupConfirm}
+      />
       {/* ─── Compact toolbar ─── */}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-3">
@@ -606,7 +687,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
           isRunning={runningPages.has(activePage)}
           streamBuf={streamBufs[activePage] ?? ""}
           onPageAiChange={onPageAiChange}
-          onRun={() => void runPage(activePage)}
+          onRun={() => runPageWithSetup(activePage)}
           onCancel={() => cancelPage(activePage)}
         />
       </div>
