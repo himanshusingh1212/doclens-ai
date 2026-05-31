@@ -1,4 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -73,6 +74,7 @@ function RootComponent() {
     <>
       <Outlet />
       <ApiKeyModal />
+      <SpeedInsights />
       <Toaster position="bottom-right" richColors closeButton />
     </>
   );
