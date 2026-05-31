@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import {
   fetchModels,
-  getKey,
+  getKeyStatus,
   getMemory,
   getMode,
   getOutputLanguage,
@@ -12,7 +12,6 @@ import {
   getStyle,
   getTemperature,
   MODE_INSTRUCTIONS,
-  setKey as saveKey,
   setMemory,
   setMode as saveMode,
   setOutputLanguage,
@@ -63,9 +62,7 @@ function isTextToText(m: ORModel): boolean {
 function SettingsPage() {
   const navigate = useNavigate();
 
-  const [keyInput, setKeyInput] = useState("");
-  const [keyStatus, setKeyStatus] = useState<"unknown" | "valid" | "invalid" | "checking">("unknown");
-  const [showKey, setShowKey] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<"unknown" | "missing" | "valid" | "invalid" | "checking">("unknown");
   const [models, setModels] = useState<ORModel[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelError, setModelError] = useState("");
@@ -113,7 +110,6 @@ function SettingsPage() {
   };
 
   useEffect(() => {
-    setKeyInput(getKey());
     setSelected(getSelectedModel());
     setLanguage(getOutputLanguage());
     setModeState(getMode());
@@ -121,18 +117,15 @@ function SettingsPage() {
     setTemp(getTemperature());
     setMemoryState(getMemory());
     setSequentialState(getSequential());
-    if (getKey()) {
-      setKeyStatus("valid");
-      void loadModels(getKey());
-    }
+    void handleValidate();
     void updateStorageStats();
   }, []);
 
-  const loadModels = async (k: string) => {
+  const loadModels = async () => {
     setLoadingModels(true);
     setModelError("");
     try {
-      const m = await fetchModels(k);
+      const m = await fetchModels();
       setModels(m);
     } catch (e) {
       setModelError(e instanceof Error ? e.message : "Failed to load models");
@@ -143,13 +136,13 @@ function SettingsPage() {
 
   const handleValidate = async () => {
     setKeyStatus("checking");
-    const ok = await validateKey(keyInput.trim());
+    const ok = await validateKey();
     if (ok) {
-      saveKey(keyInput.trim());
       setKeyStatus("valid");
-      void loadModels(keyInput.trim());
+      void loadModels();
     } else {
-      setKeyStatus("invalid");
+      const nextStatus = getKeyStatus();
+      setKeyStatus(nextStatus === "invalid" ? "invalid" : "missing");
     }
   };
 
@@ -408,41 +401,23 @@ function SettingsPage() {
               <h3 className="text-lg font-semibold text-foreground">API Management</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              Your OpenRouter credentials for high-performance inference.
+              OpenRouter runs through the server using OPENROUTER_API_KEY.
             </p>
-            <div className="flex flex-col gap-3">
-              <label className="text-xs font-bold text-muted-foreground">OpenRouter Key</label>
-              <div className="relative">
-                <input
-                  value={keyInput}
-                  onChange={(e) => {
-                    setKeyInput(e.target.value);
-                    setKeyStatus("unknown");
-                  }}
-                  type={showKey ? "text" : "password"}
-                  placeholder="sk-or-…"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 pr-10 font-mono text-sm tracking-widest outline-none transition-colors focus:border-primary"
-                />
-                <button
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  type="button"
-                >
-                  {showKey ? "🙈" : "👁"}
-                </button>
-              </div>
+            <div className="rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-muted-foreground">
+              Browser clients call DocLens server functions. The API key is never exposed to client bundles.
             </div>
             <button
               onClick={handleValidate}
-              disabled={!keyInput.trim() || keyStatus === "checking"}
+              disabled={keyStatus === "checking"}
               className="w-full rounded-lg bg-accent py-2 font-bold text-accent-foreground transition-all hover:opacity-90 disabled:opacity-40"
             >
-              {keyStatus === "checking" ? "Validating…" : "Verify Connection"}
+              {keyStatus === "checking" ? "Checking..." : "Verify Server Connection"}
             </button>
             <div className="text-xs font-semibold">
-              {keyStatus === "valid" && <span className="text-primary">✓ Key validated and saved</span>}
-              {keyStatus === "invalid" && <span className="text-destructive">✗ Invalid key</span>}
-              {keyStatus === "unknown" && <span className="text-muted-foreground">Not validated</span>}
+              {keyStatus === "valid" && <span className="text-primary">Server key validated</span>}
+              {keyStatus === "missing" && <span className="text-destructive">Missing OPENROUTER_API_KEY</span>}
+              {keyStatus === "invalid" && <span className="text-destructive">Invalid server key</span>}
+              {keyStatus === "unknown" && <span className="text-muted-foreground">Not checked</span>}
             </div>
           </section>
 
@@ -461,8 +436,8 @@ function SettingsPage() {
               />
             </div>
 
-            {!getKey() ? (
-              <p className="text-sm text-muted-foreground">Validate an API key to load models.</p>
+            {keyStatus !== "valid" ? (
+              <p className="text-sm text-muted-foreground">Configure OPENROUTER_API_KEY to load models.</p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">

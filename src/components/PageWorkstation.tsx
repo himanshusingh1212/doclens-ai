@@ -166,13 +166,13 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   /** Returns true if the key is usable; otherwise opens modal + shows toast and returns false. */
   const ensureKeyReady = useCallback((): boolean => {
     if (!getKey()) {
-      toast.error("Add your OpenRouter API key to run translations.");
-      openApiKeyModal("Add a valid OpenRouter API key to start translating.");
+      toast.error("Configure OPENROUTER_API_KEY to run translations.");
+      openApiKeyModal("Add a valid server OPENROUTER_API_KEY to start translating.");
       return false;
     }
     if (getKeyStatus() === "invalid") {
-      toast.error("Your OpenRouter API key is invalid or expired.");
-      openApiKeyModal("Your OpenRouter API key is invalid or expired.");
+      toast.error("The server OpenRouter key is invalid or expired.");
+      openApiKeyModal("The server OpenRouter key is invalid or expired.");
       return false;
     }
     return true;
@@ -188,8 +188,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
 
     const invalid = getKeyStatus() === "invalid";
     const message = invalid
-      ? "Your OpenRouter API key is invalid or expired. Run All stopped before processing pages."
-      : "Could not verify your OpenRouter API key. Run All stopped before processing pages.";
+      ? "The server OpenRouter key is invalid or expired. Run All stopped before processing pages."
+      : "Could not verify the server OpenRouter key. Run All stopped before processing pages.";
     toast.error(message);
     if (invalid) openApiKeyModal(message);
     return false;
@@ -495,17 +495,18 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   if (!keyReady || !globals.modelId) {
     const noKey = !hasKey;
     const invalid = keyStatus === "invalid";
+    const missing = keyStatus === "missing";
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-xs">
           <div className={`text-sm font-medium ${invalid ? "text-destructive" : "text-foreground"}`}>
-            {invalid ? "API Key Invalid" : noKey ? "API Key Required" : "Setup Required"}
+            {invalid ? "API Key Invalid" : missing || noKey ? "API Key Required" : "Setup Required"}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             {invalid
-              ? "Your saved OpenRouter key is invalid or expired."
-              : noKey
-                ? "Add your OpenRouter API key to enable AI translations."
+              ? "The server OpenRouter key is invalid or expired."
+              : missing || noKey
+                ? "Configure OPENROUTER_API_KEY to enable AI translations."
                 : "Select a model in Settings to get started."}
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
@@ -514,7 +515,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
                 onClick={() => openApiKeyModal()}
                 className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
-                Add API Key
+                Check API Key
               </button>
             )}
             <Link

@@ -1,3 +1,5 @@
+import { createServerFn } from "@tanstack/react-start";
+
 export interface ORModel {
   id: string;
   name: string;
@@ -7,7 +9,6 @@ export interface ORModel {
   top_provider?: { context_length?: number };
 }
 
-const KEY_LS = "doclens.openrouter.key";
 const MODEL_LS = "doclens.openrouter.model";
 const LANG_LS = "doclens.outputLanguage";
 const MODE_LS = "doclens.mode";
@@ -18,6 +19,7 @@ const SEQ_LS = "doclens.sequential";
 const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
 const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
 export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
+const SERVER_KEY_SENTINEL = "server-managed";
 
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
@@ -28,35 +30,26 @@ function emitKeyChange() {
 }
 
 export function getKey(): string {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem(KEY_LS) ?? "";
+  return SERVER_KEY_SENTINEL;
 }
 export function setKey(k: string) {
-  localStorage.setItem(KEY_LS, k);
+  void k;
   emitKeyChange();
 }
 export function clearKey() {
-  localStorage.removeItem(KEY_LS);
   localStorage.removeItem(KEY_STATUS_LS);
   emitKeyChange();
 }
 
-/** Heuristic: OpenRouter keys are prefixed with sk-or-... */
-export function isKeyFormatValid(k: string): boolean {
-  return /^sk-or-[A-Za-z0-9_-]{20,}$/.test(k.trim());
-}
-
 export function getKeyStatus(): KeyStatus {
   if (typeof window === "undefined") return "unknown";
-  const k = getKey();
-  if (!k) return "missing";
   const v = localStorage.getItem(KEY_STATUS_LS);
-  return v === "valid" || v === "invalid" ? v : "unknown";
+  return v === "valid" || v === "invalid" || v === "missing" ? v : "unknown";
 }
 
 export function setKeyStatus(s: KeyStatus): void {
   if (typeof window === "undefined") return;
-  if (s === "missing" || s === "unknown") localStorage.removeItem(KEY_STATUS_LS);
+  if (s === "unknown") localStorage.removeItem(KEY_STATUS_LS);
   else localStorage.setItem(KEY_STATUS_LS, s);
   emitKeyChange();
 }
@@ -149,35 +142,87 @@ const HEADERS_BASE = {
   "X-Title": "DocLens",
 };
 
-export async function validateKey(key: string): Promise<boolean> {
-  const trimmed = key.trim();
-  if (!trimmed) {
-    setKeyStatus("missing");
-    return false;
-  }
-  if (!isKeyFormatValid(trimmed)) {
-    setKeyStatus("invalid");
-    return false;
-  }
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-      headers: { Authorization: `Bearer ${trimmed}`, ...HEADERS_BASE },
-    });
-    setKeyStatus(res.ok ? "valid" : "invalid");
-    return res.ok;
-  } catch {
-    // Network error — don't mark invalid; status stays unknown.
-    return false;
-  }
+function getServerOpenRouterKey(): string {
+  return process.env.OPENROUTER_API_KEY?.trim() ?? "";
 }
 
-export async function fetchModels(key: string): Promise<ORModel[]> {
+const validateServerOpenRouterKey = createServerFn({ method: "GET" }).handler(async () => {
+  "use server";
+  const key = getServerOpenRouterKey();
+  if (!key) return { status: "missing" as KeyStatus };
+  const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
+    headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
+  });
+  return { status: res.ok ? ("valid" as KeyStatus) : ("invalid" as KeyStatus) };
+});
+
+const fetchServerOpenRouterModels = createServerFn({ method: "GET" }).handler(async () => {
+  "use server";
+  const key = getServerOpenRouterKey();
+  if (!key) throw new Error("OPENROUTER_API_KEY is not configured on the server.");
   const res = await fetch("https://openrouter.ai/api/v1/models", {
     headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
   });
   if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
   const json = await res.json();
   return (json.data ?? []) as ORModel[];
+});
+
+interface CompletionResult {
+  ok: boolean;
+  status: number;
+  text?: string;
+  body?: string;
+}
+
+const completeWithServerOpenRouter = createServerFn({ method: "POST" })
+  .inputValidator((input: { payload: Record<string, unknown> }) => input)
+  .handler(async ({ data }): Promise<CompletionResult> => {
+    "use server";
+    const key = getServerOpenRouterKey();
+    if (!key) {
+      return {
+        ok: false,
+        status: 401,
+        body: "OPENROUTER_API_KEY is not configured on the server.",
+      };
+    }
+
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        ...HEADERS_BASE,
+      },
+      body: JSON.stringify({ ...data.payload, stream: false }),
+    });
+
+    const body = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, body };
+
+    try {
+      const parsed = JSON.parse(body);
+      const text = parsed.choices?.[0]?.message?.content;
+      return { ok: true, status: res.status, text: typeof text === "string" ? text : "" };
+    } catch {
+      return { ok: false, status: 502, body: "OpenRouter returned an invalid JSON response." };
+    }
+  });
+
+export async function validateKey(_key?: string): Promise<boolean> {
+  try {
+    const { status } = await validateServerOpenRouterKey();
+    setKeyStatus(status);
+    return status === "valid";
+  } catch {
+    setKeyStatus("unknown");
+    return false;
+  }
+}
+
+export async function fetchModels(_key?: string): Promise<ORModel[]> {
+  return fetchServerOpenRouterModels();
 }
 
 /* -------- Friendly errors -------- */
@@ -202,6 +247,12 @@ export class OpenRouterError extends Error {
 }
 
 function friendlyOpenRouterError(status: number, body: string): OpenRouterError {
+  if (status === 401 && body.includes("OPENROUTER_API_KEY"))
+    return new OpenRouterError(
+      "OPENROUTER_API_KEY is not configured on the server.",
+      401,
+      "auth",
+    );
   if (status === 401)
     return new OpenRouterError(
       "Your OpenRouter API key is invalid or expired. Add a valid key to continue.",
@@ -249,7 +300,7 @@ const MAX_RETRIES = 1;
 const RETRY_BASE_MS = 2_000;
 
 export interface StreamOpts {
-  key: string;
+  key?: string;
   /** Full payload sent to OpenRouter — must include `model`, `messages`, `stream: true`. */
   payload: Record<string, unknown>;
   signal?: AbortSignal;
@@ -307,66 +358,30 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       await abortableDelay(delay, signal);
     }
 
-    const body = { ...opts.payload, stream: true };
-    let res: Response;
+    const body = { ...opts.payload, stream: false };
+    let result: CompletionResult;
     try {
-      res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
+      result = await completeWithServerOpenRouter({
+        data: { payload: body },
         signal,
-        headers: {
-          Authorization: `Bearer ${opts.key}`,
-          "Content-Type": "application/json",
-          ...HEADERS_BASE,
-        },
-        body: JSON.stringify(body),
       });
     } catch (e) {
       // Network error or abort
       throw e;
     }
 
-    if (!res.ok || !res.body) {
-      const txt = await res.text().catch(() => "");
-      const friendly = friendlyOpenRouterError(res.status, txt);
+    if (!result.ok) {
+      const friendly = friendlyOpenRouterError(result.status, result.body ?? "");
       // Persist key-status side effects for auth failures.
-      if (friendly.kind === "auth") setKeyStatus("invalid");
+      if (friendly.kind === "auth") {
+        setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
+      }
       lastError = friendly;
-      if (isRetryable(res.status) && attempt < MAX_RETRIES) continue;
+      if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
       throw friendly;
     }
 
-
-    // Stream reading — no retry once streaming starts
-    const reader = res.body.getReader();
-    try {
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buf.indexOf("\n")) !== -1) {
-          let line = buf.slice(0, idx);
-          buf = buf.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line || line.startsWith(":")) continue;
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") return;
-          try {
-            const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (typeof delta === "string" && delta) opts.onDelta(delta);
-          } catch {
-            buf = line + "\n" + buf;
-            break;
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    if (result.text) opts.onDelta(result.text);
     return; // Success
   }
 

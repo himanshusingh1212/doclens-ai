@@ -8,13 +8,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  getKey,
   getKeyStatus,
-  isKeyFormatValid,
   OPEN_API_KEY_MODAL_EVT,
   onKeyChange,
-  setKey,
-  setKeyStatus,
   validateKey,
   type KeyStatus,
 } from "@/lib/openrouter";
@@ -29,7 +25,6 @@ type Status = KeyStatus | "checking";
 export function ApiKeyModal() {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
-  const [input, setInput] = useState("");
   const [status, setStatus] = useState<Status>("unknown");
 
   // Listen for global open requests.
@@ -37,7 +32,6 @@ export function ApiKeyModal() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ reason?: string }>).detail;
       setReason(detail?.reason ?? null);
-      setInput(getKey());
       setStatus(getKeyStatus());
       setOpen(true);
     };
@@ -48,29 +42,21 @@ export function ApiKeyModal() {
   // Reflect external changes (e.g. saved from Settings).
   useEffect(() => onKeyChange(() => setStatus(getKeyStatus())), []);
 
-  const trimmed = input.trim();
-  const formatOk = isKeyFormatValid(trimmed);
-
   const handleValidate = async () => {
-    if (!trimmed) {
-      toast.error("Paste your OpenRouter API key first.");
-      return;
-    }
-    if (!formatOk) {
-      setStatus("invalid");
-      toast.error("That doesn't look like an OpenRouter key (expected sk-or-…).");
-      return;
-    }
     setStatus("checking");
-    const ok = await validateKey(trimmed);
+    const ok = await validateKey();
     if (ok) {
-      setKey(trimmed);
-      setKeyStatus("valid");
-      toast.success("API key validated and saved.");
+      setStatus("valid");
+      toast.success("Server OpenRouter key is configured.");
       setOpen(false);
     } else {
-      setStatus("invalid");
-      toast.error("OpenRouter rejected this key. Double-check and try again.");
+      const nextStatus = getKeyStatus();
+      setStatus(nextStatus === "missing" ? "missing" : "invalid");
+      toast.error(
+        nextStatus === "missing"
+          ? "OPENROUTER_API_KEY is not configured on the server."
+          : "OpenRouter rejected the server key.",
+      );
     }
   };
 
@@ -78,10 +64,10 @@ export function ApiKeyModal() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Add your OpenRouter API key</DialogTitle>
+          <DialogTitle>OpenRouter environment key</DialogTitle>
           <DialogDescription>
-            DocLens runs entirely in your browser — your key is stored locally
-            and only sent to OpenRouter when you trigger a translation.
+            DocLens reads OPENROUTER_API_KEY on the server. The browser never
+            receives the key.
           </DialogDescription>
         </DialogHeader>
 
@@ -91,26 +77,8 @@ export function ApiKeyModal() {
           </div>
         )}
 
-        <div className="space-y-2">
-          <label className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            openrouter api key
-          </label>
-          <input
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setStatus("unknown");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleValidate();
-            }}
-            type="password"
-            autoFocus
-            spellCheck={false}
-            placeholder="sk-or-…"
-            className="w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
-          />
-          <StatusLine status={status} formatOk={formatOk || !trimmed} />
+        <div className="rounded-md border border-border bg-background px-3 py-2">
+          <StatusLine status={status} />
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-1">
@@ -131,10 +99,10 @@ export function ApiKeyModal() {
             </button>
             <button
               onClick={handleValidate}
-              disabled={!trimmed || status === "checking"}
+              disabled={status === "checking"}
               className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground disabled:opacity-40"
             >
-              {status === "checking" ? "validating…" : "validate & save"}
+              {status === "checking" ? "checking…" : "check server key"}
             </button>
           </div>
         </div>
@@ -143,22 +111,22 @@ export function ApiKeyModal() {
   );
 }
 
-function StatusLine({ status, formatOk }: { status: Status; formatOk: boolean }) {
+function StatusLine({ status }: { status: Status }) {
   if (status === "checking")
-    return <p className="font-mono text-[11px] text-muted-foreground">checking with openrouter…</p>;
+    return <p className="font-mono text-[11px] text-muted-foreground">checking server environment…</p>;
   if (status === "valid")
-    return <p className="font-mono text-[11px] text-primary">✓ connected — key is valid</p>;
+    return <p className="font-mono text-[11px] text-primary">connected - server key is valid</p>;
+  if (status === "missing")
+    return (
+      <p className="font-mono text-[11px] text-destructive">
+        missing OPENROUTER_API_KEY on the server
+      </p>
+    );
   if (status === "invalid")
     return (
       <p className="font-mono text-[11px] text-destructive">
-        ✗ invalid or expired key
+        server key is invalid or expired
       </p>
     );
-  if (!formatOk)
-    return (
-      <p className="font-mono text-[11px] text-muted-foreground">
-        keys start with <span className="text-foreground">sk-or-</span>
-      </p>
-    );
-  return <p className="font-mono text-[11px] text-muted-foreground">not validated yet</p>;
+  return <p className="font-mono text-[11px] text-muted-foreground">server key not checked yet</p>;
 }

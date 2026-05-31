@@ -18,6 +18,7 @@ import {
   getKeyStatus,
   onKeyChange,
   openApiKeyModal,
+  validateKey,
   type KeyStatus,
 } from "@/lib/openrouter";
 import {
@@ -55,6 +56,7 @@ function DashboardPage() {
 
   useEffect(() => {
     setKeyStatus(getKeyStatus());
+    void validateKey().then(() => setKeyStatus(getKeyStatus()));
     return onKeyChange(() => setKeyStatus(getKeyStatus()));
   }, []);
 
@@ -162,15 +164,15 @@ function DashboardPage() {
                 </div>
                 <p className="mt-1 text-sm text-foreground/85">
                   {keyStatus === "invalid"
-                    ? "Your saved OpenRouter key was rejected. Update it to keep translating."
-                    : "Add your OpenRouter API key to start translating documents."}
+                    ? "The server OpenRouter key was rejected. Update the environment variable to keep translating."
+                    : "Configure OPENROUTER_API_KEY on the server to start translating documents."}
                 </p>
               </div>
               <button
                 onClick={() => openApiKeyModal()}
                 className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
               >
-                add api key
+                check key
               </button>
             </div>
           )}

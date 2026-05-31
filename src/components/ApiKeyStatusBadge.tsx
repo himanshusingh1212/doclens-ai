@@ -3,13 +3,14 @@ import {
   getKeyStatus,
   onKeyChange,
   openApiKeyModal,
+  validateKey,
   type KeyStatus,
 } from "@/lib/openrouter";
 
 const LABELS: Record<KeyStatus, string> = {
   valid: "connected",
-  invalid: "invalid key",
-  missing: "no api key",
+  invalid: "server key invalid",
+  missing: "env key missing",
   unknown: "key not verified",
 };
 
@@ -30,6 +31,7 @@ export function ApiKeyStatusBadge() {
 
   useEffect(() => {
     setStatus(getKeyStatus());
+    void validateKey().then(() => setStatus(getKeyStatus()));
     return onKeyChange(() => setStatus(getKeyStatus()));
   }, []);
 
@@ -37,7 +39,7 @@ export function ApiKeyStatusBadge() {
     <button
       onClick={() =>
         openApiKeyModal(
-          status === "valid" ? undefined : "A valid OpenRouter key is required to run translations.",
+          status === "valid" ? undefined : "A valid server OPENROUTER_API_KEY is required to run translations.",
         )
       }
       className={`rounded-md border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-widest transition-colors ${CLASSES[status]}`}
