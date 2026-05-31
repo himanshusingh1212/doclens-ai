@@ -2,7 +2,6 @@ import { ClientOnly, createFileRoute, Link, useNavigate } from "@tanstack/react-
 import { createClientOnlyFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
 import {
@@ -130,22 +129,19 @@ function DocPage() {
     });
   };
 
+  /* ─── Edge states ─── */
+
   if (missing) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <AppHeader />
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-              document not found
-            </div>
-            <Link
-              to="/"
-              className="mt-3 inline-block rounded-md bg-primary px-4 py-2 font-mono text-[11px] uppercase tracking-widest text-primary-foreground"
-            >
-              back to library
-            </Link>
-          </div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
+        <div className="text-center">
+          <div className="text-sm text-muted-foreground">Document not found</div>
+          <Link
+            to="/"
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+          >
+            ← Back to Library
+          </Link>
         </div>
       </div>
     );
@@ -153,53 +149,124 @@ function DocPage() {
 
   if (!doc) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <AppHeader />
-        <div className="flex flex-1 items-center justify-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-          loading…
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="inline-block h-4 w-4 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+          Loading document…
         </div>
       </div>
     );
   }
 
+  /* ─── Derive document name ─── */
+  const docName = doc.fileName.replace(/\.pdf$/i, "");
+  const doneCount = Object.values(aiSummary).filter((e) => e.status === "done").length;
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <AppHeader
-        right={
-          <>
-            <div className="hidden items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-              <span className="max-w-[260px] truncate text-foreground">{doc.fileName}</span>
-              <span className="text-muted-foreground">{(doc.fileSize / 1024).toFixed(1)} KB</span>
+      {/* ─── Slim Document Header ─── */}
+      <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
+        {/* Left: Back + Title */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => navigate({ to: "/" })}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Back to Library"
+          >
+            ←
+          </button>
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold text-foreground">{docName}</h1>
+          </div>
+        </div>
+
+        {/* Center: Page Navigation */}
+        {pageCount > 0 && (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setActivePage(Math.max(1, activePage - 1))}
+              disabled={activePage <= 1}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-1.5 rounded-md bg-surface-2/60 px-2.5 py-1">
+              <select
+                value={activePage}
+                onChange={(e) => setActivePage(Number(e.target.value))}
+                className="bg-transparent text-center text-xs font-medium text-foreground outline-none cursor-pointer"
+                style={{ width: `${String(activePage).length + 1}ch` }}
+              >
+                {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n} className="bg-surface">{n}</option>
+                ))}
+              </select>
+              <span className="text-xs text-muted-foreground">/ {pageCount}</span>
             </div>
+            <button
+              onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
+              disabled={activePage >= pageCount}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+            >
+              ›
+            </button>
+            {doneCount > 0 && (
+              <span className="ml-1 text-[10px] text-primary font-medium">{doneCount} translated</span>
+            )}
+          </div>
+        )}
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-1.5">
+          {!pageCount && (
             <button
               onClick={handleAnalyze}
               disabled={analyzing}
-              className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {analyzing ? "analyzing…" : pageCount ? "re-extract" : "analyze document"}
+              {analyzing ? "Analyzing…" : "Analyze Document"}
             </button>
+          )}
+          {pageCount > 0 && (
             <button
-              onClick={() => navigate({ to: "/" })}
-              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+              title={analyzing ? status : "Re-extract pages"}
             >
-              library
+              {analyzing ? (
+                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+              ) : (
+                <span className="text-sm">↻</span>
+              )}
             </button>
-          </>
-        }
-      />
+          )}
+          <Link
+            to="/settings"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Settings"
+          >
+            <span className="text-sm">⚙</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* ─── Main Content ─── */}
       <ClientOnly
         fallback={
-          <main className="flex flex-1 items-center justify-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-            loading workstation…
+          <main className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <span className="inline-block h-4 w-4 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+              Loading…
+            </div>
           </main>
         }
       >
         <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-          <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
+          <section className="relative h-full overflow-hidden">
             <PdfViewer docId={id} activePage={activePage} setActivePage={setActivePage} />
           </section>
-          <section className="h-full overflow-hidden">
+          <section className="h-full overflow-hidden border-t border-border md:border-t-0 md:border-l">
             <RightPanel
               docId={id}
               pageCount={pageCount}

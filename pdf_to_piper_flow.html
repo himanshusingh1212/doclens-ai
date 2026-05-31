@@ -352,6 +352,106 @@
         </div>
       </section>
 
+      <section id="list-model" class="panel pad">
+        <h2>List-Based Data Model With TC and SC</h2>
+        <p>
+          In your requested model, one page-indexed list is the source of truth
+          for all page operations. Here <code>P</code> means total number of
+          pages in the document. If you call this <code>N</code>, then
+          <code>N = P</code> for this table.
+        </p>
+        <pre>type PageSlot = {
+  pageNumber: number;
+  status: "empty" | "extracting" | "ready" | "ai-running" | "ai-done" | "tts-ready";
+  pdfText: string;
+  textItems: TextItem[];
+  columns: number;
+  garbageRatio: number;
+  aiResult: string;
+  ttsChunks: string[];
+  audioState: "idle" | "playing" | "paused" | "ended";
+  updatedAt: number;
+};
+
+type DocumentPageList = PageSlot[];</pre>
+        <table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Operation</th>
+              <th>Data Structure</th>
+              <th>Algorithm / Rule</th>
+              <th>TC</th>
+              <th>SC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Create custom data type for all variables</td>
+              <td><code>PageSlot</code></td>
+              <td>Define a fixed object shape for each page slot. This is a type-level design step.</td>
+              <td><code>O(1)</code></td>
+              <td><code>O(1)</code></td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>Create/initiate <code>zero_list</code> for total pages</td>
+              <td><code>DocumentPageList</code></td>
+              <td>Create a page-indexed array with one slot per page: <code>zero_list[pageNumber - 1]</code>.</td>
+              <td><code>O(1)</code> if using a sparse reserved array like <code>new Array(P)</code>. If physically filling every slot with an object, it is <code>O(P)</code>.</td>
+              <td><code>O(P)</code></td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>Fill extracted PDF data into the list</td>
+              <td><code>zero_list[i].pdfText</code>, <code>zero_list[i].textItems</code></td>
+              <td>For each extracted page, write the cleaned text, items, columns, and garbage ratio into that page slot.</td>
+              <td><code>O(Lp + np)</code> per page, where <code>Lp</code> is page text length and <code>np</code> is page text item count.</td>
+              <td><code>O(Lp + np)</code> per page</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>Modify page data only through the list</td>
+              <td><code>zero_list[pageIndex]</code></td>
+              <td>Any update, such as AI status, AI result, TTS state, or cleanup metadata, mutates/replaces the page slot at its index.</td>
+              <td><code>O(1)</code> for scalar fields; <code>O(R)</code> when replacing result text of length <code>R</code>.</td>
+              <td><code>O(1)</code> for scalar fields; <code>O(R)</code> for stored result text.</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>Use the list as source for AI operation</td>
+              <td><code>zero_list[i].pdfText</code></td>
+              <td>Read page text from the page slot, build the AI payload, stream result back into the same slot.</td>
+              <td><code>O(Lp + R)</code> client-side, excluding network/model latency.</td>
+              <td><code>O(Lp + R)</code></td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>Use the list as source for Piper TTS</td>
+              <td><code>zero_list[i].aiResult</code>, <code>zero_list[i].ttsChunks</code></td>
+              <td>Split the AI result into sentence chunks, synthesize each chunk, and update audio state in the same page slot.</td>
+              <td><code>O(R + A)</code>, where <code>A</code> is generated audio sample count.</td>
+              <td><code>O(C)</code> chunk metadata plus bounded audio buffers during playback.</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td>Run document-wide operations</td>
+              <td><code>zero_list</code></td>
+              <td>Sequentially scan page slots for export, run-all AI, progress counts, or validation.</td>
+              <td><code>O(P)</code> for metadata scan; <code>O(P + L)</code> if reading all text.</td>
+              <td><code>O(1)</code> for counters; <code>O(L)</code> if building a combined output.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="callout warn">
+          The current app persists this idea in IndexedDB as separate
+          <code>PageDataRecord</code> records instead of keeping one permanent
+          in-memory list. Conceptually, <code>pageData</code> is the durable
+          version of this page-indexed list.
+        </p>
+      </section>
+
       <section id="steps">
         <h2>Step-by-Step Details</h2>
         <div class="flow">
@@ -860,6 +960,7 @@ nextStartTime += buffer.duration</pre>
       <strong>Contents</strong>
       <a href="#answer">Short answer</a>
       <a href="#diagram">End-to-end flow</a>
+      <a href="#list-model">List TC/SC model</a>
       <a href="#steps">Step-by-step details</a>
       <a href="#stores">IndexedDB stores</a>
       <a href="#algorithms">Algorithms summary</a>

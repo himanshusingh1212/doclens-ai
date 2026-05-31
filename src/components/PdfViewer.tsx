@@ -388,8 +388,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   };
 
   return (
-    <div ref={scrollRef} className="relative h-full overflow-auto" style={{ background: "#404040" }}>
-      <div className="flex flex-col items-center gap-3 py-4" onClick={handlePageClick}>
+    <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
+      <div className="flex flex-col items-center gap-4 py-6 px-4" onClick={handlePageClick}>
         {pageMetas.map((meta) => (
           <div
             key={meta.pageNumber}
@@ -398,7 +398,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
               if (el && observerRef.current) observerRef.current.observe(el);
             }}
             style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
-            className="relative flex-shrink-0 shadow-lg"
+            className={`relative flex-shrink-0 pdf-page-container ${activePage === meta.pageNumber ? "pdf-page-active" : ""}`}
           >
             <canvas
               data-page-number={meta.pageNumber}
@@ -429,9 +429,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
                 lineHeight: 1,
               }}
             />
-            <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[10px] text-white/80">
-              {meta.pageNumber}
-            </div>
+            <div className="pdf-page-badge">{meta.pageNumber}</div>
           </div>
         ))}
       </div>
@@ -440,30 +438,21 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       {selection && (
         <div
           className="absolute z-30 -translate-x-1/2 -translate-y-full"
-          style={{ left: selection.x, top: selection.y - 6 }}
+          style={{ left: selection.x, top: selection.y - 8 }}
           onMouseDown={(e) => e.preventDefault()}
         >
-          <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1 py-1 font-mono text-[10px] uppercase tracking-widest shadow-lg">
-            <button
-              onClick={handleCopy}
-              className="rounded px-2 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-              title="Copy selection"
-            >
-              copy
+          <div className="selection-toolbar">
+            <button onClick={handleCopy} title="Copy">
+              📋
             </button>
-            <button
-              onClick={handleTranslate}
-              className="rounded px-2 py-0.5 text-primary hover:bg-primary/10"
-              title="Send to AI workstation for this page"
-            >
-              translate
+            <button onClick={handleTranslate} className="primary-action" title="Translate">
+              🌐
             </button>
             <button
               onClick={handleSpeak}
-              className="rounded px-2 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-              title={speakState === "playing" ? "speaking…" : "Read aloud"}
+              title={speakState === "playing" ? "Stop reading" : "Read aloud"}
             >
-              {speakState === "playing" ? "■ stop" : "speak"}
+              {speakState === "playing" ? "⏹" : "🔊"}
             </button>
           </div>
         </div>

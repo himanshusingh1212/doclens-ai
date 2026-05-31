@@ -496,36 +496,32 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     const noKey = !hasKey;
     const invalid = keyStatus === "invalid";
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        <div>
-          <div
-            className={`font-mono text-[11px] uppercase tracking-widest ${
-              invalid ? "text-destructive" : ""
-            }`}
-          >
-            {invalid ? "api key invalid" : noKey ? "api key required" : "setup required"}
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div className="max-w-xs">
+          <div className={`text-sm font-medium ${invalid ? "text-destructive" : "text-foreground"}`}>
+            {invalid ? "API Key Invalid" : noKey ? "API Key Required" : "Setup Required"}
           </div>
-          <p className="mt-2">
+          <p className="mt-2 text-sm text-muted-foreground">
             {invalid
               ? "Your saved OpenRouter key is invalid or expired."
               : noKey
-                ? "Add your OpenRouter API key to start translating."
-                : "Select a model in Settings."}
+                ? "Add your OpenRouter API key to enable AI translations."
+                : "Select a model in Settings to get started."}
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             {keyReady ? null : (
               <button
                 onClick={() => openApiKeyModal()}
-                className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
-                add api key
+                Add API Key
               </button>
             )}
             <Link
               to="/settings"
-              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              open settings
+              Open Settings
             </Link>
           </div>
         </div>
@@ -537,72 +533,70 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   if (pageCount === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Extract the document first to populate per-page containers.
+        Analyze the document to get started with AI translations.
       </div>
     );
   }
 
   const doneCount = Object.values(aiSummary).filter((e) => e.status === "done").length;
+  const modeLabel = MODE_INSTRUCTIONS[globals.mode]?.label || globals.mode;
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border bg-surface-2 px-4 py-3">
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background/50 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.6)]" />
-              per-page workstation
-            </span>
-            <span>
-              progress <span className="text-primary">{doneCount}/{pageCount} done</span>
-            </span>
-            <span>
-              {globals.sequential ? "sequential" : "parallel"} · memory {globals.memory ? "on" : "off"}
-            </span>
+      {/* ─── Compact toolbar ─── */}
+      <div className="flex items-center justify-between border-b border-border px-4 py-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {doneCount > 0 ? (
+              <>{doneCount} of {pageCount} pages translated</>
+            ) : (
+              <>{pageCount} pages ready</>
+            )}
+          </span>
           {runAllProgress && (
-            <span className="text-primary">
-              · processing {runAllProgress.current}/{runAllProgress.total}
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
+              {runAllProgress.current}/{runAllProgress.total}
               {runAllProgress.errors > 0 && (
-                <span className="text-destructive"> · {runAllProgress.errors} error{runAllProgress.errors > 1 ? "s" : ""}</span>
+                <span className="text-destructive">· {runAllProgress.errors} failed</span>
               )}
             </span>
           )}
-          </div>
-          <div className="flex items-center gap-2">
-            {runAllActive ? (
-              <button
-                onClick={cancelRunAll}
-                className="rounded-md border border-destructive/60 bg-destructive/10 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/20"
-              >
-                cancel all
-              </button>
-            ) : (
-              <button
-                onClick={handleRunAll}
-                className="rounded-md bg-primary px-4 py-2 font-mono text-[11px] font-black uppercase tracking-widest text-primary-foreground shadow-[0_10px_24px_rgba(78,222,163,0.14)] hover:opacity-90"
-              >
-                ▶ run all pages
-              </button>
-            )}
-          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {runAllActive ? (
+            <button
+              onClick={cancelRunAll}
+              className="rounded-lg border border-destructive/30 px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={handleRunAll}
+              className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+              title="Translate all pages"
+            >
+              ▶ Translate All
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-4">
-        <div className="right-panel-item-wrap w-full">
-          <PageCardLoader
-            docId={docId}
-            pageNumber={activePage}
-            globals={globals}
-            models={models}
-            summary={aiSummary[activePage]}
-            isRunning={runningPages.has(activePage)}
-            streamBuf={streamBufs[activePage] ?? ""}
-            onPageAiChange={onPageAiChange}
-            onRun={() => void runPage(activePage)}
-            onCancel={() => cancelPage(activePage)}
-          />
-        </div>
+      {/* ─── Single page card ─── */}
+      <div className="flex-1 overflow-auto px-5 py-4 page-card-enter" key={activePage}>
+        <PageCardLoader
+          docId={docId}
+          pageNumber={activePage}
+          globals={globals}
+          models={models}
+          summary={aiSummary[activePage]}
+          isRunning={runningPages.has(activePage)}
+          streamBuf={streamBufs[activePage] ?? ""}
+          onPageAiChange={onPageAiChange}
+          onRun={() => void runPage(activePage)}
+          onCancel={() => cancelPage(activePage)}
+        />
       </div>
     </div>
   );
@@ -664,8 +658,9 @@ function PageCardLoader(props: CardLoaderProps) {
 
   if (text === null) {
     return (
-      <div className="rounded-md border border-border bg-background/40 px-3 py-3 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-        page {pageNumber} · loading…
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/30 px-4 py-4 text-sm text-muted-foreground">
+        <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
+        Loading page {pageNumber}…
       </div>
     );
   }
@@ -717,7 +712,7 @@ function PageCard({
   onRun,
   onCancel,
 }: CardProps) {
-  const [view, setView] = useState<"request" | "result">(state.status === "done" ? "result" : "request");
+  const [showSettings, setShowSettings] = useState(false);
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
@@ -737,11 +732,6 @@ function PageCard({
     window.addEventListener("doclens:scroll-to-workstation", handleScroll);
     return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
   }, [pageNumber]);
-
-  useEffect(() => {
-    if (state.status === "done") setView("result");
-    if (state.status === "running") setView("result");
-  }, [state.status]);
 
   // Strict cleanup on unmount: destroy TTS controller fully.
   useEffect(() => {
@@ -817,192 +807,180 @@ function PageCard({
     setTtsState("idle");
   };
 
-  const statusColor =
-    state.status === "running"
-      ? "text-primary"
-      : state.status === "done"
-        ? "text-primary"
-        : state.status === "error"
-          ? "text-destructive"
-          : "text-muted-foreground";
+  /* Determine button label from mode */
+  const modeLabel = MODE_INSTRUCTIONS[eff.mode]?.label || "Translate";
+  const hasResult = !!state.result || isRunning;
 
   return (
-    <article
-      className={`rounded-md border bg-background/40 transition-colors ${
-        isRunning ? "border-primary/50 ring-1 ring-primary/30" : "border-border"
-      } ${highlighted ? "highlight-card" : ""}`}
-    >
-      <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-        <span className="text-foreground">page {pageNumber}</span>
-        <span>tok <span className="text-foreground">{estimateTokens(pageText).toLocaleString()}</span></span>
-        <span className={statusColor}>● {state.status}</span>
-        {state.isCustom && (
-          <span className="rounded bg-accent/15 px-1.5 py-0.5 normal-case tracking-normal text-accent">custom</span>
-        )}
-        {state.overrides && Object.keys(state.overrides).length > 0 && (
-          <span className="rounded bg-primary/15 px-1.5 py-0.5 normal-case tracking-normal text-primary">override</span>
-        )}
-        <div className="ml-auto flex items-center gap-1">
+    <article className={`reader-card ${highlighted ? "highlight-card" : ""} ${isRunning ? "!border-primary/20" : ""}`}>
+      {/* ─── Header ─── */}
+      <header className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Page {pageNumber}
+          </h3>
+          {state.status === "done" && (
+            <span className="flex h-1.5 w-1.5 rounded-full bg-primary" title="Translated" />
+          )}
+          {state.status === "running" && (
+            <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
+          )}
+          {state.status === "error" && (
+            <span className="flex h-1.5 w-1.5 rounded-full bg-destructive" title="Error" />
+          )}
+          {state.isCustom && (
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">Custom</span>
+          )}
+          {overrideCount > 0 && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{overrideCount} override{overrideCount > 1 ? "s" : ""}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {/* TTS controls */}
+          {state.result && isTtsSupported() && (
+            <>
+              {ttsState !== "playing" ? (
+                <button
+                  onClick={handleTtsPlay}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary"
+                  title={ttsState === "paused" ? "Resume" : "Listen"}
+                >
+                  ▶
+                </button>
+              ) : (
+                <button
+                  onClick={handleTtsPause}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-primary transition-colors hover:bg-surface-2"
+                  title="Pause"
+                >
+                  ❚❚
+                </button>
+              )}
+              {(ttsState === "playing" || ttsState === "paused") && (
+                <button
+                  onClick={handleTtsStop}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-destructive"
+                  title="Stop"
+                >
+                  ■
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Settings gear */}
           <button
-            onClick={() => setView("request")}
-            className={`rounded px-2 py-0.5 ${view === "request" ? "bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setShowSettings(!showSettings)}
+            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${showSettings ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"}`}
+            title="Configure"
           >
-            request
+            ⚙
           </button>
-          <button
-            onClick={() => setView("result")}
-            className={`rounded px-2 py-0.5 ${view === "result" ? "bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}
-            disabled={!state.result && !isRunning}
-          >
-            result
-          </button>
+
+          {/* Run / Cancel */}
           {isRunning ? (
             <button
               onClick={onCancel}
-              className="rounded border border-destructive/60 bg-destructive/10 px-2 py-0.5 text-destructive hover:bg-destructive/20"
+              className="ml-1 rounded-lg border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
-              cancel
+              Stop
             </button>
           ) : (
             <button
               onClick={onRun}
-              className="rounded bg-primary px-2 py-0.5 text-primary-foreground hover:opacity-90"
+              className="ml-1 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
             >
-              ▶ run
+              {modeLabel}
             </button>
           )}
         </div>
       </header>
 
-      {view === "request" ? (
-        <div className="space-y-3 px-3 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span>primary overrides</span>
-              {overrideCount > 0 && (
-                <span className="rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-primary">
-                  {overrideCount} active
-                </span>
-              )}
-              {state.isCustom && (
-                <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-accent">
-                  custom json
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {state.isCustom && (
-                <button
-                  onClick={resetAuto}
-                  className="rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
-                >
-                  reset to auto
-                </button>
-              )}
-              <button
-                onClick={editingJson ? () => setEditingJson(false) : startEdit}
-                className="rounded-md border border-border bg-background px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:border-border-strong hover:text-foreground"
-              >
-                {editingJson ? "hide json" : "advanced: edit json"}
-              </button>
-            </div>
-          </div>
-
-          <OverrideControls
-            eff={eff}
-            models={models}
-            overrides={state.overrides}
-            onSetOverride={setOverride}
-            onClearOverrides={() => onUpdate({ overrides: undefined })}
-            surface="primary"
-          />
-
-          {editingJson && (
-            <div className="rounded-md border border-border bg-background/40 p-3">
-              <div className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                {state.isCustom ? "custom request — sent verbatim" : "auto-generated request"}
-              </div>
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                spellCheck={false}
-                className="h-72 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none focus:border-primary"
-              />
-              {draftError && <div className="mt-1 font-mono text-[11px] text-destructive">{draftError}</div>}
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  onClick={saveEdit}
-                  className="rounded-md bg-primary px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
-                >
-                  save custom
-                </button>
-                <button
-                  onClick={() => setEditingJson(false)}
-                  className="rounded-md border border-border px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
-                >
-                  cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!editingJson && state.isCustom && (
-            <div className="rounded-md border border-accent/20 bg-accent/10 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-accent">
-              custom JSON is active. Click advanced edit JSON to inspect or change it.
-            </div>
-          )}
+      {/* ─── Error banner ─── */}
+      {state.status === "error" && (
+        <div className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {state.error}
         </div>
-      ) : (
-        <div className="space-y-3 px-3 py-3">
-          {state.status === "error" && (
-            <div className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 font-mono text-[11px] text-destructive">
-              {state.error}
-            </div>
-          )}
-          {state.result && isTtsSupported() && (
-            <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2">
+      )}
+
+      {/* ─── Settings panel (collapsed by default) ─── */}
+      <div className={`collapsible-content ${showSettings ? "open" : ""}`}>
+        <div>
+          <div className="mb-4 space-y-3 rounded-lg bg-surface-2/30 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Page Overrides</span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  TTS
-                </span>
-                {ttsState !== "playing" ? (
+                {state.isCustom && (
                   <button
-                    onClick={handleTtsPlay}
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                    title={ttsState === "paused" ? "Resume speech" : "Play speech"}
+                    onClick={resetAuto}
+                    className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/20"
                   >
-                    ▶
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleTtsPause}
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:border-primary hover:text-primary"
-                    title="Pause speech"
-                  >
-                    ❚❚
+                    Reset to Auto
                   </button>
                 )}
                 <button
-                  onClick={handleTtsStop}
-                  disabled={ttsState === "idle" || ttsState === "ended"}
-                  className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
-                  title="Stop speech"
+                  onClick={editingJson ? () => setEditingJson(false) : startEdit}
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  ■
+                  {editingJson ? "Hide JSON" : "Edit JSON"}
                 </button>
               </div>
-              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                {ttsState}
-              </span>
             </div>
-          )}
-          <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/60 p-3 font-mono text-[12.5px] leading-relaxed text-foreground/90">
-            {isRunning
-              ? streamBuf || <span className="text-muted-foreground italic">waiting for first token…</span>
-              : state.result || <span className="text-muted-foreground italic">no result yet — click ▶ run</span>}
-          </pre>
+
+            <OverrideControls
+              eff={eff}
+              models={models}
+              overrides={state.overrides}
+              onSetOverride={setOverride}
+              onClearOverrides={() => onUpdate({ overrides: undefined })}
+              surface="primary"
+            />
+
+            {editingJson && (
+              <div className="rounded-lg border border-border bg-background/40 p-3">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  spellCheck={false}
+                  className="h-56 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none focus:border-primary"
+                />
+                {draftError && <div className="mt-1 text-xs text-destructive">{draftError}</div>}
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={saveEdit}
+                    className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingJson(false)}
+                    className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* ─── Result / Streaming content ─── */}
+      <div className="reader-text">
+        {isRunning ? (
+          <div className="whitespace-pre-wrap break-words">
+            {streamBuf || (
+              <span className="text-muted-foreground italic">Waiting for response…</span>
+            )}
+          </div>
+        ) : state.result ? (
+          <div className="whitespace-pre-wrap break-words">{state.result}</div>
+        ) : (
+          <p className="text-center text-sm text-muted-foreground py-8">
+            Click <span className="font-semibold text-primary">{modeLabel}</span> to process this page.
+          </p>
+        )}
+      </div>
     </article>
   );
 }
@@ -1020,11 +998,11 @@ function SmallSelect({
 }) {
   return (
     <label className="block">
-      <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-medium text-muted-foreground capitalize">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded border border-border bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-primary"
+        className="mt-1 w-full rounded-md border border-border bg-background/50 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-primary"
       >
         {options.map(([v, l]) => (
           <option key={v} value={v}>{l}</option>
@@ -1040,7 +1018,6 @@ function OverrideControls({
   overrides,
   onSetOverride,
   onClearOverrides,
-  surface,
 }: {
   eff: ReturnType<typeof effective>;
   models: ORModel[];
@@ -1050,16 +1027,12 @@ function OverrideControls({
   surface?: "primary";
 }) {
   const hasOverrides = !!overrides && Object.keys(overrides).length > 0;
-  const wrapperClass =
-    surface === "primary"
-      ? "rounded-md border border-border bg-background/30 p-3"
-      : "pt-2";
 
   return (
-    <div className={wrapperClass}>
+    <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <SmallSelect
-          label="mode"
+          label="Mode"
           value={overrides?.mode ?? ""}
           onChange={(v) => onSetOverride({ mode: (v || undefined) as GlobalMode | undefined })}
           options={[
@@ -1068,19 +1041,19 @@ function OverrideControls({
           ]}
         />
         <SmallSelect
-          label="language"
+          label="Language"
           value={overrides?.language ?? ""}
           onChange={(v) => onSetOverride({ language: v || undefined })}
           options={[["", eff.language], ...QUICK_LANGS.map((l) => [l, l] as [string, string])]}
         />
         <SmallSelect
-          label="style"
+          label="Style"
           value={overrides?.style ?? ""}
           onChange={(v) => onSetOverride({ style: v || undefined })}
           options={[["", eff.style], ...STYLES.map((s) => [s, s] as [string, string])]}
         />
         <SmallSelect
-          label="model"
+          label="Model"
           value={overrides?.modelId ?? ""}
           onChange={(v) => onSetOverride({ modelId: v || undefined })}
           options={[
@@ -1092,8 +1065,8 @@ function OverrideControls({
           ]}
         />
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            temp · {(overrides?.temperature ?? eff.temperature).toFixed(2)}
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Temperature · {(overrides?.temperature ?? eff.temperature).toFixed(2)}
           </span>
           <input
             type="range"
@@ -1105,22 +1078,22 @@ function OverrideControls({
             className="mt-1 w-full accent-primary"
           />
         </label>
-        <label className="flex items-center gap-2 self-end font-mono text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-2 self-end text-[12px] text-muted-foreground">
           <input
             type="checkbox"
             checked={overrides?.memory ?? eff.memory}
             onChange={(e) => onSetOverride({ memory: e.target.checked })}
-            className="h-3.5 w-3.5 accent-primary"
+            className="h-3.5 w-3.5 rounded accent-primary"
           />
-          memory
+          Memory
         </label>
       </div>
       {hasOverrides && (
         <button
           onClick={onClearOverrides}
-          className="mt-2 rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          className="mt-2 rounded-md border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
-          clear overrides
+          Clear Overrides
         </button>
       )}
     </div>

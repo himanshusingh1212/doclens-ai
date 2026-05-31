@@ -4,8 +4,6 @@ import { estimateTokens } from "@/lib/models";
 import { getAllPages, getPageData, type PageAiSummaryEntry } from "@/lib/storage";
 import { PageWorkstation } from "./PageWorkstation";
 
-type Tab = "text" | "pages";
-
 interface Props {
   docId: string;
   pageCount: number;
@@ -75,6 +73,8 @@ async function exportAsJson(docId: string) {
 
 /* ---------- Component ---------- */
 
+type Tab = "ai" | "text";
+
 export function RightPanel({
   docId,
   pageCount,
@@ -85,100 +85,66 @@ export function RightPanel({
   activePage,
   setActivePage,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("pages");
+  const [tab, setTab] = useState<Tab>("ai");
+  const [showExport, setShowExport] = useState(false);
 
   const doneCount = useMemo(
     () => Object.values(aiSummary).filter((e) => e.status === "done").length,
     [aiSummary],
   );
-  const hasResults = pageCount > 0;
 
   return (
-    <div className="flex h-full flex-col bg-surface">
-      {/* Tabs */}
-      <div className="flex items-center border-b border-border">
+    <div className="flex h-full flex-col bg-surface/30">
+      {/* ─── Tab bar ─── */}
+      <div className="flex items-center border-b border-border bg-surface/50 backdrop-blur-sm">
+        <TabButton active={tab === "ai"} onClick={() => setTab("ai")}>
+          AI Assistant
+        </TabButton>
         <TabButton active={tab === "text"} onClick={() => setTab("text")}>
-          Extracted Text
-          <Badge>{pageCount || "—"}</Badge>
+          Original Text
         </TabButton>
-        <TabButton active={tab === "pages"} onClick={() => setTab("pages")}>
-          Pages
-          <Badge>
-            {doneCount}/{pageCount || "—"}
-          </Badge>
-        </TabButton>
-        <div className="ml-auto flex items-center gap-2 px-4">
-          {hasResults && (
-            <div className="flex items-center gap-1">
+
+        <div className="ml-auto flex items-center gap-1 px-3">
+          {analyzing && (
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
+              {status}
+            </span>
+          )}
+
+          {pageCount > 0 && (
+            <div className="relative">
               <button
-                onClick={() => void exportAsMarkdown(docId)}
-                className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-                title="Export as Markdown"
+                onClick={() => setShowExport(!showExport)}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                title="Export"
               >
-                ↓ md
+                <span className="text-xs">↓</span>
               </button>
-              <button
-                onClick={() => void exportAsJson(docId)}
-                className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-                title="Export as JSON"
-              >
-                ↓ json
-              </button>
+              {showExport && (
+                <div className="absolute right-0 top-full z-20 mt-1 rounded-lg border border-border bg-surface p-1 shadow-xl">
+                  <button
+                    onClick={() => { void exportAsMarkdown(docId); setShowExport(false); }}
+                    className="block w-full rounded px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-surface-2"
+                  >
+                    Export as Markdown
+                  </button>
+                  <button
+                    onClick={() => { void exportAsJson(docId); setShowExport(false); }}
+                    className="block w-full rounded px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-surface-2"
+                  >
+                    Export as JSON
+                  </button>
+                </div>
+              )}
             </div>
           )}
-          <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            {analyzing ? <span className="text-primary">{status}</span> : status || "idle"}
-          </span>
         </div>
       </div>
 
-      {/* Page Navigation Controls */}
-      {pageCount > 0 && (
-        <div className="flex items-center justify-between border-b border-border bg-surface-2/40 backdrop-blur-md px-4 py-2 font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActivePage(Math.max(1, activePage - 1))}
-              disabled={activePage <= 1}
-              className="rounded border border-border bg-background/50 px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ← Prev
-            </button>
-            <span className="text-muted-foreground">
-              Page <span className="text-foreground font-bold">{activePage}</span> of {pageCount}
-            </span>
-            <button
-              onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
-              disabled={activePage >= pageCount}
-              className="rounded border border-border bg-background/50 px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next →
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Go to:</span>
-            <select
-              value={activePage}
-              onChange={(e) => setActivePage(Number(e.target.value))}
-              className="rounded border border-border bg-background/50 px-2 py-1 font-mono text-[11px] text-foreground outline-none focus:border-primary"
-            >
-              {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
-                <option key={pageNum} value={pageNum} className="bg-surface">
-                  Page {pageNum}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Body */}
+      {/* ─── Body ─── */}
       <div className="flex-1 overflow-hidden">
-        {tab === "text" && (
-          <ExtractedTextTab docId={docId} activePage={activePage} />
-        )}
-
-        {tab === "pages" && (
+        {tab === "ai" && (
           <PageWorkstation
             docId={docId}
             pageCount={pageCount}
@@ -187,6 +153,10 @@ export function RightPanel({
             activePage={activePage}
             setActivePage={setActivePage}
           />
+        )}
+
+        {tab === "text" && (
+          <ExtractedTextTab docId={docId} activePage={activePage} />
         )}
       </div>
     </div>
@@ -207,10 +177,8 @@ function ExtractedTextTab({ docId, activePage }: { docId: string; activePage: nu
   }
 
   return (
-    <div className="h-full overflow-auto px-5 py-4">
-      <div className="right-panel-item-wrap w-full">
-        <ExtractedPageRow docId={docId} pageNumber={activePage} />
-      </div>
+    <div className="h-full overflow-auto px-6 py-5 page-card-enter" key={activePage}>
+      <ExtractedPageRow docId={docId} pageNumber={activePage} />
     </div>
   );
 }
@@ -229,34 +197,37 @@ function ExtractedPageRow({ docId, pageNumber }: { docId: string; pageNumber: nu
     };
   }, [docId, pageNumber]);
 
+  if (data === null) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
+        Loading page {pageNumber}…
+      </div>
+    );
+  }
+
   return (
-    <article className="rounded-md border border-border bg-background/40">
-      <header className="flex items-center justify-between border-b border-border px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-        <span>page {pageNumber}</span>
-        <span className="flex items-center gap-3">
-          <span>
-            cols: <span className="text-foreground">{data?.columns ?? "—"}</span>
-          </span>
-          <span>
-            tok:{" "}
-            <span className="text-foreground">
-              {data ? estimateTokens(data.text).toLocaleString() : "…"}
-            </span>
-          </span>
+    <article className="reader-card">
+      <header className="mb-4 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Page {pageNumber} — Original Text
+        </h3>
+        <span className="text-[11px] text-muted-foreground/60">
+          {data.text ? `${estimateTokens(data.text).toLocaleString()} tokens` : ""}
         </span>
       </header>
-      <pre className="whitespace-pre-wrap break-words px-3 py-3 font-mono text-[12.5px] leading-relaxed text-foreground/90">
-        {data === null ? (
-          <span className="text-muted-foreground italic">loading…</span>
-        ) : data.text ? (
-          data.text
+      <div className="reader-text">
+        {data.text ? (
+          <div className="whitespace-pre-wrap break-words">{data.text}</div>
         ) : (
-          <span className="text-muted-foreground italic">(no extractable text)</span>
+          <p className="italic text-muted-foreground">No extractable text on this page.</p>
         )}
-      </pre>
+      </div>
     </article>
   );
 }
+
+/* ---------- Shared UI primitives ---------- */
 
 function TabButton({
   active,
@@ -270,20 +241,12 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative flex items-center gap-2 px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] transition-colors ${
+      className={`relative px-4 py-2.5 text-[13px] font-medium transition-colors ${
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
       }`}
     >
       {children}
-      {active && <span className="absolute inset-x-3 -bottom-px h-px bg-primary" />}
+      {active && <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-primary" />}
     </button>
-  );
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-      {children}
-    </span>
   );
 }
