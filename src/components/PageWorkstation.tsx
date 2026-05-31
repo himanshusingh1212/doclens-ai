@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { estimateTokens } from "@/lib/models";
+import { TtsVoiceSetupDialog } from "@/components/TtsVoiceSetupDialog";
 import {
   buildPagePayload,
   fetchModels,
+  getEffectiveSelectedModel,
   getKey,
   getKeyStatus,
   getMemory,
@@ -38,6 +40,7 @@ import {
 } from "@/lib/storage";
 import {
   createSmartTtsController,
+  hasTtsSelection,
   isTtsSupported,
   stopAll as stopAllTts,
 } from "@/lib/tts";
@@ -142,6 +145,14 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     const onFocus = () => setGlobals(readGlobals());
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  useEffect(() => {
+    if (globalsRef.current.modelId) return;
+    void getEffectiveSelectedModel().then((modelId) => {
+      if (!modelId || getSelectedModel()) return;
+      setGlobals((current) => current.modelId ? current : { ...current, modelId });
+    });
   }, []);
 
   useEffect(() => {
@@ -720,6 +731,7 @@ function PageCard({
   const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
   const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
   const [highlighted, setHighlighted] = useState(false);
+  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = (e: Event) => {
@@ -788,7 +800,7 @@ function PageCard({
     setEditingJson(false);
   };
 
-  const handleTtsPlay = () => {
+  const startTts = () => {
     if (!state.result || !isTtsSupported()) return;
     if (ttsState === "paused" && ttsRef.current) {
       ttsRef.current.resume();
@@ -802,6 +814,18 @@ function PageCard({
     ttsRef.current = ctrl;
     ctrl.play();
   };
+
+  const handleTtsPlay = () => {
+    if (!state.result || !isTtsSupported()) return;
+    if (ttsState === "paused" && ttsRef.current) {
+      ttsRef.current.resume();
+      return;
+    }
+    void hasTtsSelection(eff.language).then((ready) => {
+      if (ready) startTts();
+      else setVoiceSetupOpen(true);
+    });
+  };
   const handleTtsPause = () => ttsRef.current?.pause();
   const handleTtsStop = () => {
     ttsRef.current?.stop();
@@ -814,6 +838,12 @@ function PageCard({
 
   return (
     <article className={`reader-card ${highlighted ? "highlight-card" : ""} ${isRunning ? "!border-primary/20" : ""}`}>
+      <TtsVoiceSetupDialog
+        open={voiceSetupOpen}
+        language={eff.language}
+        onOpenChange={setVoiceSetupOpen}
+        onReady={startTts}
+      />
       {/* ─── Header ─── */}
       <header className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">

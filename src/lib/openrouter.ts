@@ -20,6 +20,7 @@ const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
 const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
 export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
 const SERVER_KEY_SENTINEL = "server-managed";
+const FALLBACK_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
 
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
@@ -79,6 +80,28 @@ export function getSelectedModel(): string {
 }
 export function setSelectedModel(id: string) {
   localStorage.setItem(MODEL_LS, id);
+}
+
+function getServerDefaultModel(): string {
+  return process.env.OPENROUTER_DEFAULT_MODEL?.trim() || FALLBACK_OPENROUTER_MODEL;
+}
+
+const fetchServerDefaultModel = createServerFn({ method: "GET" }).handler(async () => {
+  "use server";
+  return { modelId: getServerDefaultModel() };
+});
+
+export async function getDefaultModel(): Promise<string> {
+  try {
+    const { modelId } = await fetchServerDefaultModel();
+    return modelId || FALLBACK_OPENROUTER_MODEL;
+  } catch {
+    return FALLBACK_OPENROUTER_MODEL;
+  }
+}
+
+export async function getEffectiveSelectedModel(): Promise<string> {
+  return getSelectedModel() || (await getDefaultModel());
 }
 
 export function getOutputLanguage(): string {

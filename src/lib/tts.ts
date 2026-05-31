@@ -52,6 +52,7 @@ export function langKey(language?: string | null): string {
     spanish: "es", japanese: "ja", german: "de", italian: "it",
     portuguese: "pt", russian: "ru", chinese: "zh", korean: "ko",
     turkish: "tr", dutch: "nl",
+    "हिंदी": "hi", "বাংলা": "bn", "తెలుగు": "te", "മലയാളം": "ml",
   };
   if (map[l]) return map[l];
   // already a code like "en" or "en-US"
@@ -284,6 +285,7 @@ export function createTtsController(text: string, opts: {
  * ============================================================ */
 
 const ENGINE_PREF_LS = "doclens.tts.engine"; // "auto" | "neural" | "browser"
+const PIPER_PREFERRED_LS = "doclens.piper.preferredVoice";
 
 export type TtsEngine = "auto" | "neural" | "browser";
 
@@ -294,6 +296,17 @@ export function getTtsEngine(): TtsEngine {
 }
 export function setTtsEngine(e: TtsEngine) {
   localStorage.setItem(ENGINE_PREF_LS, e);
+}
+
+export function getPreferredPiperVoice(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(PIPER_PREFERRED_LS) ?? "";
+}
+
+export function setPreferredPiperVoice(voiceId: string) {
+  if (typeof window === "undefined") return;
+  if (voiceId) localStorage.setItem(PIPER_PREFERRED_LS, voiceId);
+  else localStorage.removeItem(PIPER_PREFERRED_LS);
 }
 
 /** Lazy-import the Piper engine (keeps main bundle lean). */
@@ -327,6 +340,14 @@ export async function listInstalledPiperVoices() {
 export async function testPiperVoice(voiceId: string) {
   const engine = await loadPiperEngine();
   return engine.testVoice(voiceId);
+}
+
+export async function hasTtsSelection(language?: string | null): Promise<boolean> {
+  if (getTtsVoiceFor(language)) return true;
+  const preferred = getPreferredPiperVoice();
+  if (!preferred) return false;
+  const installed = await listInstalledPiperVoices().catch(() => []);
+  return installed.includes(preferred);
 }
 
 export type { PiperVoiceMeta } from "./neural-tts/piper-engine";
@@ -423,4 +444,3 @@ export function createSmartTtsController(text: string, opts: {
     },
   };
 }
-

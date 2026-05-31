@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { TtsVoiceSetupDialog } from "@/components/TtsVoiceSetupDialog";
+import { getOutputLanguage } from "@/lib/openrouter";
 import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob } from "@/lib/storage";
-import { createSmartTtsController } from "@/lib/tts";
+import { createSmartTtsController, hasTtsSelection } from "@/lib/tts";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 
 interface Props {
@@ -47,6 +49,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [speakState, setSpeakState] = useState<"idle" | "playing">("idle");
+  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
@@ -335,6 +338,16 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     );
   }, [selection, docId]);
 
+  const startSpeak = useCallback(() => {
+    if (!selection) return;
+    ttsRef.current?.destroy();
+    ttsRef.current = createSmartTtsController(selection.text, {
+      onState: (s) => setSpeakState(s === "playing" ? "playing" : "idle"),
+      language: getOutputLanguage(),
+    });
+    ttsRef.current.play();
+  }, [selection]);
+
   const handleSpeak = useCallback(() => {
     if (!selection) return;
     if (speakState === "playing") {
@@ -342,13 +355,12 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       setSpeakState("idle");
       return;
     }
-    ttsRef.current?.destroy();
-    ttsRef.current = createSmartTtsController(selection.text, {
-      onState: (s) => setSpeakState(s === "playing" ? "playing" : "idle"),
-      language: null,
+    const language = getOutputLanguage();
+    void hasTtsSelection(language).then((ready) => {
+      if (ready) startSpeak();
+      else setVoiceSetupOpen(true);
     });
-    ttsRef.current.play();
-  }, [selection, speakState]);
+  }, [selection, speakState, startSpeak]);
 
   if (loading) {
     return (
@@ -388,7 +400,14 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   };
 
   return (
-    <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
+    <>
+      <TtsVoiceSetupDialog
+        open={voiceSetupOpen}
+        language={getOutputLanguage()}
+        onOpenChange={setVoiceSetupOpen}
+        onReady={startSpeak}
+      />
+      <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
       <div className="flex flex-col items-center gap-4 py-6 px-4" onClick={handlePageClick}>
         {pageMetas.map((meta) => (
           <div
@@ -457,6 +476,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

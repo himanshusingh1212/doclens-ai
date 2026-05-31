@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import {
   fetchModels,
+  getEffectiveSelectedModel,
   getKeyStatus,
   getMemory,
   getMode,
@@ -111,6 +112,9 @@ function SettingsPage() {
 
   useEffect(() => {
     setSelected(getSelectedModel());
+    void getEffectiveSelectedModel().then((modelId) => {
+      if (!getSelectedModel()) setSelected(modelId);
+    });
     setLanguage(getOutputLanguage());
     setModeState(getMode());
     setStyleState(getStyle());
