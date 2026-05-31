@@ -182,31 +182,34 @@ function DocPage() {
 
         {/* Center: Page Navigation */}
         {pageCount > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setActivePage(Math.max(1, activePage - 1))}
               disabled={activePage <= 1}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-base text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+              aria-label="Previous page"
             >
               ‹
             </button>
-            <div className="flex items-center gap-1.5 rounded-md bg-surface-2/60 px-2.5 py-1">
+            <div className="flex h-8 items-center gap-2 rounded-md bg-surface-2/60 px-3">
               <select
                 value={activePage}
                 onChange={(e) => setActivePage(Number(e.target.value))}
-                className="bg-transparent text-center text-xs font-medium text-foreground outline-none cursor-pointer"
-                style={{ width: `${String(activePage).length + 1}ch` }}
+                className="cursor-pointer bg-transparent pl-1 pr-6 text-center text-xs font-medium tabular-nums text-foreground outline-none"
+                style={{ minWidth: `${Math.max(3.75, String(pageCount).length + 3)}rem` }}
+                aria-label="Select page"
               >
                 {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
                   <option key={n} value={n} className="bg-surface">{n}</option>
                 ))}
               </select>
-              <span className="text-xs text-muted-foreground">/ {pageCount}</span>
+              <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">/ {pageCount}</span>
             </div>
             <button
               onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
               disabled={activePage >= pageCount}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-base text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+              aria-label="Next page"
             >
               ›
             </button>
