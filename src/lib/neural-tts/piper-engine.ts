@@ -328,14 +328,26 @@ export async function synthesizeAudio(
     ),
   ]);
 
+  // Prefer PCM path — avoids Chrome's decodeAudioData which can hang.
   if (result?.audio instanceof Float32Array) {
     return {
       pcm: result.audio,
       sampleRate: result.sampleRate ?? 22050,
     };
   }
-  if (result?.file instanceof Blob) return { blob: result.file };
-  if (result instanceof Blob) return { blob: result };
+
+  // Blob fallback: extract PCM from WAV to avoid decodeAudioData entirely.
+  const blob = result?.file instanceof Blob ? result.file : result instanceof Blob ? result : null;
+  if (blob) {
+    try {
+      const pcmResult = await extractPcmFromWav(blob);
+      if (pcmResult) return pcmResult;
+    } catch (e) {
+      console.warn("[piper-engine] PCM extraction failed, using blob:", e);
+    }
+    return { blob };
+  }
+
   console.error("[piper-engine] Unexpected generate() result:", result);
   throw new Error("Unexpected generate() result format");
 }
@@ -405,7 +417,16 @@ export async function synthesize(
   };
   audio.onended = cleanup;
   audio.onerror = cleanup;
-  await audio.play();
+
+  // Chrome may reject play() due to autoplay policy — catch and rethrow cleanly
+  try {
+    await audio.play();
+  } catch (e) {
+    cleanup();
+    throw new Error(
+      `Playback blocked by browser. Click a button first, then try again. (${(e as Error)?.message})`,
+    );
+  }
   return audio;
 }
 
@@ -440,8 +461,13 @@ export async function testVoice(voiceId: string): Promise<void> {
 
   const audio = await synthesize(text, voiceId);
   return new Promise<void>((resolve) => {
-    audio.onended = () => resolve();
-    audio.onerror = () => resolve();
+    // Safety timeout: never hang forever (30s max for a test sentence)
+    const timeout = setTimeout(() => {
+      try { audio.pause(); } catch { /* ignore */ }
+      resolve();
+    }, 30_000);
+    audio.onended = () => { clearTimeout(timeout); resolve(); };
+    audio.onerror = () => { clearTimeout(timeout); resolve(); };
   });
 }
 
@@ -454,7 +480,7 @@ function getAudioCtx(): AudioContext {
   if (!audioCtx || audioCtx.state === "closed") {
     const Ctor =
       (window as any).AudioContext || (window as any).webkitAudioContext;
-    audioCtx = new Ctor();
+    audioCtx = new Ctor({ sampleRate: 22050 });
   }
   return audioCtx!;
 }
@@ -498,8 +524,22 @@ export async function speakChunked(
   stop(); // cancel any prior playback
 
   const ctx = getAudioCtx();
+
+  // Chrome aggressively suspends AudioContext — must await resume with retry
   if (ctx.state === "suspended") {
-    try { await ctx.resume(); } catch { /* ignore */ }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await ctx.resume();
+        if ((ctx.state as string) === "running") break;
+      } catch { /* ignore */ }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if ((ctx.state as string) !== "running") {
+      console.warn("[piper-engine] AudioContext stuck in", ctx.state, "— creating fresh context");
+      closeAudioContext();
+      const freshCtx = getAudioCtx();
+      try { await freshCtx.resume(); } catch { /* ignore */ }
+    }
   }
 
   const MAX_BUFFERED = 2; // depth of decoded buffers kept ready
@@ -534,6 +574,9 @@ export async function speakChunked(
     });
 
   // Producer: pre-render chunks, bounded by MAX_BUFFERED decoded buffers.
+  // Use the (potentially fresh) context for scheduling
+  const activeCtx = audioCtx!;
+
   const producer = (async () => {
     while (prefetchIndex < chunks.length && !aborted) {
       await waitForSlot();
@@ -543,11 +586,28 @@ export async function speakChunked(
         if (aborted) return;
         let buffer: AudioBuffer;
         if (audioData.pcm) {
-          buffer = ctx.createBuffer(1, audioData.pcm.length, audioData.sampleRate ?? 22050);
+          // Direct PCM path — bypasses decodeAudioData entirely (Chrome-safe)
+          buffer = activeCtx.createBuffer(1, audioData.pcm.length, audioData.sampleRate ?? 22050);
           buffer.getChannelData(0).set(audioData.pcm);
         } else if (audioData.blob) {
-          const arrayBuffer = await audioData.blob.arrayBuffer();
-          buffer = await ctx.decodeAudioData(arrayBuffer);
+          // Fallback: try extracting PCM from WAV manually first
+          const pcmFallback = await extractPcmFromWav(audioData.blob);
+          if (pcmFallback?.pcm) {
+            buffer = activeCtx.createBuffer(1, pcmFallback.pcm.length, pcmFallback.sampleRate ?? 22050);
+            buffer.getChannelData(0).set(pcmFallback.pcm);
+          } else {
+            // Last resort: use decodeAudioData with timeout
+            const arrayBuffer = await audioData.blob.arrayBuffer();
+            // Deep-copy to avoid SharedArrayBuffer issues in Chrome
+            const copy = new ArrayBuffer(arrayBuffer.byteLength);
+            new Uint8Array(copy).set(new Uint8Array(arrayBuffer));
+            buffer = await Promise.race([
+              activeCtx.decodeAudioData(copy),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("decodeAudioData timed out")), 5_000),
+              ),
+            ]);
+          }
         } else {
           throw new Error("No audio format returned");
         }
@@ -557,12 +617,15 @@ export async function speakChunked(
         notifyConsumer();
       } catch (e) {
         if (aborted) return;
-        throw e;
+        console.warn("[piper-engine] Chunk", prefetchIndex, "failed:", e);
+        // Skip failed chunks instead of aborting entire playback
+        prefetchIndex++;
+        continue;
       }
     }
   })();
 
-  let nextStartTime = ctx.currentTime;
+  let nextStartTime = activeCtx.currentTime;
   let playedCount = 0;
 
   activePipeline = {
@@ -595,11 +658,11 @@ export async function speakChunked(
       const buffer = decoded.shift()!;
       notifySlot(); // free a producer slot
 
-      const src = ctx.createBufferSource();
+      const src = activeCtx.createBufferSource();
       src.buffer = buffer;
-      src.connect(ctx.destination);
+      src.connect(activeCtx.destination);
 
-      const startAt = Math.max(nextStartTime, ctx.currentTime);
+      const startAt = Math.max(nextStartTime, activeCtx.currentTime);
       src.start(startAt);
       nextStartTime = startAt + buffer.duration;
       sources.add(src);
@@ -617,14 +680,14 @@ export async function speakChunked(
       // building up an unbounded set of live nodes.
       const waitMs = Math.max(
         0,
-        (nextStartTime - ctx.currentTime) * 1000 - 50,
+        (nextStartTime - activeCtx.currentTime) * 1000 - 50,
       );
       if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
     }
 
     // Wait for the final scheduled buffer to finish.
     if (!aborted) {
-      const tail = Math.max(0, (nextStartTime - ctx.currentTime) * 1000);
+      const tail = Math.max(0, (nextStartTime - activeCtx.currentTime) * 1000);
       if (tail > 0) await new Promise((r) => setTimeout(r, tail));
     }
 
@@ -675,9 +738,22 @@ export async function pickVoiceForLanguage(
   const installedVoices = catalog.filter((v) => installed.includes(v.key));
 
   const langLower = lang.toLowerCase();
+  const langCodeMap: Record<string, string> = {
+    "हिंदी": "hi",
+    "বাংলা": "bn",
+    "తెలుగు": "te",
+    "മലയാളം": "ml",
+    hindi: "hi",
+    bangla: "bn",
+    bengali: "bn",
+    telugu: "te",
+    malayalam: "ml",
+  };
+  const requestedCode = langCodeMap[langLower] ?? langLower;
 
   const langMatches = installedVoices.filter(
     (v) =>
+      v.language.code.toLowerCase() === requestedCode ||
       v.language.name_english.toLowerCase() === langLower ||
       v.language.name_native.toLowerCase() === langLower,
   );
@@ -692,6 +768,70 @@ export async function pickVoiceForLanguage(
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Extract raw PCM from a WAV Blob by manually parsing the RIFF header.
+ * This completely bypasses AudioContext.decodeAudioData which can hang
+ * indefinitely in Chrome when fed certain WAV formats.
+ */
+async function extractPcmFromWav(blob: Blob): Promise<SynthesizedAudio | null> {
+  try {
+    const buffer = await blob.arrayBuffer();
+    const view = new DataView(buffer);
+
+    // Validate RIFF/WAVE header
+    if (buffer.byteLength < 44) return null;
+    const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+    const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
+    if (riff !== "RIFF" || wave !== "WAVE") return null;
+
+    // Find fmt chunk
+    let offset = 12;
+    let sampleRate = 22050;
+    let bitsPerSample = 16;
+    let numChannels = 1;
+    let dataOffset = -1;
+    let dataSize = 0;
+
+    while (offset < buffer.byteLength - 8) {
+      const chunkId = String.fromCharCode(
+        view.getUint8(offset), view.getUint8(offset + 1),
+        view.getUint8(offset + 2), view.getUint8(offset + 3),
+      );
+      const chunkSize = view.getUint32(offset + 4, true);
+
+      if (chunkId === "fmt ") {
+        numChannels = view.getUint16(offset + 10, true);
+        sampleRate = view.getUint32(offset + 12, true);
+        bitsPerSample = view.getUint16(offset + 22, true);
+      } else if (chunkId === "data") {
+        dataOffset = offset + 8;
+        dataSize = chunkSize;
+        break;
+      }
+
+      offset += 8 + chunkSize;
+      // Ensure word-aligned
+      if (chunkSize % 2 !== 0) offset++;
+    }
+
+    if (dataOffset < 0 || dataSize === 0) return null;
+
+    // Only handle 16-bit PCM (standard Piper output)
+    if (bitsPerSample !== 16) return null;
+
+    const sampleCount = dataSize / 2;
+    const pcm = new Float32Array(sampleCount);
+    for (let i = 0; i < sampleCount; i++) {
+      const sample = view.getInt16(dataOffset + i * 2, true);
+      pcm[i] = sample < 0 ? sample / 0x8000 : sample / 0x7FFF;
+    }
+
+    return { pcm, sampleRate };
+  } catch {
+    return null;
+  }
+}
 
 function splitIntoSentences(text: string): string[] {
   return text.match(/[^.!?\n]+[.!?\n]*/g) || [text];

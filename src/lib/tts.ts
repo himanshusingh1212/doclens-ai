@@ -346,7 +346,7 @@ export async function hasTtsSelection(language?: string | null): Promise<boolean
   if (getTtsVoiceFor(language)) return true;
   const preferred = getPreferredPiperVoice();
   if (!preferred) return false;
-  const installed = await listInstalledPiperVoices().catch(() => []);
+  const installed = await listInstalledPiperVoices().catch(() => [] as string[]);
   return installed.includes(preferred);
 }
 
