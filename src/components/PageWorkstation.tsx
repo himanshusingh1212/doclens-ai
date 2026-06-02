@@ -142,6 +142,17 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(null);
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
+
+  // ─── Auto-Translate toggle (persisted per doc) ───
+  const autoTranslateKey = `doclens.autoTranslate.${docId}`;
+  const [autoTranslate, setAutoTranslateRaw] = useState(() => localStorage.getItem(`doclens.autoTranslate.${docId}`) === "1");
+  const autoTranslateRef = useRef(autoTranslate);
+  autoTranslateRef.current = autoTranslate;
+  const setAutoTranslate = (on: boolean) => {
+    setAutoTranslateRaw(on);
+    autoTranslateRef.current = on;
+    localStorage.setItem(autoTranslateKey, on ? "1" : "0");
+  };
   const mountedRef = useRef(true);
   /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
   const selectionOverridesRef = useRef<Map<number, string>>(new Map());
@@ -436,9 +447,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   }, [runPage, shouldShowExplainSetup]);
 
   /**
-   * Translate the next N un-translated pages starting from `activePage`.
-   * Walks forward (wrapping to page 1 if needed) and picks pages that
-   * haven't been translated yet (or whose settings changed).
+   * Background-translate the next N pages after the current `activePage`.
+   * Runs silently without changing the user's view. Skips already-done pages.
    */
   const runNextPages = async (count = AUTO_TRANSLATE_COUNT) => {
     if (!(await ensureBatchKeyReady())) return;
@@ -446,12 +456,26 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     globalsRef.current = freshGlobals;
     setGlobals(freshGlobals);
 
-    // Collect the next `count` untranslated pages starting from activePage
+    const startPage = activePage; // snapshot the user's current page
+
+    // Determine target pages: N+1, N+2, N+3 (clamped to pageCount)
+    const candidates: number[] = [];
+    for (let i = 1; i <= count; i++) {
+      const n = startPage + i;
+      if (n <= pageCount) candidates.push(n);
+    }
+
+    if (candidates.length === 0) {
+      toast.info("No more pages ahead to translate.", { duration: 3000 });
+      return;
+    }
+
+    // Check which pages actually need translating
     const pagesToRun: number[] = [];
-    for (let offset = 0; offset < pageCount && pagesToRun.length < count; offset++) {
-      const n = ((activePage - 1 + offset) % pageCount) + 1;
+    const skipped: number[] = [];
+    for (const n of candidates) {
       const pageRec = await getPageData(docId, n);
-      if (!pageRec) continue;
+      if (!pageRec) { skipped.push(n); continue; }
       const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
       const currentGlobals = globalsRef.current;
       const eff = effective(currentGlobals, state.overrides);
@@ -468,12 +492,18 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         state.settingsHash === hash &&
         !state.isCustom &&
         !!state.result;
-      if (!alreadyDone) pagesToRun.push(n);
+      if (alreadyDone) skipped.push(n);
+      else pagesToRun.push(n);
     }
 
     if (pagesToRun.length === 0) {
-      toast.info("All nearby pages are already translated.", { duration: 3000 });
+      const pageList = candidates.map((n) => `p${n}`).join(", ");
+      toast.info(`Pages ${pageList} are already translated.`, { duration: 3000 });
       return;
+    }
+
+    if (skipped.length > 0) {
+      toast.info(`Skipping ${skipped.length} already-translated page${skipped.length > 1 ? "s" : ""}.`, { duration: 2500 });
     }
 
     const batch: BatchRun = { cancelled: false };
@@ -484,14 +514,18 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     let processedCount = 0;
     let prev: string | undefined;
 
+    // Seed memory context from the current page if memory is enabled
+    const currentPageRec = await getPageData(docId, startPage);
+    const currentAi = currentPageRec?.pageAi;
+    if (currentAi?.result && freshGlobals.memory) {
+      prev = memoryExcerpt(currentAi.result);
+    }
+
     if (mountedRef.current) setBatchProgress({ current: 0, total, errors: 0 });
 
-    // Run sequentially for memory context continuity
+    // Run sequentially in background — NO page navigation
     for (const n of pagesToRun) {
       if (batch.cancelled) break;
-
-      // Navigate to the page being processed
-      setActivePage(n);
 
       try {
         const out = await runPage(n, prev, batch);
@@ -509,14 +543,14 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     }
 
     if (batch.cancelled) {
-      toast.info("Translation cancelled.", { duration: 3000 });
+      // Don't toast on cancel when auto-translate just re-triggers
     } else if (errorCount > 0) {
       toast.warning(
-        `Completed with ${errorCount} error${errorCount > 1 ? "s" : ""}. Check individual pages.`,
-        { duration: 5000 },
+        `Background: ${processedCount - errorCount}/${total} done, ${errorCount} failed.`,
+        { duration: 4000 },
       );
-    } else {
-      toast.success(`${total} page${total > 1 ? "s" : ""} translated successfully.`, { duration: 3000 });
+    } else if (total > 0) {
+      toast.success(`Background: ${total} page${total > 1 ? "s" : ""} translated.`, { duration: 2500 });
     }
 
     if (mountedRef.current && batchRef.current === batch) {
@@ -534,6 +568,47 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     }
     void runNextPages();
   };
+
+  const toggleAutoTranslate = () => {
+    if (autoTranslate) {
+      // Turn OFF — cancel any running batch
+      setAutoTranslate(false);
+      if (batchRef.current) batchRef.current.cancelled = true;
+      abortMap.current.forEach((c) => c.abort());
+      if (mountedRef.current) {
+        setBatchActive(false);
+        setBatchProgress(null);
+      }
+    } else {
+      // Turn ON — first check setup, then start
+      if (shouldShowExplainSetup()) {
+        setPendingExplainAction({ type: "next" });
+        setExplainSetupOpen(true);
+        setAutoTranslate(true);
+        return;
+      }
+      setAutoTranslate(true);
+      void runNextPages();
+    }
+  };
+
+  // ─── Auto-trigger on page change ───
+  const prevAutoPage = useRef(activePage);
+  useEffect(() => {
+    if (prevAutoPage.current === activePage) return;
+    prevAutoPage.current = activePage;
+    if (!autoTranslateRef.current) return;
+    if (batchRef.current) {
+      batchRef.current.cancelled = true;
+    }
+    // Small delay so the current batch cancellation settles
+    const timer = setTimeout(() => {
+      if (!mountedRef.current || !autoTranslateRef.current) return;
+      void runNextPages();
+    }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage]);
 
   const handleExplainSetupConfirm = async (settings: { language: string; style: ExplanationStyle }) => {
     saveMode("explain");
@@ -558,6 +633,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   };
 
   const cancelBatch = () => {
+    setAutoTranslate(false);
     if (batchRef.current) batchRef.current.cancelled = true;
     abortMap.current.forEach((c) => c.abort());
     if (mountedRef.current) {
@@ -651,38 +727,35 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
               <>{pageCount} pages ready</>
             )}
           </span>
-          {batchProgress && (
-            <span className="flex items-center gap-1.5 text-xs text-primary">
-              <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
-              {batchProgress.current}/{batchProgress.total}
-              {batchProgress.errors > 0 && (
-                <span className="text-destructive">· {batchProgress.errors} failed</span>
-              )}
-            </span>
-          )}
         </div>
-        <div className="flex items-center gap-1.5">
-          {batchActive ? (
-            <button
-              onClick={cancelBatch}
-              className="rounded-lg border border-destructive/30 px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
-            >
-              Cancel
-            </button>
-          ) : (
-            <button
-              onClick={handleRunNext}
-              className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
-              title={`Auto-translate the next ${AUTO_TRANSLATE_COUNT} untranslated pages`}
-            >
-              ▶ Translate Next {AUTO_TRANSLATE_COUNT}
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          {/* Auto-Translate toggle */}
+          <button
+            onClick={toggleAutoTranslate}
+            className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 ${
+              autoTranslate
+                ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                : "bg-surface-2/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+            }`}
+            title={autoTranslate
+              ? "Auto-translate is ON — pages ahead are translated in the background as you read"
+              : "Turn on auto-translate to pre-translate upcoming pages"}
+          >
+            {/* Toggle pill */}
+            <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${
+              autoTranslate ? "bg-primary" : "bg-muted-foreground/30"
+            }`}>
+              <span className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                autoTranslate ? "translate-x-3.5" : "translate-x-0.5"
+              }`} />
+            </span>
+            Auto-Translate
+          </button>
         </div>
       </div>
 
       {/* ─── Single page card ─── */}
-      <div className="flex-1 overflow-auto px-5 py-4 page-card-enter" key={activePage}>
+      <div className="relative flex-1 overflow-auto px-5 py-4 page-card-enter" key={activePage}>
         <PageCardLoader
           docId={docId}
           pageNumber={activePage}
@@ -695,6 +768,33 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
           onRun={() => runPageWithSetup(activePage)}
           onCancel={() => cancelPage(activePage)}
         />
+
+        {/* ─── Floating background-progress pill ─── */}
+        {batchProgress && (
+          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border border-primary/20 bg-surface/90 px-3.5 py-2 shadow-lg backdrop-blur-md">
+            <span className="inline-block h-3 w-3 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+            <span className="text-xs font-medium text-foreground">
+              Pre-translating {batchProgress.current}/{batchProgress.total}
+            </span>
+            {batchProgress.errors > 0 && (
+              <span className="text-xs text-destructive">· {batchProgress.errors} err</span>
+            )}
+            <button
+              onClick={cancelBatch}
+              className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-xs text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
+              title="Stop auto-translate"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {/* Subtle auto-translate ON indicator when idle */}
+        {autoTranslate && !batchProgress && (
+          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 rounded-full border border-primary/10 bg-surface/80 px-3 py-1.5 shadow-md backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <span className="text-[10px] font-medium text-muted-foreground">Auto-translate on</span>
+          </div>
+        )}
       </div>
     </div>
   );
