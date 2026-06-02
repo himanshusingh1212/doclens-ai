@@ -1,6 +1,6 @@
 import { ClientOnly, createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { createClientOnlyFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
@@ -27,6 +27,10 @@ const extractPdfPagesClient = createClientOnlyFn(async (
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
+  validateSearch: (search: Record<string, unknown>): { page?: number } => {
+    const p = Number(search.page);
+    return { page: p > 0 && Number.isFinite(p) ? Math.floor(p) : undefined };
+  },
   head: () => ({
     meta: [{ title: "DocLens — Document" }],
   }),
@@ -34,6 +38,7 @@ export const Route = createFileRoute("/doc/$id")({
 
 function DocPage() {
   const { id } = Route.useParams();
+  const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
   const [doc, setDoc] = useState<DocRecord | null>(null);
   const [missing, setMissing] = useState(false);
@@ -42,7 +47,21 @@ function DocPage() {
   const [status, setStatus] = useState("");
   /** Lightweight summary only — full text + result are read on demand per page. */
   const [aiSummary, setAiSummary] = useState<Record<number, PageAiSummaryEntry>>({});
-  const [activePage, setActivePage] = useState<number>(1);
+  const [activePage, setActivePageRaw] = useState<number>(urlPage ?? 1);
+
+  /** Sync page changes to the URL query param (?page=N) */
+  const setActivePage = useCallback(
+    (p: number) => {
+      setActivePageRaw(p);
+      void navigate({
+        to: "/doc/$id",
+        params: { id },
+        search: { page: p },
+        replace: true,
+      });
+    },
+    [id, navigate],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +73,10 @@ function DocPage() {
         return;
       }
       setDoc(rec);
-      setPageCount(rec.pageCount ?? 0);
+      const pc = rec.pageCount ?? 0;
+      setPageCount(pc);
+      // Clamp activePage if the URL had a page beyond the document's range
+      if (pc > 0 && activePage > pc) setActivePageRaw(pc);
       const sum = await getPageAiSummary(id);
       if (cancelled) return;
       setAiSummary(sum);
