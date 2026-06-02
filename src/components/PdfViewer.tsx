@@ -274,20 +274,24 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
   // Scroll to corresponding page when activePage changes from outside (e.g. right-side panel)
   useEffect(() => {
-    if (activePage > 0) {
-      const pageEl = scrollRef.current?.querySelector(`[data-page-number="${activePage}"]`);
-      if (pageEl) {
-        const rect = pageEl.getBoundingClientRect();
-        const rootRect = scrollRef.current?.getBoundingClientRect();
-        if (rootRect) {
-          const isVisible = rect.top >= rootRect.top - 100 && rect.bottom <= rootRect.bottom + 100;
-          if (!isVisible) {
-            pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (activePage > 0 && !loading) {
+      // Use requestAnimationFrame/setTimeout to ensure elements are fully mounted
+      const timer = setTimeout(() => {
+        const pageEl = scrollRef.current?.querySelector(`[data-page-number="${activePage}"]`);
+        if (pageEl) {
+          const rect = pageEl.getBoundingClientRect();
+          const rootRect = scrollRef.current?.getBoundingClientRect();
+          if (rootRect) {
+            const isVisible = rect.top >= rootRect.top - 100 && rect.bottom <= rootRect.bottom + 100;
+            if (!isVisible) {
+              pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
           }
         }
-      }
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [activePage]);
+  }, [activePage, loading]);
 
   // Also support scroll-to-pdf event on right-side click (even if activePage hasn't changed)
   useEffect(() => {
