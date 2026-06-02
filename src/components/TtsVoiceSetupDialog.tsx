@@ -10,14 +10,11 @@ import {
 import {
   downloadPiperVoice,
   getPreferredPiperVoice,
-  getTtsVoiceFor,
   langKey,
   listInstalledPiperVoices,
   listPiperVoices,
-  listVoices,
   setPreferredPiperVoice,
   setTtsEngine,
-  setTtsVoiceFor,
   type PiperVoiceMeta,
 } from "@/lib/tts";
 
@@ -29,7 +26,6 @@ interface Props {
 }
 
 export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: Props) {
-  const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [piperVoices, setPiperVoices] = useState<PiperVoiceMeta[] | null>(null);
   const [installed, setInstalled] = useState<string[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -37,24 +33,14 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
 
   useEffect(() => {
     if (!open) return;
-    const loadBrowserVoices = () => setBrowserVoices(listVoices());
-    loadBrowserVoices();
-    window.speechSynthesis?.addEventListener?.("voiceschanged", loadBrowserVoices);
     void listInstalledPiperVoices().then(setInstalled).catch(() => setInstalled([]));
     void listPiperVoices().then(setPiperVoices).catch(() => {
       setPiperVoices([]);
       toast.error("Could not load Piper voice catalog.");
     });
-    return () => window.speechSynthesis?.removeEventListener?.("voiceschanged", loadBrowserVoices);
   }, [open]);
 
   const code = langKey(language).split("-")[0].toLowerCase();
-
-  const matchingBrowserVoices = useMemo(() => {
-    return browserVoices
-      .filter((voice) => voice.lang.toLowerCase().startsWith(code))
-      .sort((a, b) => Number(a.localService) - Number(b.localService) || a.name.localeCompare(b.name));
-  }, [browserVoices, code]);
 
   const matchingPiperVoices = useMemo(() => {
     return (piperVoices ?? [])
@@ -65,16 +51,7 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
       .slice(0, 12);
   }, [piperVoices, code, language]);
 
-  const selectedBrowser = getTtsVoiceFor(language);
   const selectedPiper = getPreferredPiperVoice();
-
-  const chooseBrowser = (voice: SpeechSynthesisVoice) => {
-    setTtsVoiceFor(language, voice.name);
-    setTtsEngine("auto");
-    toast.success(`Voice set to ${voice.name}.`);
-    onOpenChange(false);
-    onReady?.();
-  };
 
   const choosePiper = (voiceId: string) => {
     setPreferredPiperVoice(voiceId);
@@ -105,47 +82,13 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-hidden sm:max-w-[760px]">
         <DialogHeader>
-          <DialogTitle>Select a voice for {language}</DialogTitle>
+          <DialogTitle>Select a Piper voice for {language}</DialogTitle>
           <DialogDescription>
-            Choose a browser voice or install a Piper neural voice before playback starts.
+            Install or select a local Piper neural voice before playback starts.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 gap-4 md:grid-cols-2">
-          <section className="min-h-0 rounded-lg border border-border bg-surface">
-            <div className="border-b border-border px-4 py-3">
-              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                browser voices
-              </div>
-              <div className="mt-1 text-sm text-foreground">
-                Google and system TTS voices available in this browser
-              </div>
-            </div>
-            <div className="max-h-[420px] overflow-auto">
-              {matchingBrowserVoices.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No browser voices found for {language}.
-                </div>
-              ) : (
-                matchingBrowserVoices.map((voice) => (
-                  <button
-                    key={`${voice.name}-${voice.lang}`}
-                    onClick={() => chooseBrowser(voice)}
-                    className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left last:border-b-0 hover:bg-background/60"
-                  >
-                    <span className={`h-3 w-3 rounded-full border ${selectedBrowser === voice.name ? "border-primary bg-primary" : "border-border"}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-foreground">{voice.name}</span>
-                      <span className="block font-mono text-[10px] text-muted-foreground">
-                        {voice.lang} · {voice.localService ? "local" : "online"}{voice.default ? " · default" : ""}
-                      </span>
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
-
+        <div className="grid min-h-0 gap-4">
           <section className="min-h-0 rounded-lg border border-border bg-surface">
             <div className="border-b border-border px-4 py-3">
               <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">

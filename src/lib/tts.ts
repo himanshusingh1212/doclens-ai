@@ -180,6 +180,7 @@ export function getActiveOwner(): symbol | null {
 export function stopAll() {
   if (typeof window === "undefined") return;
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  import("./piper-reader").then((p) => p.stopPiperReader()).catch(() => {});
   // Also stop neural TTS if it's playing
   import("./neural-tts/piper-engine").then((p) => p.stop()).catch(() => {});
   activeOwner = null;
@@ -343,7 +344,7 @@ export async function testPiperVoice(voiceId: string) {
 }
 
 export async function hasTtsSelection(language?: string | null): Promise<boolean> {
-  if (getTtsVoiceFor(language)) return true;
+  void language;
   const preferred = getPreferredPiperVoice();
   if (!preferred) return false;
   const installed = await listInstalledPiperVoices().catch(() => [] as string[]);

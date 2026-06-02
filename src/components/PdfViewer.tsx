@@ -3,7 +3,8 @@ import { TtsVoiceSetupDialog } from "@/components/TtsVoiceSetupDialog";
 import { getOutputLanguage } from "@/lib/openrouter";
 import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob } from "@/lib/storage";
-import { createSmartTtsController, hasTtsSelection } from "@/lib/tts";
+import { hasTtsSelection } from "@/lib/tts";
+import { createPiperReaderController, type PiperReaderController } from "@/lib/piper-reader";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 
 interface Props {
@@ -58,7 +59,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const renderingPages = useRef<Set<number>>(new Set());
   const recentlyVisibleOrder = useRef<number[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
+  const ttsRef = useRef<PiperReaderController | null>(null);
 
   // Load PDF on-demand from IndexedDB (as Blob → objectURL)
   useEffect(() => {
@@ -341,8 +342,10 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const startSpeak = useCallback(() => {
     if (!selection) return;
     ttsRef.current?.destroy();
-    ttsRef.current = createSmartTtsController(selection.text, {
-      onState: (s) => setSpeakState(s === "playing" ? "playing" : "idle"),
+    ttsRef.current = createPiperReaderController(selection.text, {
+      onSnapshot: (snapshot) => {
+        setSpeakState(snapshot.status === "playing" || snapshot.status === "loading" ? "playing" : "idle");
+      },
       language: getOutputLanguage(),
     });
     ttsRef.current.play();

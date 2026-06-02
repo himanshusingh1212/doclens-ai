@@ -112,6 +112,11 @@ export function setOutputLanguage(lang: string) {
   localStorage.setItem(LANG_LS, lang);
 }
 
+function hasStoredValue(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  return (localStorage.getItem(key)?.trim() ?? "") !== "";
+}
+
 export type GlobalMode = "translate" | "explain";
 /** Legacy values ("summarize", "keypoints") collapse into "explain". */
 function normalizeMode(v: string | null): GlobalMode {
@@ -133,6 +138,19 @@ export function getStyle(): ExplanationStyle {
 }
 export function setStyle(s: ExplanationStyle) {
   localStorage.setItem(STYLE_LS, s);
+}
+
+export function hasCompletedAiPreferenceSetup(): boolean {
+  if (typeof window === "undefined") return false;
+  const rawMode = localStorage.getItem(MODE_LS);
+  const mode = normalizeMode(rawMode);
+  const hasMode = rawMode === "translate" || rawMode === "explain";
+  const hasLanguage = hasStoredValue(LANG_LS);
+  const hasValidStyle =
+    mode === "translate" ||
+    EXPLANATION_STYLES.some((s) => s.id === getStyle());
+
+  return hasMode && hasLanguage && hasValidStyle;
 }
 
 export function getTemperature(): number {

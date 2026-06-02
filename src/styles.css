@@ -179,6 +179,31 @@
     letter-spacing: 0.01em;
   }
 
+  .reader-chunk {
+    border-radius: 4px;
+    cursor: pointer;
+    transition:
+      background-color 0.12s ease,
+      color 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+
+  .reader-chunk:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .reader-chunk-buffered {
+    text-decoration: underline;
+    text-decoration-color: rgba(78, 222, 163, 0.18);
+    text-underline-offset: 4px;
+  }
+
+  .reader-chunk-active {
+    background: rgba(78, 222, 163, 0.2);
+    box-shadow: 0 0 0 2px rgba(78, 222, 163, 0.08);
+    color: #effff8;
+  }
+
   /* ─── Glassmorphic panels ─── */
   .glass-panel {
     backdrop-filter: blur(12px);

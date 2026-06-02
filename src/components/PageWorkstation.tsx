@@ -8,6 +8,7 @@ import {
   buildPagePayload,
   fetchModels,
   getEffectiveSelectedModel,
+  hasCompletedAiPreferenceSetup,
   getKey,
   getKeyStatus,
   getMemory,
@@ -44,11 +45,14 @@ import {
   type PageOverrides,
 } from "@/lib/storage";
 import {
-  createSmartTtsController,
   hasTtsSelection,
-  isTtsSupported,
   stopAll as stopAllTts,
 } from "@/lib/tts";
+import {
+  createPiperReaderController,
+  type PiperReaderController,
+  type ReaderSnapshot,
+} from "@/lib/piper-reader";
 
 interface Props {
   docId: string;
@@ -136,6 +140,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(null);
+  const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
   const mountedRef = useRef(true);
   /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
   const selectionOverridesRef = useRef<Map<number, string>>(new Map());
@@ -162,19 +167,35 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   }, []);
 
   useEffect(() => {
-    const onFocus = () => setGlobals(readGlobals());
+    const onFocus = () => {
+      void readEffectiveGlobals().then((next) => {
+        if (!mountedRef.current) return;
+        globalsRef.current = next;
+        setGlobals(next);
+        setModelResolved(true);
+      });
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   const shouldShowExplainSetup = useCallback(() => {
     if (typeof window === "undefined") return false;
-    return globalsRef.current.mode === "explain" && localStorage.getItem(explainSetupKey) !== "1";
+    return (
+      globalsRef.current.mode === "explain" &&
+      localStorage.getItem(explainSetupKey) !== "1" &&
+      !hasCompletedAiPreferenceSetup()
+    );
   }, [explainSetupKey]);
 
   useEffect(() => {
-    if (globalsRef.current.modelId) return;
+    if (globalsRef.current.modelId) {
+      setModelResolved(true);
+      return;
+    }
     void getEffectiveSelectedModel().then((modelId) => {
+      if (!mountedRef.current) return;
+      setModelResolved(true);
       if (!modelId || getSelectedModel()) return;
       setGlobals((current) => {
         if (current.modelId) return current;
@@ -182,6 +203,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         globalsRef.current = next;
         return next;
       });
+    }).catch(() => {
+      if (mountedRef.current) setModelResolved(true);
     });
   }, []);
 
@@ -439,7 +462,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
           continue;
         }
         const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
-        const currentGlobals = readGlobals();
+        const currentGlobals = globalsRef.current;
         const eff = effective(currentGlobals, state.overrides);
         const hash = computeSettingsHash({
           modelId: eff.modelId,
@@ -482,7 +505,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
           if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
           if (!pageRec) return { status: "fulfilled" as const, value: undefined };
           const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
-          const currentGlobals = readGlobals();
+          const currentGlobals = globalsRef.current;
           const eff = effective(currentGlobals, state.overrides);
           const hash = computeSettingsHash({
             modelId: eff.modelId,
@@ -573,6 +596,17 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   };
 
   /* ---------- Empty / setup states ---------- */
+
+  if (keyReady && !modelResolved && !globals.modelId) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="inline-block h-4 w-4 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+          Loading model defaults...
+        </div>
+      </div>
+    );
+  }
 
   if (!keyReady || !globals.modelId) {
     const noKey = !hasKey;
@@ -809,8 +843,8 @@ function PageCard({
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
-  const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
-  const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
+  const [reader, setReader] = useState<ReaderSnapshot | null>(null);
+  const ttsRef = useRef<PiperReaderController | null>(null);
   const [highlighted, setHighlighted] = useState(false);
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
@@ -838,7 +872,7 @@ function PageCard({
   useEffect(() => {
     if (isRunning) {
       ttsRef.current?.stop();
-      setTtsState("idle");
+      setReader(null);
     }
   }, [isRunning]);
 
@@ -882,23 +916,24 @@ function PageCard({
   };
 
   const startTts = () => {
-    if (!state.result || !isTtsSupported()) return;
-    if (ttsState === "paused" && ttsRef.current) {
+    if (!state.result) return;
+    if (reader?.status === "paused" && ttsRef.current) {
       ttsRef.current.resume();
       return;
     }
     ttsRef.current?.destroy();
-    const ctrl = createSmartTtsController(state.result, {
-      onState: setTtsState,
+    const ctrl = createPiperReaderController(state.result, {
       language: eff.language,
+      onSnapshot: setReader,
+      onError: (message) => toast.error(message),
     });
     ttsRef.current = ctrl;
     ctrl.play();
   };
 
   const handleTtsPlay = () => {
-    if (!state.result || !isTtsSupported()) return;
-    if (ttsState === "paused" && ttsRef.current) {
+    if (!state.result) return;
+    if (reader?.status === "paused" && ttsRef.current) {
       ttsRef.current.resume();
       return;
     }
@@ -910,8 +945,11 @@ function PageCard({
   const handleTtsPause = () => ttsRef.current?.pause();
   const handleTtsStop = () => {
     ttsRef.current?.stop();
-    setTtsState("idle");
+    setReader(null);
   };
+  const handleTtsForward = () => ttsRef.current?.forward();
+  const handleTtsRewind = () => ttsRef.current?.rewind();
+  const handleTtsSeek = (index: number) => ttsRef.current?.seek(index);
 
   /* Determine button label from mode */
   const modeLabel = MODE_INSTRUCTIONS[eff.mode]?.label || "Translate";
@@ -949,13 +987,13 @@ function PageCard({
         </div>
         <div className="flex items-center gap-1">
           {/* TTS controls */}
-          {state.result && isTtsSupported() && (
+          {state.result && (
             <>
-              {ttsState !== "playing" ? (
+              {reader?.status !== "playing" && reader?.status !== "loading" ? (
                 <button
                   onClick={handleTtsPlay}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary"
-                  title={ttsState === "paused" ? "Resume" : "Listen"}
+                  title={reader?.status === "paused" ? "Resume" : "Listen"}
                 >
                   ▶
                 </button>
@@ -968,7 +1006,27 @@ function PageCard({
                   ❚❚
                 </button>
               )}
-              {(ttsState === "playing" || ttsState === "paused") && (
+              {reader && reader.status !== "idle" && reader.status !== "ended" && (
+                <>
+                  <button
+                    onClick={handleTtsRewind}
+                    disabled={!reader.canRewind}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+                    title="Rewind"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={handleTtsForward}
+                    disabled={!reader.canForward}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+                    title="Forward"
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+              {reader && reader.status !== "idle" && reader.status !== "ended" && (
                 <button
                   onClick={handleTtsStop}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-destructive"
@@ -1012,6 +1070,11 @@ function PageCard({
       {state.status === "error" && (
         <div className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {state.error}
+        </div>
+      )}
+      {reader?.status === "error" && reader.error && (
+        <div className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {reader.error}
         </div>
       )}
 
@@ -1086,7 +1149,11 @@ function PageCard({
             )}
           </div>
         ) : state.result ? (
-          <div className="whitespace-pre-wrap break-words">{state.result}</div>
+          <ReadableResult
+            text={state.result}
+            reader={reader}
+            onSeek={handleTtsSeek}
+          />
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
             Click <span className="font-semibold text-primary">{modeLabel}</span> to process this page.
@@ -1094,6 +1161,38 @@ function PageCard({
         )}
       </div>
     </article>
+  );
+}
+
+function ReadableResult({
+  text,
+  reader,
+  onSeek,
+}: {
+  text: string;
+  reader: ReaderSnapshot | null;
+  onSeek: (index: number) => void;
+}) {
+  if (!reader?.chunks.length) {
+    return <div className="whitespace-pre-wrap break-words">{text}</div>;
+  }
+
+  return (
+    <div className="whitespace-pre-wrap break-words">
+      {reader.chunks.map((chunk, index) => (
+        <span
+          key={`${index}-${chunk.slice(0, 16)}`}
+          onClick={() => onSeek(index)}
+          className={`reader-chunk ${index === reader.index ? "reader-chunk-active" : ""} ${
+            index <= reader.bufferedUntil ? "reader-chunk-buffered" : ""
+          }`}
+          title="Seek here"
+        >
+          {chunk}
+          {index < reader.chunks.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </div>
   );
 }
 
