@@ -46,6 +46,7 @@
     "@tanstack/react-start": "^1.167.14",
     "@tanstack/react-virtual": "^3.13.24",
     "@tanstack/router-plugin": "^1.167.10",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
