@@ -15,7 +15,7 @@ import {
   getMode,
   getOutputLanguage,
   getSelectedModel,
-  getSequential,
+
   getStyle,
   getTemperature,
   memoryExcerpt,
@@ -28,7 +28,7 @@ import {
   setOutputLanguage,
   setStyle as saveStyle,
   streamCompletion,
-  mapLimit,
+
   validateKey,
   type ExplanationStyle,
   type GlobalMode,
@@ -69,13 +69,13 @@ const QUICK_LANGS = ["हिंदी", "বাংলা", "తెలుగు",
 /** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
 const STREAM_FLUSH_MS = 150;
 
-interface RunAllBatch {
+interface BatchRun {
   cancelled: boolean;
 }
 
 type PendingExplainAction =
   | { type: "page"; pageNumber: number }
-  | { type: "all" };
+  | { type: "next" };
 
 interface Globals {
   mode: GlobalMode;
@@ -84,7 +84,6 @@ interface Globals {
   style: string;
   temperature: number;
   memory: boolean;
-  sequential: boolean;
 }
 
 function effective(globals: Globals, ov?: PageOverrides) {
@@ -98,6 +97,9 @@ function effective(globals: Globals, ov?: PageOverrides) {
   };
 }
 
+/** How many un-translated pages to auto-process per batch. */
+const AUTO_TRANSLATE_COUNT = 3;
+
 function readGlobals(): Globals {
   return {
     mode: getMode(),
@@ -106,7 +108,6 @@ function readGlobals(): Globals {
     style: getStyle(),
     temperature: getTemperature(),
     memory: getMemory(),
-    sequential: getSequential(),
   };
 }
 
@@ -135,9 +136,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   const [streamBufs, setStreamBufs] = useState<Record<number, string>>({});
 
   const abortMap = useRef<Map<number, AbortController>>(new Map());
-  const runAllRef = useRef<RunAllBatch | null>(null);
-  const [runAllActive, setRunAllActive] = useState(false);
-  const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
+  const batchRef = useRef<BatchRun | null>(null);
+  const [batchActive, setBatchActive] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(null);
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
@@ -160,7 +161,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
       mountedRef.current = false;
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
-      if (runAllRef.current) runAllRef.current.cancelled = true;
+      if (batchRef.current) batchRef.current.cancelled = true;
       // Fully tear down Piper engine to reclaim WASM/AudioContext memory
       import("@/lib/neural-tts/piper-engine").then((p) => p.destroyEngine()).catch(() => {});
     };
@@ -242,7 +243,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     return true;
   }, []);
 
-  const ensureRunAllKeyReady = useCallback(async (): Promise<boolean> => {
+  const ensureBatchKeyReady = useCallback(async (): Promise<boolean> => {
     const key = getKey().trim();
     if (!ensureKeyReady() || !key) return false;
 
@@ -252,8 +253,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
 
     const invalid = getKeyStatus() === "invalid";
     const message = invalid
-      ? "The server OpenRouter key is invalid or expired. Run All stopped before processing pages."
-      : "Could not verify the server OpenRouter key. Run All stopped before processing pages.";
+      ? "The API key is invalid or expired. Batch translation stopped."
+      : "Could not verify the API key. Batch translation stopped.";
     toast.error(message);
     if (invalid) openApiKeyModal(message);
     return false;
@@ -262,7 +263,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   /* ---------- Per-page execution ---------- */
 
   const runPage = useCallback(
-    async (pageNumber: number, prevExcerpt?: string, batch?: RunAllBatch): Promise<string | undefined> => {
+    async (pageNumber: number, prevExcerpt?: string, batch?: BatchRun): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
       if (!key) {
@@ -434,134 +435,104 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     void runPage(pageNumber);
   }, [runPage, shouldShowExplainSetup]);
 
-  const runAllPages = async () => {
-    if (!(await ensureRunAllKeyReady())) return;
+  /**
+   * Translate the next N un-translated pages starting from `activePage`.
+   * Walks forward (wrapping to page 1 if needed) and picks pages that
+   * haven't been translated yet (or whose settings changed).
+   */
+  const runNextPages = async (count = AUTO_TRANSLATE_COUNT) => {
+    if (!(await ensureBatchKeyReady())) return;
     const freshGlobals = await readEffectiveGlobals();
     globalsRef.current = freshGlobals;
     setGlobals(freshGlobals);
 
+    // Collect the next `count` untranslated pages starting from activePage
+    const pagesToRun: number[] = [];
+    for (let offset = 0; offset < pageCount && pagesToRun.length < count; offset++) {
+      const n = ((activePage - 1 + offset) % pageCount) + 1;
+      const pageRec = await getPageData(docId, n);
+      if (!pageRec) continue;
+      const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
+      const currentGlobals = globalsRef.current;
+      const eff = effective(currentGlobals, state.overrides);
+      const hash = computeSettingsHash({
+        modelId: eff.modelId,
+        mode: eff.mode,
+        language: eff.language,
+        style: eff.style,
+        temperature: eff.temperature,
+        memory: eff.memory,
+      });
+      const alreadyDone =
+        state.status === "done" &&
+        state.settingsHash === hash &&
+        !state.isCustom &&
+        !!state.result;
+      if (!alreadyDone) pagesToRun.push(n);
+    }
 
-    const batch: RunAllBatch = { cancelled: false };
-    runAllRef.current = batch;
-    setRunAllActive(true);
-    let prev: string | undefined;
+    if (pagesToRun.length === 0) {
+      toast.info("All nearby pages are already translated.", { duration: 3000 });
+      return;
+    }
+
+    const batch: BatchRun = { cancelled: false };
+    batchRef.current = batch;
+    setBatchActive(true);
+    const total = pagesToRun.length;
     let errorCount = 0;
     let processedCount = 0;
-    const totalToProcess = pageCount;
+    let prev: string | undefined;
 
-    if (mountedRef.current) setRunAllProgress({ current: 0, total: totalToProcess, errors: 0 });
+    if (mountedRef.current) setBatchProgress({ current: 0, total, errors: 0 });
 
-    if (freshGlobals.sequential) {
-      for (let n = 1; n <= pageCount; n++) {
+    // Run sequentially for memory context continuity
+    for (const n of pagesToRun) {
+      if (batch.cancelled) break;
+
+      // Navigate to the page being processed
+      setActivePage(n);
+
+      try {
+        const out = await runPage(n, prev, batch);
         if (batch.cancelled) break;
-        const pageRec = await getPageData(docId, n);
-        if (batch.cancelled) break;
-        if (!pageRec) {
-          processedCount++;
-          if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
-          continue;
-        }
-        const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
         const currentGlobals = globalsRef.current;
+        const pageRec = await getPageData(docId, n);
+        const state: PageAi = pageRec?.pageAi ?? { pageNumber: n, status: "idle" };
         const eff = effective(currentGlobals, state.overrides);
-        const hash = computeSettingsHash({
-          modelId: eff.modelId,
-          mode: eff.mode,
-          language: eff.language,
-          style: eff.style,
-          temperature: eff.temperature,
-          memory: eff.memory,
-        });
-        const skip =
-          state.status === "done" &&
-          state.settingsHash === hash &&
-          !state.isCustom &&
-          !!state.result;
-        if (skip) {
-          if (eff.memory) prev = memoryExcerpt(state.result);
-          processedCount++;
-          if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
-          continue;
-        }
-        try {
-          const out = await runPage(n, prev, batch);
-          if (batch.cancelled) break;
-          if (out && eff.memory) prev = memoryExcerpt(out);
-        } catch {
-          errorCount++;
-        }
-        processedCount++;
-        if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
+        if (out && eff.memory) prev = memoryExcerpt(out);
+      } catch {
+        errorCount++;
       }
-    } else {
-      let completed = 0;
-      const numbers = Array.from({ length: pageCount }, (_, i) => i + 1);
-      const results = await mapLimit(
-        numbers,
-        3,
-        async (n) => {
-          if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
-          const pageRec = await getPageData(docId, n);
-          if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
-          if (!pageRec) return { status: "fulfilled" as const, value: undefined };
-          const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
-          const currentGlobals = globalsRef.current;
-          const eff = effective(currentGlobals, state.overrides);
-          const hash = computeSettingsHash({
-            modelId: eff.modelId,
-            mode: eff.mode,
-            language: eff.language,
-            style: eff.style,
-            temperature: eff.temperature,
-            memory: eff.memory,
-          });
-          if (state.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
-            completed++;
-            if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
-            return { status: "fulfilled" as const, value: undefined };
-          }
-          if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
-          try {
-            const result = await runPage(n, undefined, batch);
-            completed++;
-            if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
-            return { status: "fulfilled" as const, value: result };
-          } catch (e) {
-            completed++;
-            errorCount++;
-            if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
-            return { status: "rejected" as const, reason: e };
-          }
-        }
-      );
-      errorCount = results.filter((r) => r.status === "rejected").length;
+      processedCount++;
+      if (mountedRef.current) setBatchProgress({ current: processedCount, total, errors: errorCount });
     }
 
     if (batch.cancelled) {
-      toast.info("Run All cancelled.", { duration: 3000 });
+      toast.info("Translation cancelled.", { duration: 3000 });
     } else if (errorCount > 0) {
       toast.warning(
-        `Completed with ${errorCount} error${errorCount > 1 ? "s" : ""}. Check individual pages for details.`,
+        `Completed with ${errorCount} error${errorCount > 1 ? "s" : ""}. Check individual pages.`,
         { duration: 5000 },
       );
     } else {
-      toast.success(`All ${totalToProcess} pages processed successfully.`, { duration: 3000 });
+      toast.success(`${total} page${total > 1 ? "s" : ""} translated successfully.`, { duration: 3000 });
     }
 
-    if (mountedRef.current && runAllRef.current === batch) {
-      setRunAllActive(false);
-      setRunAllProgress(null);
+    if (mountedRef.current && batchRef.current === batch) {
+      setBatchActive(false);
+      setBatchProgress(null);
     }
-    if (runAllRef.current === batch) runAllRef.current = null;
+    if (batchRef.current === batch) batchRef.current = null;
   };
 
-  const handleRunAll = () => {
+  const handleRunNext = () => {
     if (shouldShowExplainSetup()) {
-      setPendingExplainAction({ type: "all" });
+      setPendingExplainAction({ type: "next" });
       setExplainSetupOpen(true);
       return;
     }
-    void runAllPages();
+    void runNextPages();
   };
 
   const handleExplainSetupConfirm = async (settings: { language: string; style: ExplanationStyle }) => {
@@ -582,16 +553,16 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
 
     const action = pendingExplainAction;
     setPendingExplainAction(null);
-    if (action?.type === "all") void runAllPages();
+    if (action?.type === "next") void runNextPages();
     else if (action?.type === "page") void runPage(action.pageNumber);
   };
 
-  const cancelRunAll = () => {
-    if (runAllRef.current) runAllRef.current.cancelled = true;
+  const cancelBatch = () => {
+    if (batchRef.current) batchRef.current.cancelled = true;
     abortMap.current.forEach((c) => c.abort());
     if (mountedRef.current) {
-      setRunAllActive(false);
-      setRunAllProgress(null);
+      setBatchActive(false);
+      setBatchProgress(null);
     }
   };
 
@@ -680,31 +651,31 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
               <>{pageCount} pages ready</>
             )}
           </span>
-          {runAllProgress && (
+          {batchProgress && (
             <span className="flex items-center gap-1.5 text-xs text-primary">
               <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
-              {runAllProgress.current}/{runAllProgress.total}
-              {runAllProgress.errors > 0 && (
-                <span className="text-destructive">· {runAllProgress.errors} failed</span>
+              {batchProgress.current}/{batchProgress.total}
+              {batchProgress.errors > 0 && (
+                <span className="text-destructive">· {batchProgress.errors} failed</span>
               )}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          {runAllActive ? (
+          {batchActive ? (
             <button
-              onClick={cancelRunAll}
+              onClick={cancelBatch}
               className="rounded-lg border border-destructive/30 px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
               Cancel
             </button>
           ) : (
             <button
-              onClick={handleRunAll}
+              onClick={handleRunNext}
               className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
-              title="Translate all pages"
+              title={`Auto-translate the next ${AUTO_TRANSLATE_COUNT} untranslated pages`}
             >
-              ▶ Translate All
+              ▶ Translate Next {AUTO_TRANSLATE_COUNT}
             </button>
           )}
         </div>
@@ -1145,7 +1116,9 @@ function PageCard({
         {isRunning ? (
           <div className="whitespace-pre-wrap break-words">
             {streamBuf || (
-              <span className="text-muted-foreground italic">Waiting for response…</span>
+              <span className="text-muted-foreground italic">
+                A bit longer, thanks for your patience... it might take up to 1 min
+              </span>
             )}
           </div>
         ) : state.result ? (
