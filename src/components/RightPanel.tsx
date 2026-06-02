@@ -177,7 +177,17 @@ function ExtractedTextTab({ docId, activePage }: { docId: string; activePage: nu
   }
 
   return (
-    <div className="h-full overflow-auto px-6 py-5 page-card-enter" key={activePage}>
+    <div
+      className="h-full overflow-auto px-6 py-5 page-card-enter"
+      key={activePage}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("button, select, textarea, input, [role='button']")) return;
+        window.dispatchEvent(
+          new CustomEvent("doclens:scroll-to-pdf", { detail: { pageNumber: activePage } })
+        );
+      }}
+    >
       <ExtractedPageRow docId={docId} pageNumber={activePage} />
     </div>
   );

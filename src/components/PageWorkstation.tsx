@@ -755,7 +755,17 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
       </div>
 
       {/* ─── Single page card ─── */}
-      <div className="relative flex-1 overflow-auto px-5 py-4 page-card-enter" key={activePage}>
+      <div
+        className="relative flex-1 overflow-auto px-5 py-4 page-card-enter"
+        key={activePage}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("button, select, textarea, input, [role='button']")) return;
+          window.dispatchEvent(
+            new CustomEvent("doclens:scroll-to-pdf", { detail: { pageNumber: activePage } })
+          );
+        }}
+      >
         <PageCardLoader
           docId={docId}
           pageNumber={activePage}

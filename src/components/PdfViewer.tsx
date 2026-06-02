@@ -289,6 +289,22 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     }
   }, [activePage]);
 
+  // Also support scroll-to-pdf event on right-side click (even if activePage hasn't changed)
+  useEffect(() => {
+    const handleScrollEvent = (e: Event) => {
+      const ev = e as CustomEvent<{ pageNumber: number }>;
+      const targetPage = ev.detail?.pageNumber;
+      if (targetPage && targetPage > 0) {
+        const pageEl = scrollRef.current?.querySelector(`[data-page-number="${targetPage}"]`);
+        if (pageEl) {
+          pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    };
+    window.addEventListener("doclens:scroll-to-pdf", handleScrollEvent);
+    return () => window.removeEventListener("doclens:scroll-to-pdf", handleScrollEvent);
+  }, []);
+
   /* ---------- Selection toolbar ---------- */
 
   useEffect(() => {
