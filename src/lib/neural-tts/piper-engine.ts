@@ -221,15 +221,16 @@ export async function downloadVoice(
     onProgress?.(loaded, contentLength);
   }
 
-  const onnxData = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    onnxData.set(chunk, offset);
-    offset += chunk.length;
-  }
+  // Zero-copy: build a Blob directly from the chunk array. IDB stores Blobs
+  // natively (in many browsers via OS file refs, never deserialized through
+  // the JS heap), so we avoid the 60MB contiguous Uint8Array allocation that
+  // would otherwise sit in memory until GC.
+  const onnxBlob = new Blob(chunks as BlobPart[], { type: "application/octet-stream" });
+  // Free chunk references immediately so GC can reclaim them.
+  chunks.length = 0;
 
   await idbPut(voiceId, {
-    onnx: onnxData.buffer,
+    onnx: onnxBlob,
     config,
     installedAt: Date.now(),
     language: voice.language.name_english,
@@ -279,7 +280,7 @@ class LocalVoiceProvider {
     if (cached) return [cached.config, cached.blobUrl];
 
     const record = await idbGet<{
-      onnx: ArrayBuffer;
+      onnx: Blob | ArrayBuffer;
       config: any;
     }>(voiceId);
 
@@ -289,7 +290,11 @@ class LocalVoiceProvider {
       );
     }
 
-    const blob = new Blob([record.onnx], { type: "application/octet-stream" });
+    // v1 stored ArrayBuffer; v2 stores Blob directly (zero-copy from IDB).
+    // The Blob path avoids materializing the model bytes on the JS heap.
+    const blob = record.onnx instanceof Blob
+      ? record.onnx
+      : new Blob([record.onnx], { type: "application/octet-stream" });
     const blobUrl = URL.createObjectURL(blob);
     this.cache.set(voiceId, { config: record.config, blobUrl });
     return [record.config, blobUrl];
@@ -714,9 +719,18 @@ export function destroyEngine() {
     localProviderInstance = null;
   }
   if (engineInstance) {
+    // Try every known teardown path — piper-tts-web may expose any of these,
+    // and without a hard worker terminate the WASM heap (50-100MB) leaks for
+    // the lifetime of the page.
     try { engineInstance.dispose?.(); } catch { /* ignore */ }
+    try { engineInstance.destroy?.(); } catch { /* ignore */ }
+    try { engineInstance.terminate?.(); } catch { /* ignore */ }
+    try { engineInstance.worker?.terminate?.(); } catch { /* ignore */ }
     engineInstance = null;
   }
+  // Drop the catalog (~200KB parsed JSON) too — it'll be re-fetched lazily
+  // and HTTP-cached by the browser.
+  catalogCache = null;
   setStatus("idle");
 }
 

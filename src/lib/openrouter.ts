@@ -350,20 +350,33 @@ export interface StreamOpts {
   timeoutMs?: number;
 }
 
-/** Combine user abort signal with a timeout signal. */
-function combinedSignal(userSignal?: AbortSignal, timeoutMs = STREAM_TIMEOUT_MS): AbortSignal {
+/** Combine user abort signal with a timeout signal.
+ *  The fallback path used to leak `"abort"` listeners on both source signals
+ *  when the request completed normally — we now expose a cleanup hook so
+ *  callers can detach listeners in a `finally`. */
+function combinedSignal(
+  userSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): { signal: AbortSignal; cleanup: () => void } {
   const timeout = AbortSignal.timeout(timeoutMs);
-  if (!userSignal) return timeout;
-  // AbortSignal.any is available in modern browsers; fallback for older engines.
+  if (!userSignal) return { signal: timeout, cleanup: () => {} };
   if (typeof AbortSignal.any === "function") {
-    return AbortSignal.any([userSignal, timeout]);
+    // AbortSignal.any returns a signal that is GC'd with its sources — no
+    // manual cleanup needed.
+    return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => {} };
   }
-  // Manual fallback
+  // Manual fallback for older engines.
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
   userSignal.addEventListener("abort", onAbort, { once: true });
   timeout.addEventListener("abort", onAbort, { once: true });
-  return ctrl.signal;
+  return {
+    signal: ctrl.signal,
+    cleanup: () => {
+      userSignal.removeEventListener("abort", onAbort);
+      timeout.removeEventListener("abort", onAbort);
+    },
+  };
 }
 
 /** Returns true for HTTP statuses that should be retried. */
@@ -387,46 +400,44 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
-  const signal = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
+  const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  try {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-    // Backoff delay on retries
-    if (attempt > 0) {
-      const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
-      await abortableDelay(delay, signal);
-    }
+      // Backoff delay on retries
+      if (attempt > 0) {
+        const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+        await abortableDelay(delay, signal);
+      }
 
-    const body = { ...opts.payload, stream: false };
-    let result: CompletionResult;
-    try {
-      result = await completeWithServerOpenRouter({
+      const body = { ...opts.payload, stream: false };
+      const result: CompletionResult = await completeWithServerOpenRouter({
         data: { payload: body },
         signal,
       });
-    } catch (e) {
-      // Network error or abort
-      throw e;
-    }
 
-    if (!result.ok) {
-      const friendly = friendlyOpenRouterError(result.status, result.body ?? "");
-      // Persist key-status side effects for auth failures.
-      if (friendly.kind === "auth") {
-        setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
+      if (!result.ok) {
+        const friendly = friendlyOpenRouterError(result.status, result.body ?? "");
+        if (friendly.kind === "auth") {
+          setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
+        }
+        lastError = friendly;
+        if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
+        throw friendly;
       }
-      lastError = friendly;
-      if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
-      throw friendly;
+
+      if (result.text) opts.onDelta(result.text);
+      return; // Success
     }
 
-    if (result.text) opts.onDelta(result.text);
-    return; // Success
+    if (lastError) throw lastError;
+  } finally {
+    // Always detach any AbortSignal listeners we attached, success or failure.
+    cleanup();
   }
-
-  if (lastError) throw lastError;
 }
 
 /** Trailing excerpt from previous page used as memory in next request. */
