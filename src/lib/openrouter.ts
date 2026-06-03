@@ -400,36 +400,45 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
-  const signal = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
+  const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  try {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-    // Backoff delay on retries
-    if (attempt > 0) {
-      const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
-      await abortableDelay(delay, signal);
-    }
+      // Backoff delay on retries
+      if (attempt > 0) {
+        const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+        await abortableDelay(delay, signal);
+      }
 
-    const body = { ...opts.payload, stream: false };
-    let result: CompletionResult;
-    try {
-      result = await completeWithServerOpenRouter({
+      const body = { ...opts.payload, stream: false };
+      const result: CompletionResult = await completeWithServerOpenRouter({
         data: { payload: body },
         signal,
       });
-    } catch (e) {
-      // Network error or abort
-      throw e;
+
+      if (!result.ok) {
+        const friendly = friendlyOpenRouterError(result.status, result.body ?? "");
+        if (friendly.kind === "auth") {
+          setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
+        }
+        lastError = friendly;
+        if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
+        throw friendly;
+      }
+
+      if (result.text) opts.onDelta(result.text);
+      return; // Success
     }
 
-    if (!result.ok) {
-      const friendly = friendlyOpenRouterError(result.status, result.body ?? "");
-      // Persist key-status side effects for auth failures.
-      if (friendly.kind === "auth") {
-        setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
-      }
+    if (lastError) throw lastError;
+  } finally {
+    // Always detach any AbortSignal listeners we attached, success or failure.
+    cleanup();
+  }
+}
       lastError = friendly;
       if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
       throw friendly;
