@@ -181,8 +181,9 @@ export function stopAll() {
   if (typeof window === "undefined") return;
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   import("./piper-reader").then((p) => p.stopPiperReader()).catch(() => {});
-  // Also stop neural TTS if it's playing
-  import("./neural-tts/piper-engine").then((p) => p.stop()).catch(() => {});
+  if (piperEnginePromise) {
+    piperEnginePromise.then((p) => p.stop()).catch(() => {});
+  }
   activeOwner = null;
   notify();
 }
@@ -310,12 +311,15 @@ export function setPreferredPiperVoice(voiceId: string) {
   else localStorage.removeItem(PIPER_PREFERRED_LS);
 }
 
+let piperEnginePromise: Promise<typeof import("./neural-tts/piper-engine")> | null = null;
+
 /** Lazy-import the Piper engine (keeps main bundle lean). */
 function loadPiperEngine() {
   if (import.meta.env.SSR) {
     return Promise.reject(new Error("Piper TTS is only available in the browser."));
   }
-  return import("./neural-tts/piper-engine");
+  if (!piperEnginePromise) piperEnginePromise = import("./neural-tts/piper-engine");
+  return piperEnginePromise;
 }
 
 // Re-export catalog/management functions for the settings UI
