@@ -439,17 +439,6 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
     cleanup();
   }
 }
-      lastError = friendly;
-      if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
-      throw friendly;
-    }
-
-    if (result.text) opts.onDelta(result.text);
-    return; // Success
-  }
-
-  if (lastError) throw lastError;
-}
 
 /** Trailing excerpt from previous page used as memory in next request. */
 export function memoryExcerpt(prev: string | undefined, maxChars = 600): string {
