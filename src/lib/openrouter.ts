@@ -350,20 +350,33 @@ export interface StreamOpts {
   timeoutMs?: number;
 }
 
-/** Combine user abort signal with a timeout signal. */
-function combinedSignal(userSignal?: AbortSignal, timeoutMs = STREAM_TIMEOUT_MS): AbortSignal {
+/** Combine user abort signal with a timeout signal.
+ *  The fallback path used to leak `"abort"` listeners on both source signals
+ *  when the request completed normally — we now expose a cleanup hook so
+ *  callers can detach listeners in a `finally`. */
+function combinedSignal(
+  userSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): { signal: AbortSignal; cleanup: () => void } {
   const timeout = AbortSignal.timeout(timeoutMs);
-  if (!userSignal) return timeout;
-  // AbortSignal.any is available in modern browsers; fallback for older engines.
+  if (!userSignal) return { signal: timeout, cleanup: () => {} };
   if (typeof AbortSignal.any === "function") {
-    return AbortSignal.any([userSignal, timeout]);
+    // AbortSignal.any returns a signal that is GC'd with its sources — no
+    // manual cleanup needed.
+    return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => {} };
   }
-  // Manual fallback
+  // Manual fallback for older engines.
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
   userSignal.addEventListener("abort", onAbort, { once: true });
   timeout.addEventListener("abort", onAbort, { once: true });
-  return ctrl.signal;
+  return {
+    signal: ctrl.signal,
+    cleanup: () => {
+      userSignal.removeEventListener("abort", onAbort);
+      timeout.removeEventListener("abort", onAbort);
+    },
+  };
 }
 
 /** Returns true for HTTP statuses that should be retried. */
