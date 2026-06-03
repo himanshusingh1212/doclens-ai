@@ -40,6 +40,9 @@ interface Options {
 const MAX_CACHE_ENTRIES = 5;
 const MAX_READY_BUFFERS = 2;
 const SCHEDULE_AHEAD_SECONDS = 0.18;
+/** Piper outputs 22050 Hz mono. Match the AudioContext rate so the browser
+ *  doesn't resample every buffer on the audio thread. */
+const PIPER_SAMPLE_RATE = 22050;
 
 let activeController: PiperReader | null = null;
 let enginePromise: Promise<PiperEngineModule> | null = null;
@@ -79,6 +82,11 @@ class PiperReader implements PiperReaderController {
   private currentBuffer: AudioBuffer | null = null;
   private sourceDone: (() => void) | null = null;
   private cache = new Map<string, Promise<AudioEntry>>();
+  /** LRU last-access timestamps (used to evict the right entry without
+   *  dropping the buffer we're about to play). */
+  private cacheLru = new Map<string, number>();
+  /** Resolves when the play loop consumes a buffer — replaces busy-poll. */
+  private slotWaiter: (() => void) | null = null;
 
   constructor(text: string, private options: Options) {
     this.text = typeof text === "string" ? text : "";
@@ -142,6 +150,8 @@ class PiperReader implements PiperReaderController {
     this.destroyed = true;
     this.stop();
     this.cache.clear();
+    this.cacheLru.clear();
+    this.notifySlot();
     if (activeController === this) activeController = null;
   }
 
@@ -211,19 +221,27 @@ class PiperReader implements PiperReaderController {
     void (async () => {
       for (let i = startIndex; i < this.chunks.length; i++) {
         if (this.destroyed || token !== this.generationToken || playToken !== this.playToken) return;
+        // Wait for the play loop to consume a slot, signalled via a promise.
+        // Replaces the previous busy-poll (delay(40)) which woke 25× per
+        // second per active reader for no useful work.
         while (
           this.bufferedUntil - this.index >= MAX_READY_BUFFERS &&
           !this.destroyed &&
           token === this.generationToken &&
           playToken === this.playToken
         ) {
-          await delay(40);
+          await new Promise<void>((res) => { this.slotWaiter = res; });
         }
+        if (this.destroyed || token !== this.generationToken || playToken !== this.playToken) return;
         this.fetchAudio(i).catch(() => null);
         this.bufferedUntil = Math.max(this.bufferedUntil, i);
         this.emit();
       }
     })();
+  }
+
+  private notifySlot() {
+    if (this.slotWaiter) { const r = this.slotWaiter; this.slotWaiter = null; r(); }
   }
 
   private async playLoop(token: number) {
@@ -237,6 +255,9 @@ class PiperReader implements PiperReaderController {
       this.index++;
       this.currentOffset = 0;
       this.currentBuffer = null;
+      // Producer is bounded by (bufferedUntil - index); now that index
+      // advanced, the producer's slot wait can resolve.
+      this.notifySlot();
     }
     if (!this.destroyed && token === this.playToken) {
       this.status = "ended";
@@ -288,10 +309,20 @@ class PiperReader implements PiperReaderController {
     if (!promise) {
       promise = this.generateAudio(text);
       this.cache.set(key, promise);
-      while (this.cache.size > MAX_CACHE_ENTRIES) {
-        const first = this.cache.keys().next().value;
-        if (first) this.cache.delete(first);
-        else break;
+    }
+    // True LRU: touch on every access, evict the oldest entry that is NOT
+    // the currently-playing or next-up chunk (so seek-back can find buffers
+    // and the play head never stalls on a freshly-evicted entry).
+    this.cacheLru.set(key, performance.now());
+    if (this.cache.size > MAX_CACHE_ENTRIES) {
+      const currentKey = `${this.voiceId}:${this.chunks[this.index]}`;
+      const nextKey = `${this.voiceId}:${this.chunks[this.index + 1] ?? ""}`;
+      const sorted = [...this.cacheLru.entries()].sort((a, b) => a[1] - b[1]);
+      for (const [oldKey] of sorted) {
+        if (this.cache.size <= MAX_CACHE_ENTRIES) break;
+        if (oldKey === currentKey || oldKey === nextKey || oldKey === key) continue;
+        this.cache.delete(oldKey);
+        this.cacheLru.delete(oldKey);
       }
     }
     return promise;
@@ -318,7 +349,14 @@ class PiperReader implements PiperReaderController {
   private ensureAudioContext(): AudioContext {
     if (!this.audioCtx || this.audioCtx.state === "closed") {
       const Ctor = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioCtx = new Ctor();
+      // Match Piper's native sample rate to avoid browser-side resampling
+      // (which silently doubles CPU on the audio thread on most laptops).
+      try {
+        this.audioCtx = new Ctor({ sampleRate: PIPER_SAMPLE_RATE });
+      } catch {
+        // Safari < 14 rejects the constructor option — fall back to default.
+        this.audioCtx = new Ctor();
+      }
     }
     return this.audioCtx;
   }
