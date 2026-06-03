@@ -225,7 +225,7 @@ export async function downloadVoice(
   // natively (in many browsers via OS file refs, never deserialized through
   // the JS heap), so we avoid the 60MB contiguous Uint8Array allocation that
   // would otherwise sit in memory until GC.
-  const onnxBlob = new Blob(chunks, { type: "application/octet-stream" });
+  const onnxBlob = new Blob(chunks as BlobPart[], { type: "application/octet-stream" });
   // Free chunk references immediately so GC can reclaim them.
   chunks.length = 0;
 
