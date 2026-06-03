@@ -654,10 +654,24 @@ export async function clearAllAiResults(): Promise<void> {
 export async function getThumbnail(docId: string): Promise<string | null> {
   const d = await db();
   const v = await d.get(THUMBNAILS, docId);
+  if (!v) return null;
+  // v2: stored as Blob (≈3× smaller, avoids large base64 string on the JS heap).
+  if (v instanceof Blob) return URL.createObjectURL(v);
+  // v1: legacy data-URL string.
   return typeof v === "string" ? v : null;
 }
 
 export async function saveThumbnail(docId: string, dataUrl: string): Promise<void> {
   const d = await db();
-  await safePut(d, THUMBNAILS, dataUrl, docId);
+  // Convert the data URL to a Blob before persisting so we don't store a
+  // 100KB+ base64 string in IDB — the binary form is ~25% the size and is
+  // never deserialized through the JS heap on read.
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    await safePut(d, THUMBNAILS, blob, docId);
+  } catch {
+    // Fall back to the original string write if anything fails.
+    await safePut(d, THUMBNAILS, dataUrl, docId);
+  }
 }
