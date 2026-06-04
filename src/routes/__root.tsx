@@ -3,6 +3,8 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { Toaster } from "@/components/ui/sonner";
+import { useEffect } from "react";
+import { initTheme } from "@/lib/theme";
 
 
 import appCss from "../styles.css?url";
@@ -71,6 +73,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 function RootComponent() {
+  useEffect(() => {
+    initTheme();
+  }, []);
+
   return (
     <>
       <Outlet />

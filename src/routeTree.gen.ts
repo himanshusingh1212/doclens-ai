@@ -8,97 +8,130 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as SettingsRouteImport } from "./routes/settings";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as SettingsVoiceRouteImport } from "./routes/settings_.voice";
-import { Route as DocIdRouteImport } from "./routes/doc.$id";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsVoiceRouteImport } from './routes/settings_.voice'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings_.appearance'
+import { Route as DocIdRouteImport } from './routes/doc.$id'
 
 const SettingsRoute = SettingsRouteImport.update({
-  id: "/settings",
-  path: "/settings",
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SettingsVoiceRoute = SettingsVoiceRouteImport.update({
-  id: "/settings_/voice",
-  path: "/settings/voice",
+  id: '/settings_/voice',
+  path: '/settings/voice',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: '/settings_/appearance',
+  path: '/settings/appearance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocIdRoute = DocIdRouteImport.update({
-  id: "/doc/$id",
-  path: "/doc/$id",
+  id: '/doc/$id',
+  path: '/doc/$id',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/settings": typeof SettingsRoute;
-  "/doc/$id": typeof DocIdRoute;
-  "/settings/voice": typeof SettingsVoiceRoute;
+  '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/doc/$id': typeof DocIdRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/voice': typeof SettingsVoiceRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/settings": typeof SettingsRoute;
-  "/doc/$id": typeof DocIdRoute;
-  "/settings/voice": typeof SettingsVoiceRoute;
+  '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/doc/$id': typeof DocIdRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/voice': typeof SettingsVoiceRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/settings": typeof SettingsRoute;
-  "/doc/$id": typeof DocIdRoute;
-  "/settings_/voice": typeof SettingsVoiceRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/doc/$id': typeof DocIdRoute
+  '/settings_/appearance': typeof SettingsAppearanceRoute
+  '/settings_/voice': typeof SettingsVoiceRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/settings" | "/doc/$id" | "/settings/voice";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/settings" | "/doc/$id" | "/settings/voice";
-  id: "__root__" | "/" | "/settings" | "/doc/$id" | "/settings_/voice";
-  fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/doc/$id'
+    | '/settings/appearance'
+    | '/settings/voice'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/settings'
+    | '/doc/$id'
+    | '/settings/appearance'
+    | '/settings/voice'
+  id:
+    | '__root__'
+    | '/'
+    | '/settings'
+    | '/doc/$id'
+    | '/settings_/appearance'
+    | '/settings_/voice'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  SettingsRoute: typeof SettingsRoute;
-  DocIdRoute: typeof DocIdRoute;
-  SettingsVoiceRoute: typeof SettingsVoiceRoute;
+  IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
+  DocIdRoute: typeof DocIdRoute
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsVoiceRoute: typeof SettingsVoiceRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/settings": {
-      id: "/settings";
-      path: "/settings";
-      fullPath: "/settings";
-      preLoaderRoute: typeof SettingsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/settings_/voice": {
-      id: "/settings_/voice";
-      path: "/settings/voice";
-      fullPath: "/settings/voice";
-      preLoaderRoute: typeof SettingsVoiceRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/doc/$id": {
-      id: "/doc/$id";
-      path: "/doc/$id";
-      fullPath: "/doc/$id";
-      preLoaderRoute: typeof DocIdRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings_/voice': {
+      id: '/settings_/voice'
+      path: '/settings/voice'
+      fullPath: '/settings/voice'
+      preLoaderRoute: typeof SettingsVoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings_/appearance': {
+      id: '/settings_/appearance'
+      path: '/settings/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/doc/$id': {
+      id: '/doc/$id'
+      path: '/doc/$id'
+      fullPath: '/doc/$id'
+      preLoaderRoute: typeof DocIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,17 +139,18 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
   DocIdRoute: DocIdRoute,
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsVoiceRoute: SettingsVoiceRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { createStart } from "@tanstack/react-start";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }
