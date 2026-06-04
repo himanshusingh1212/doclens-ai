@@ -25,6 +25,8 @@
 
 - [[What is DocLens AI]] — Product overview in 60 seconds
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
+- [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
+- [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
 - [[Escalation Matrix]] — Who to contact for what
 - [[Glossary]] — Key terms and abbreviations
 
@@ -32,7 +34,7 @@
 
 ## 📁 Source Documents
 
-Original design documents are archived in `_sources/` for reference.
+Original design documents and external reference logs/SOPs are archived in `_sources/` for reference.
 
 ---
 

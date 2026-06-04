@@ -27,6 +27,7 @@
 - [[MOC — Pipelines]] — PDF Extraction → Translation → TTS
 - [[MOC — APIs]] — External and browser API integrations
 - [[End-to-End Pipeline]] — Complete data flow diagram
+- [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
 
 ---
 
@@ -42,6 +43,7 @@
 ## Reference
 
 - [[Glossary]] — Key terms and abbreviations
+- [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
 
 ---
 

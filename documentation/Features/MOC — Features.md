@@ -23,6 +23,7 @@
 
 ### Diagnostics & Integration
 - [[Memory Diagnostics]] — Real-time memory footprint diagnostics (Heap, Canvases, LocalStorage).
+- [[Memory & Storage Audit]] — Comprehensive audit of memory hotspots and optimization strategies.
 - [[Export System]] — Document and translation data exporter supporting Markdown and structured JSON.
 
 ---
