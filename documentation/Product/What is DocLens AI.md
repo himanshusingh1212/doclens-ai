@@ -1,0 +1,66 @@
+# What is DocLens AI
+
+> **DocLens AI** is a browser-first document intelligence application that lets users upload PDF documents, translate or explain their content using AI, and listen to the results through neural text-to-speech — all without uploading data to external servers.
+
+---
+
+## Tagline
+
+**"Read it. Hear it. Own it — in the language that owns your heart."**
+
+---
+
+## Three Core Capabilities
+
+| Capability | Description | Powered By |
+|-----------|-------------|------------|
+| **Read it** | Render PDFs with selectable text, page navigation, and retina-quality canvas rendering | [[PDF.js]], [[PdfViewer]] |
+| **Hear it** | Convert translated text into natural speech with sentence-level highlighting | [[Piper Neural TTS]], [[Web Speech API]] |
+| **Own it** | Translate or explain any page into 90+ languages using AI models | [[OpenRouter API]], [[AI Translation]] |
+
+---
+
+## Key Differentiators
+
+1. **Privacy-first** — PDF processing happens entirely in the browser. Documents never leave the user's device.
+2. **Offline TTS** — Piper neural voices are downloaded once and cached locally via IndexedDB. No internet needed for playback.
+3. **Multi-language focus** — First-class support for Indian languages (Hindi, Bengali, Telugu, Malayalam) alongside global languages.
+4. **Per-page control** — Users can override AI settings (model, language, temperature, tone) on individual pages without changing global defaults.
+5. **Auto-translate** — Background pre-translation of upcoming pages creates a seamless ebook-like reading experience.
+
+---
+
+## Who Uses It
+
+| Persona | Use Case |
+|---------|----------|
+| **Language learners** | Read academic PDFs explained in their native language |
+| **Researchers** | Quickly translate foreign-language papers |
+| **Students** | Get simplified explanations of complex textbook pages |
+| **Developers** | Process technical documentation with full AI control (JSON editor, model selection) |
+| **Accessibility users** | Listen to translated content via neural TTS |
+
+---
+
+## Application Structure
+
+DocLens has four main pages:
+
+1. [[Library Page]] — Upload and manage documents
+2. [[Workspace Page]] — View PDFs, translate, and listen
+3. [[General Settings Page]] — Configure AI pipeline defaults
+4. [[Voice Settings Page]] — Manage TTS voices and playback
+
+---
+
+## Related
+
+- [[Why DocLens Exists]] — The problem it solves
+- [[Tech Stack]] — How it's built
+- [[Design System]] — How it looks
+- [[End-to-End Pipeline]] — How data flows through it
+- [[MOC — Product]]
+
+---
+
+*Part of [[MOC — Product]]*
