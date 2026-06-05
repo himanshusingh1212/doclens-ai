@@ -1,0 +1,38 @@
+# Allow indexing of all pages for search engines and AI crawlers
+User-agent: *
+Allow: /
+
+# Google
+User-agent: Googlebot
+Allow: /
+
+# Bing / Microsoft Copilot
+User-agent: Bingbot
+Allow: /
+
+User-agent: msnbot
+Allow: /
+
+# OpenAI
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+
+# Anthropic / Claude
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+# Brave (used by Claude AI search)
+User-agent: BraveBot
+Allow: /
+
+Sitemap: https://www.anuwad.com/sitemap.xml

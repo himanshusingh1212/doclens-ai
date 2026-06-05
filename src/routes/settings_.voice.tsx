@@ -29,7 +29,7 @@ import {
 
 export const Route = createFileRoute("/settings_/voice")({
   component: VoicePage,
-  head: () => ({ meta: [{ title: "DocLens — Voice Settings" }] }),
+  head: () => ({ meta: [{ title: "Anuwad — Voice Settings" }] }),
 });
 
 /* ---------- Comprehensive language list ---------- */

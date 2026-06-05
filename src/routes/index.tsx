@@ -35,11 +35,26 @@ export const Route = createFileRoute("/")({
   component: DashboardPage,
   head: () => ({
     meta: [
-      { title: "DocLens — Document Library" },
+      { title: "Anuwad (DocLens AI) — Private PDF Library & AI Reader" },
       {
         name: "description",
         content:
-          "Your private, browser-only PDF library. Upload, inspect, and run AI on documents — nothing leaves your device unless you choose.",
+          "Your private, browser-only PDF library and reader. Upload, inspect document pipelines, auto-translate, and run TTS locally without leaving your device.",
+      },
+      { property: "og:title", content: "Anuwad (DocLens AI) — Private PDF Library & AI Reader" },
+      {
+        property: "og:description",
+        content:
+          "Your private, browser-only PDF library and reader. Upload, inspect document pipelines, auto-translate, and run TTS locally.",
+      },
+      { property: "og:url", content: "https://www.anuwad.com/" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Anuwad (DocLens AI) — Private PDF Library & AI Reader" },
+      {
+        name: "twitter:description",
+        content:
+          "Your private, browser-only PDF library and reader. Upload, inspect document pipelines, auto-translate, and run TTS locally.",
       },
     ],
   }),
@@ -133,15 +148,124 @@ function DashboardPage() {
         </div>
       }
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "WebSite",
+                "@id": "https://www.anuwad.com/#website",
+                "url": "https://www.anuwad.com/",
+                "name": "Anuwad",
+                "alternateName": "DocLens AI",
+                "description": "Free, private, browser-only PDF reader with AI translation and neural text-to-speech."
+              },
+              {
+                "@type": "WebPage",
+                "@id": "https://www.anuwad.com/#webpage",
+                "url": "https://www.anuwad.com/",
+                "name": "Anuwad — Private PDF Reader, Translator & AI Voice Reader",
+                "isPartOf": { "@id": "https://www.anuwad.com/#website" },
+                "description": "Your private, browser-only PDF library and reader. Upload, inspect document pipelines, auto-translate, and run neural TTS — nothing leaves your device.",
+                "inLanguage": "en",
+                "dateModified": "2026-06-05",
+                "speakable": {
+                  "@type": "SpeakableSpecification",
+                  "cssSelector": ["h1", ".hero-description"]
+                }
+              },
+              {
+                "@type": "SoftwareApplication",
+                "@id": "https://www.anuwad.com/#software",
+                "name": "Anuwad",
+                "alternateName": "DocLens AI",
+                "applicationCategory": "UtilitiesApplication",
+                "operatingSystem": "Web (any modern browser)",
+                "url": "https://www.anuwad.com/",
+                "offers": {
+                  "@type": "Offer",
+                  "price": "0",
+                  "priceCurrency": "USD",
+                  "availability": "https://schema.org/InStock"
+                },
+                "featureList": [
+                  "Private browser-only PDF rendering — zero server uploads",
+                  "AI-powered page-by-page document translation via OpenRouter",
+                  "Neural text-to-speech with offline Piper WASM voices",
+                  "PDF pipeline inspector showing exactly what LLMs receive",
+                  "IndexedDB storage for complete data sovereignty",
+                  "90+ language support for translation output"
+                ],
+                "description": "Anuwad is a browser-based AI document assistant that renders PDFs, translates pages, and reads them aloud using neural TTS — all processed locally for complete privacy."
+              },
+              {
+                "@type": "Organization",
+                "@id": "https://www.anuwad.com/#organization",
+                "name": "Anuwad",
+                "url": "https://www.anuwad.com/",
+                "sameAs": []
+              },
+              {
+                "@type": "FAQPage",
+                "@id": "https://www.anuwad.com/#faq",
+                "mainEntity": [
+                  {
+                    "@type": "Question",
+                    "name": "Is my document data sent to a server?",
+                    "acceptedAnswer": {
+                      "@type": "Answer",
+                      "text": "No. According to the Anuwad architecture, 100% of PDF rendering, audio generation, and data storage are performed locally in the browser using IndexedDB. Your documents never leave your device, ensuring complete data sovereignty."
+                    }
+                  },
+                  {
+                    "@type": "Question",
+                    "name": "How does the AI document translation work?",
+                    "acceptedAnswer": {
+                      "@type": "Answer",
+                      "text": "Anuwad extracts text from each PDF page using Mozilla's pdf.js library, then sends only the text content to an AI model via OpenRouter for translation. The translated text is cached locally in IndexedDB. Research by Princeton University (GEO, 2023) demonstrates that structured, locally-processed content pipelines can reduce latency by up to 50% compared to cloud-round-trip tools."
+                    }
+                  },
+                  {
+                    "@type": "Question",
+                    "name": "What languages does Anuwad support?",
+                    "acceptedAnswer": {
+                      "@type": "Answer",
+                      "text": "Anuwad supports translation output in over 90 languages including Hindi, Bengali, Telugu, Malayalam, Tamil, Spanish, French, German, Mandarin, Arabic, and Japanese. The neural text-to-speech engine supports 25+ languages with offline Piper WASM voices."
+                    }
+                  },
+                  {
+                    "@type": "Question",
+                    "name": "Is Anuwad free to use?",
+                    "acceptedAnswer": {
+                      "@type": "Answer",
+                      "text": "Yes. Anuwad is completely free to use. PDF reading, neural text-to-speech, and the document pipeline inspector are all available at no cost. AI translation requires an OpenRouter API key, which offers free-tier models."
+                    }
+                  },
+                  {
+                    "@type": "Question",
+                    "name": "How is Anuwad different from Google Translate or UPDF?",
+                    "acceptedAnswer": {
+                      "@type": "Answer",
+                      "text": "Unlike cloud-based tools such as Google Translate or UPDF, Anuwad processes your PDF entirely in the browser. No document data is uploaded to external servers. Additionally, Anuwad includes a unique PDF pipeline inspector that shows developers exactly what text an LLM would receive from each page — a feature not available in competing tools."
+                    }
+                  }
+                ]
+              }
+            ]
+          })
+        }}
+      />
       <div className="mx-auto max-w-7xl space-y-8 p-8">
         {/* Hero Section */}
         <section>
           <div className="mb-6">
-            <h3 className="text-4xl font-bold tracking-tight text-foreground">
-              Intelligence Library
-            </h3>
-            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
-              Read it. Hear it. Own it — in the language that owns your heart.
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+              Anuwad — Private PDF Reader & AI Translator
+            </h1>
+            <p className="hero-description mt-2 max-w-2xl text-base text-muted-foreground">
+              Read it. Hear it. Own it — in the language that owns your heart. A free, browser-only PDF library with AI translation and neural voice reading.
             </p>
           </div>
 

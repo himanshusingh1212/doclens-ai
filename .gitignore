@@ -34,3 +34,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SEO/GEO Reports
+anuwad_seo_geo_report.md
+
+# Agent temporary files
+.agents/cache/
+.agents/logs/

@@ -32,7 +32,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
   head: () => ({
-    meta: [{ title: "DocLens — General Settings" }],
+    meta: [{ title: "Anuwad — General Settings" }],
   }),
 });
 

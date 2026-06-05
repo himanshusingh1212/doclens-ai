@@ -32,7 +32,7 @@ export const Route = createFileRoute("/doc/$id")({
     return { page: p > 0 && Number.isFinite(p) ? Math.floor(p) : undefined };
   },
   head: () => ({
-    meta: [{ title: "DocLens — Document" }],
+    meta: [{ title: "Anuwad — Document Reader" }],
   }),
 });
 

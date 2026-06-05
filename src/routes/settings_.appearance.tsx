@@ -15,7 +15,7 @@ import {
 export const Route = createFileRoute("/settings_/appearance")({
   component: AppearanceSettingsPage,
   head: () => ({
-    meta: [{ title: "DocLens — Appearance & Theme" }],
+    meta: [{ title: "Anuwad — Appearance & Theme" }],
   }),
 });
 
