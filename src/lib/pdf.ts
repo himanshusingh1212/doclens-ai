@@ -146,90 +146,102 @@ export async function extractPdfPages(
   onPage?: (page: PageExtraction, total: number) => void,
 ): Promise<PageExtraction[]> {
   const pdf = await loadDocFromSource(data);
-  const total = pdf.numPages;
-  const pages: PageExtraction[] = new Array(total);
+  try {
+    const total = pdf.numPages;
+    const pages: PageExtraction[] = new Array(total);
 
-  async function extractOne(pageNumber: number): Promise<PageExtraction> {
-    const page = await pdf.getPage(pageNumber);
+    async function extractOne(pageNumber: number): Promise<PageExtraction> {
+      const page = await pdf.getPage(pageNumber);
+      try {
+        const viewport = page.getViewport({ scale: 1 });
+        const content = await page.getTextContent();
+        const items: TextItem[] = [];
+        for (const it of content.items as any[]) {
+          if (typeof it.str !== "string") continue;
+          const tx = it.transform;
+          items.push({
+            str: it.str as string,
+            x: tx[4] as number,
+            y: tx[5] as number,
+            width: it.width as number,
+            height: it.height as number,
+          });
+        }
+        const columns = detectColumns(items, viewport.width);
+        const sorted = sortByColumns(items, viewport.width, columns);
+
+        let rawText = "";
+        let lastY: number | null = null;
+        for (const it of sorted) {
+          if (lastY !== null && Math.abs(it.y - lastY) > 4) rawText += "\n";
+          else if (rawText && !rawText.endsWith(" ") && !rawText.endsWith("\n")) rawText += " ";
+          rawText += it.str;
+          lastY = it.y;
+        }
+        rawText = rawText.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+        // Release the intermediate TextItem array references immediately
+        items.length = 0;
+        sorted.length = 0;
+
+        const { text, garbageRatio } = cleanExtractedText(rawText);
+
+        if (garbageRatio > 0.3) {
+          console.warn(
+            `Page ${pageNumber}: ${Math.round(garbageRatio * 100)}% garbage chars detected — ` +
+            `PDF likely uses legacy/non-Unicode fonts. Text may be incomplete.`,
+          );
+        }
+
+        // NOTE: We intentionally drop the per-item `items[]` from the returned
+        // extraction — the caller stores only `{pageNumber, text, columns,
+        // garbageRatio}`, and the live PdfViewer re-fetches its own text layer
+        // directly. Keeping items here just allocated then immediately GC'd a
+        // few MB per large page, and re-cleaning each item's `str` doubled the
+        // regex work on data that was thrown away.
+        return {
+          pageNumber,
+          text,
+          items: [],
+          columns,
+          garbageRatio,
+        };
+      } finally {
+        // Release the operator list / decoded fonts pdf.js caches per page so
+        // a 500-page document doesn't keep all pages hot at once.
+        try { page.cleanup(); } catch { /* ignore */ }
+      }
+    }
+
+    // Process in concurrency-bounded waves, preserving page order in `pages[]`
+    // and firing onPage in ascending order.
+    let nextEmit = 1;
+    const ready = new Map<number, PageExtraction>();
+    for (let start = 1; start <= total; start += EXTRACTION_CONCURRENCY) {
+      const batch = [];
+      for (let i = 0; i < EXTRACTION_CONCURRENCY && start + i <= total; i++) {
+        batch.push(extractOne(start + i));
+      }
+      const results = await Promise.all(batch);
+      for (const r of results) {
+        pages[r.pageNumber - 1] = r;
+        ready.set(r.pageNumber, r);
+      }
+      while (ready.has(nextEmit)) {
+        const r = ready.get(nextEmit)!;
+        ready.delete(nextEmit);
+        onPage?.(r, total);
+        nextEmit++;
+      }
+    }
+    return pages;
+  } finally {
     try {
-      const viewport = page.getViewport({ scale: 1 });
-      const content = await page.getTextContent();
-      const items: TextItem[] = [];
-      for (const it of content.items as any[]) {
-        if (typeof it.str !== "string") continue;
-        const tx = it.transform;
-        items.push({
-          str: it.str as string,
-          x: tx[4] as number,
-          y: tx[5] as number,
-          width: it.width as number,
-          height: it.height as number,
-        });
-      }
-      const columns = detectColumns(items, viewport.width);
-      const sorted = sortByColumns(items, viewport.width, columns);
-
-      let rawText = "";
-      let lastY: number | null = null;
-      for (const it of sorted) {
-        if (lastY !== null && Math.abs(it.y - lastY) > 4) rawText += "\n";
-        else if (rawText && !rawText.endsWith(" ") && !rawText.endsWith("\n")) rawText += " ";
-        rawText += it.str;
-        lastY = it.y;
-      }
-      rawText = rawText.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-
-      const { text, garbageRatio } = cleanExtractedText(rawText);
-
-      if (garbageRatio > 0.3) {
-        console.warn(
-          `Page ${pageNumber}: ${Math.round(garbageRatio * 100)}% garbage chars detected — ` +
-          `PDF likely uses legacy/non-Unicode fonts. Text may be incomplete.`,
-        );
-      }
-
-      // NOTE: We intentionally drop the per-item `items[]` from the returned
-      // extraction — the caller stores only `{pageNumber, text, columns,
-      // garbageRatio}`, and the live PdfViewer re-fetches its own text layer
-      // directly. Keeping items here just allocated then immediately GC'd a
-      // few MB per large page, and re-cleaning each item's `str` doubled the
-      // regex work on data that was thrown away.
-      return {
-        pageNumber,
-        text,
-        items: [],
-        columns,
-        garbageRatio,
-      };
-    } finally {
-      // Release the operator list / decoded fonts pdf.js caches per page so
-      // a 500-page document doesn't keep all pages hot at once.
-      try { page.cleanup(); } catch { /* ignore */ }
+      await pdf.destroy();
+    } catch {
+      // ignore
     }
   }
-
-  // Process in concurrency-bounded waves, preserving page order in `pages[]`
-  // and firing onPage in ascending order.
-  let nextEmit = 1;
-  const ready = new Map<number, PageExtraction>();
-  for (let start = 1; start <= total; start += EXTRACTION_CONCURRENCY) {
-    const batch = [];
-    for (let i = 0; i < EXTRACTION_CONCURRENCY && start + i <= total; i++) {
-      batch.push(extractOne(start + i));
-    }
-    const results = await Promise.all(batch);
-    for (const r of results) {
-      pages[r.pageNumber - 1] = r;
-      ready.set(r.pageNumber, r);
-    }
-    while (ready.has(nextEmit)) {
-      const r = ready.get(nextEmit)!;
-      ready.delete(nextEmit);
-      onPage?.(r, total);
-      nextEmit++;
-    }
-  }
-  return pages;
 }
 
 export async function loadPdfDocument(data: ArrayBuffer | Blob) {

@@ -1,8 +1,62 @@
 import { useEffect, useState } from "react";
-import { getDocBlob, getThumbnail, saveThumbnail } from "@/lib/storage";
+import { getDocBlob, getThumbnail, saveThumbnailBlob } from "@/lib/storage";
 
 const THUMB_W = 200;
 const THUMB_H = 260;
+
+async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
+  const arrayBuffer = await pdfBlob.arrayBuffer();
+  try {
+    const pdfjsLib = await import("pdfjs-dist");
+
+    // Ensure worker is configured
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url,
+      ).toString();
+    }
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    try {
+      const page = await pdf.getPage(1);
+      try {
+        const naturalVp = page.getViewport({ scale: 1 });
+
+        // Scale to fit within THUMB_W × THUMB_H, preserving aspect ratio
+        const scaleX = THUMB_W / naturalVp.width;
+        const scaleY = THUMB_H / naturalVp.height;
+        const scale = Math.min(scaleX, scaleY);
+
+        const vp = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(vp.width);
+        canvas.height = Math.round(vp.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("Could not get 2D context");
+        }
+
+        await page.render({ canvasContext: ctx, viewport: vp, canvas } as any).promise;
+
+        return new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((b) => {
+            canvas.width = 0;
+            canvas.height = 0;
+            if (b) resolve(b);
+            else reject(new Error("Canvas to blob conversion failed"));
+          }, "image/jpeg", 0.8);
+        });
+      } finally {
+        page.cleanup();
+      }
+    } finally {
+      pdf.destroy();
+    }
+  } finally {
+    // ArrayBuffer is released here
+  }
+}
 
 /**
  * React hook that returns a cached PDF thumbnail (page-1 preview) for a document.
@@ -20,15 +74,24 @@ export function useThumbnail(docId: string): {
 
   useEffect(() => {
     let cancelled = false;
+    let createdUrl: string | null = null;
 
     (async () => {
+      setLoading(true);
       // 1. Check cache first
       try {
         const cached = await getThumbnail(docId);
         if (cached) {
           if (!cancelled) {
+            if (cached.startsWith("blob:")) {
+              createdUrl = cached;
+            }
             setThumbnailUrl(cached);
             setLoading(false);
+          } else {
+            if (cached.startsWith("blob:")) {
+              URL.revokeObjectURL(cached);
+            }
           }
           return;
         }
@@ -44,57 +107,17 @@ export function useThumbnail(docId: string): {
           return;
         }
 
-        const arrayBuffer = await blob.arrayBuffer();
-        const pdfjsLib = await import("pdfjs-dist");
-
-        // Ensure worker is configured
-        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-            "pdfjs-dist/build/pdf.worker.min.mjs",
-            import.meta.url,
-          ).toString();
-        }
-
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
-        const naturalVp = page.getViewport({ scale: 1 });
-
-        // Scale to fit within THUMB_W × THUMB_H, preserving aspect ratio
-        const scaleX = THUMB_W / naturalVp.width;
-        const scaleY = THUMB_H / naturalVp.height;
-        const scale = Math.min(scaleX, scaleY);
-
-        const vp = page.getViewport({ scale });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(vp.width);
-        canvas.height = Math.round(vp.height);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          pdf.destroy();
-          if (!cancelled) setLoading(false);
-          return;
-        }
-
-        await page.render({ canvasContext: ctx, viewport: vp, canvas } as any).promise;
-        const dataUrl = canvas.toDataURL("image/png");
-
-        // Release canvas bitmap memory
-        canvas.width = 0;
-        canvas.height = 0;
-
-        // Destroy PDF.js document proxy to free decoded fonts, CMap tables,
-        // and internal page caches (~50-200MB per document if left alive).
-        page.cleanup();
-        pdf.destroy();
-
+        const thumbBlob = await renderPageToJpegBlob(blob);
         if (cancelled) return;
 
-        // 3. Cache and return
-        setThumbnailUrl(dataUrl);
+        const url = URL.createObjectURL(thumbBlob);
+        createdUrl = url;
+
+        setThumbnailUrl(url);
         setLoading(false);
 
         // Fire-and-forget cache write
-        saveThumbnail(docId, dataUrl).catch(() => {});
+        saveThumbnailBlob(docId, thumbBlob).catch(() => {});
       } catch {
         if (!cancelled) setLoading(false);
       }
@@ -102,6 +125,9 @@ export function useThumbnail(docId: string): {
 
     return () => {
       cancelled = true;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
     };
   }, [docId]);
 

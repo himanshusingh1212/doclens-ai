@@ -472,6 +472,7 @@ export async function getPageAiSummary(docId: string): Promise<Record<number, Pa
       };
     }
   }
+  all.length = 0;
   return out;
 }
 
@@ -661,15 +662,23 @@ export async function getThumbnail(docId: string): Promise<string | null> {
   return typeof v === "string" ? v : null;
 }
 
+/**
+ * Save a thumbnail Blob directly to the database.
+ */
+export async function saveThumbnailBlob(docId: string, blob: Blob): Promise<void> {
+  const d = await db();
+  await safePut(d, THUMBNAILS, blob, docId);
+}
+
+/**
+ * @deprecated Use saveThumbnailBlob instead to avoid storing large base64 strings in memory.
+ */
 export async function saveThumbnail(docId: string, dataUrl: string): Promise<void> {
   const d = await db();
-  // Convert the data URL to a Blob before persisting so we don't store a
-  // 100KB+ base64 string in IDB — the binary form is ~25% the size and is
-  // never deserialized through the JS heap on read.
   try {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
-    await safePut(d, THUMBNAILS, blob, docId);
+    await saveThumbnailBlob(docId, blob);
   } catch {
     // Fall back to the original string write if anything fails.
     await safePut(d, THUMBNAILS, dataUrl, docId);

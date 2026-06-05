@@ -142,6 +142,8 @@ class PiperReader implements PiperReaderController {
     this.currentOffset = 0;
     this.currentBuffer = null;
     this.bufferedUntil = -1;
+    this.cache.clear();
+    this.cacheLru.clear();
     this.status = "idle";
     this.emit();
   }
@@ -262,6 +264,8 @@ class PiperReader implements PiperReaderController {
     if (!this.destroyed && token === this.playToken) {
       this.status = "ended";
       this.options.onEnd?.();
+      this.cache.clear();
+      this.cacheLru.clear();
       this.emit();
     }
   }

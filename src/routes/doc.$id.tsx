@@ -130,6 +130,8 @@ function DocPage() {
         } else {
           toast.error("Extraction complete but failed to save. Storage may be full.");
         }
+      } finally {
+        collected.length = 0;
       }
     } catch (err) {
       console.error(err);
