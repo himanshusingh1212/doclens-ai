@@ -6,7 +6,6 @@ export default defineNitroConfig({
       "piper-tts-web",
       "@huggingface/transformers",
       "onnxruntime-web",
-      "lucide-react",
       "pdfjs-dist",
     ],
   },
