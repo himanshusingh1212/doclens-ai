@@ -126,23 +126,20 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   }, [docId]);
 
   /** Release bitmap memory + clear text layer for an off-screen page. */
-  const releasePage = useCallback(
-    (pageNumber: number) => {
-      const canvas = canvasRefs.current.get(pageNumber);
-      if (canvas) {
-        canvas.width = 0;
-        canvas.height = 0;
-      }
-      const tl = textLayerRefs.current.get(pageNumber);
-      if (tl) tl.innerHTML = "";
-      renderedPages.current.delete(pageNumber);
-      // Note: We intentionally do NOT call doc.getPage(n).cleanup() here.
-      // That call re-fetches the page proxy into pdf.js's internal cache,
-      // counterproductively increasing memory. doc.destroy() on unmount
-      // handles full cleanup.
-    },
-    [],
-  );
+  const releasePage = useCallback((pageNumber: number) => {
+    const canvas = canvasRefs.current.get(pageNumber);
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    const tl = textLayerRefs.current.get(pageNumber);
+    if (tl) tl.innerHTML = "";
+    renderedPages.current.delete(pageNumber);
+    // Note: We intentionally do NOT call doc.getPage(n).cleanup() here.
+    // That call re-fetches the page proxy into pdf.js's internal cache,
+    // counterproductively increasing memory. doc.destroy() on unmount
+    // handles full cleanup.
+  }, []);
 
   const renderPage = useCallback(
     async (pageNumber: number) => {
@@ -253,7 +250,10 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     return () => {
       renderedPages.current.forEach((pn) => {
         const c = canvasRefs.current.get(pn);
-        if (c) { c.width = 0; c.height = 0; }
+        if (c) {
+          c.width = 0;
+          c.height = 0;
+        }
         const tl = textLayerRefs.current.get(pn);
         if (tl) tl.innerHTML = "";
       });
@@ -282,7 +282,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
           const rect = pageEl.getBoundingClientRect();
           const rootRect = scrollRef.current?.getBoundingClientRect();
           if (rootRect) {
-            const isVisible = rect.top >= rootRect.top - 100 && rect.bottom <= rootRect.bottom + 100;
+            const isVisible =
+              rect.top >= rootRect.top - 100 && rect.bottom <= rootRect.bottom + 100;
             if (!isVisible) {
               pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
             }
@@ -316,17 +317,32 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     if (!root) return;
     const onSelChange = () => {
       const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) { setSelection(null); return; }
+      if (!sel || sel.isCollapsed) {
+        setSelection(null);
+        return;
+      }
       const text = sel.toString().trim();
-      if (!text) { setSelection(null); return; }
+      if (!text) {
+        setSelection(null);
+        return;
+      }
       // Verify selection lives inside one of our text layers
       const anchor = sel.anchorNode as Node | null;
-      if (!anchor) { setSelection(null); return; }
+      if (!anchor) {
+        setSelection(null);
+        return;
+      }
       const el = (anchor.nodeType === 1 ? anchor : anchor.parentElement) as HTMLElement | null;
       const tlEl = el?.closest<HTMLElement>("[data-text-layer]");
-      if (!tlEl) { setSelection(null); return; }
+      if (!tlEl) {
+        setSelection(null);
+        return;
+      }
       const pn = Number(tlEl.dataset.pageNumber);
-      if (!Number.isFinite(pn)) { setSelection(null); return; }
+      if (!Number.isFinite(pn)) {
+        setSelection(null);
+        return;
+      }
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const rootRect = root.getBoundingClientRect();
@@ -364,7 +380,9 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     ttsRef.current?.destroy();
     ttsRef.current = createPiperReaderController(selection.text, {
       onSnapshot: (snapshot) => {
-        setSpeakState(snapshot.status === "playing" || snapshot.status === "loading" ? "playing" : "idle");
+        setSpeakState(
+          snapshot.status === "playing" || snapshot.status === "loading" ? "playing" : "idle",
+        );
       },
       language: getOutputLanguage(),
     });
@@ -400,7 +418,9 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         <div className="text-center">
-          <div className="font-mono text-xs uppercase tracking-widest text-destructive">{error}</div>
+          <div className="font-mono text-xs uppercase tracking-widest text-destructive">
+            {error}
+          </div>
         </div>
       </div>
     );
@@ -431,74 +451,74 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
         onReady={startSpeak}
       />
       <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
-      <div className="flex flex-col items-center gap-4 py-6 px-4" onClick={handlePageClick}>
-        {pageMetas.map((meta) => (
-          <div
-            key={meta.pageNumber}
-            data-page-number={meta.pageNumber}
-            ref={(el) => {
-              if (el && observerRef.current) observerRef.current.observe(el);
-            }}
-            style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
-            className={`relative flex-shrink-0 pdf-page-container ${activePage === meta.pageNumber ? "pdf-page-active" : ""}`}
-          >
-            <canvas
-              data-page-number={meta.pageNumber}
-              ref={(el) => {
-                if (el) canvasRefs.current.set(meta.pageNumber, el);
-                else canvasRefs.current.delete(meta.pageNumber);
-              }}
-              style={{
-                width: meta.cssWidth,
-                height: meta.cssHeight,
-                maxWidth: "100%",
-                display: "block",
-                background: "#fff",
-              }}
-            />
+        <div className="flex flex-col items-center gap-4 py-6 px-4" onClick={handlePageClick}>
+          {pageMetas.map((meta) => (
             <div
-              data-text-layer
+              key={meta.pageNumber}
               data-page-number={meta.pageNumber}
               ref={(el) => {
-                if (el) textLayerRefs.current.set(meta.pageNumber, el);
-                else textLayerRefs.current.delete(meta.pageNumber);
+                if (el && observerRef.current) observerRef.current.observe(el);
               }}
-              className="textLayer absolute inset-0"
-              style={{
-                width: meta.cssWidth,
-                height: meta.cssHeight,
-                opacity: 1,
-                lineHeight: 1,
-              }}
-            />
-            <div className="pdf-page-badge">{meta.pageNumber}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Floating selection toolbar */}
-      {selection && (
-        <div
-          className="absolute z-30 -translate-x-1/2 -translate-y-full"
-          style={{ left: selection.x, top: selection.y - 8 }}
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          <div className="selection-toolbar">
-            <button onClick={handleCopy} title="Copy">
-              📋
-            </button>
-            <button onClick={handleTranslate} className="primary-action" title="Translate">
-              🌐
-            </button>
-            <button
-              onClick={handleSpeak}
-              title={speakState === "playing" ? "Stop reading" : "Read aloud"}
+              style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
+              className={`relative flex-shrink-0 pdf-page-container ${activePage === meta.pageNumber ? "pdf-page-active" : ""}`}
             >
-              {speakState === "playing" ? "⏹" : "🔊"}
-            </button>
-          </div>
+              <canvas
+                data-page-number={meta.pageNumber}
+                ref={(el) => {
+                  if (el) canvasRefs.current.set(meta.pageNumber, el);
+                  else canvasRefs.current.delete(meta.pageNumber);
+                }}
+                style={{
+                  width: meta.cssWidth,
+                  height: meta.cssHeight,
+                  maxWidth: "100%",
+                  display: "block",
+                  background: "#fff",
+                }}
+              />
+              <div
+                data-text-layer
+                data-page-number={meta.pageNumber}
+                ref={(el) => {
+                  if (el) textLayerRefs.current.set(meta.pageNumber, el);
+                  else textLayerRefs.current.delete(meta.pageNumber);
+                }}
+                className="textLayer absolute inset-0"
+                style={{
+                  width: meta.cssWidth,
+                  height: meta.cssHeight,
+                  opacity: 1,
+                  lineHeight: 1,
+                }}
+              />
+              <div className="pdf-page-badge">{meta.pageNumber}</div>
+            </div>
+          ))}
         </div>
-      )}
+
+        {/* Floating selection toolbar */}
+        {selection && (
+          <div
+            className="absolute z-30 -translate-x-1/2 -translate-y-full"
+            style={{ left: selection.x, top: selection.y - 8 }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <div className="selection-toolbar">
+              <button onClick={handleCopy} title="Copy">
+                📋
+              </button>
+              <button onClick={handleTranslate} className="primary-action" title="Translate">
+                🌐
+              </button>
+              <button
+                onClick={handleSpeak}
+                title={speakState === "playing" ? "Stop reading" : "Read aloud"}
+              >
+                {speakState === "playing" ? "⏹" : "🔊"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
