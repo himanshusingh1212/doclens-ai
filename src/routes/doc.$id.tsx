@@ -63,6 +63,19 @@ function DocPage() {
     [id, navigate],
   );
 
+  // Stop active playback when leaving the document reader, but keep the workers warm in the JS heap
+  useEffect(() => {
+    return () => {
+      import("@/lib/tts")
+        .then((tts) => {
+          tts.stopAll();
+        })
+        .catch((err) => console.warn("[tts-cleanup] failed:", err));
+    };
+  }, []);
+
+
+
   useEffect(() => {
     let cancelled = false;
     (async () => {

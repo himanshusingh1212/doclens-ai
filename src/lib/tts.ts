@@ -449,3 +449,11 @@ export function createSmartTtsController(text: string, opts: {
     },
   };
 }
+
+export async function destroyPiperEngine() {
+  if (piperEnginePromise) {
+    const engine = await piperEnginePromise.catch(() => null);
+    engine?.destroyEngine();
+  }
+}
+

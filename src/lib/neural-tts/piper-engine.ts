@@ -48,7 +48,10 @@ const IDB_STORE = "models";
 
 let catalogCache: PiperVoiceMeta[] | null = null;
 let engineInstance: any = null;
+let engineInitPromise: Promise<any> | null = null;
+let synthesisQueuePromise: Promise<any> = Promise.resolve();
 let engineStatus: EngineStatus = "idle";
+
 const statusListeners = new Set<() => void>();
 
 export function getStatus(): EngineStatus {
@@ -296,8 +299,14 @@ class LocalVoiceProvider {
       ? record.onnx
       : new Blob([record.onnx], { type: "application/octet-stream" });
     const blobUrl = URL.createObjectURL(blob);
-    this.cache.set(voiceId, { config: record.config, blobUrl });
-    return [record.config, blobUrl];
+
+    const config = record.config || {};
+    if (!config.speaker_id_map) {
+      config.speaker_id_map = {};
+    }
+
+    this.cache.set(voiceId, { config, blobUrl });
+    return [config, blobUrl];
   }
 
   async list() {
@@ -326,12 +335,20 @@ export async function synthesizeAudio(
 ): Promise<SynthesizedAudio> {
   const engine = await getEngine();
 
-  const result = await Promise.race([
-    engine.generate(text, voiceId, speakerId),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
-    ),
-  ]);
+  // Queue synthesis calls sequentially to prevent overlapping messages in the worker
+  const currentPromise = synthesisQueuePromise.then(async () => {
+    return Promise.race([
+      engine.generate(text, voiceId, speakerId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
+      ),
+    ]);
+  });
+
+  // Update the global queue promise (catch errors so the chain doesn't break)
+  synthesisQueuePromise = currentPromise.catch(() => {});
+
+  const result = await currentPromise;
 
   // Prefer PCM path — avoids Chrome's decodeAudioData which can hang.
   if (result?.audio instanceof Float32Array) {
@@ -382,21 +399,28 @@ export async function synthesizeBlob(
  */
 async function getEngine(): Promise<any> {
   if (engineInstance) return engineInstance;
+  if (engineInitPromise) return engineInitPromise;
 
-  setStatus("loading");
-  try {
-    const mod = await import("piper-tts-web");
-    if (!localProviderInstance) localProviderInstance = new LocalVoiceProvider();
-    engineInstance = new mod.PiperWebWorkerEngine({
-      voiceProvider: localProviderInstance,
-    });
-    setStatus("ready");
-    return engineInstance;
-  } catch (e) {
-    console.error("[piper-engine] Failed to init:", e);
-    setStatus("error");
-    throw e;
-  }
+  engineInitPromise = (async () => {
+    setStatus("loading");
+    try {
+      const mod = await import("piper-tts-web");
+      if (!localProviderInstance) localProviderInstance = new LocalVoiceProvider();
+      const instance = new mod.PiperWebWorkerEngine({
+        voiceProvider: localProviderInstance,
+      });
+      engineInstance = instance;
+      setStatus("ready");
+      return instance;
+    } catch (e) {
+      console.error("[piper-engine] Failed to init:", e);
+      setStatus("error");
+      engineInitPromise = null; // reset so we can retry
+      throw e;
+    }
+  })();
+
+  return engineInitPromise;
 }
 
 /**
@@ -728,6 +752,8 @@ export function destroyEngine() {
     try { engineInstance.worker?.terminate?.(); } catch { /* ignore */ }
     engineInstance = null;
   }
+  engineInitPromise = null;
+  synthesisQueuePromise = Promise.resolve();
   // Drop the catalog (~200KB parsed JSON) too — it'll be re-fetched lazily
   // and HTTP-cached by the browser.
   catalogCache = null;
@@ -891,3 +917,15 @@ function writeString(view: DataView, offset: number, str: string) {
     view.setUint8(offset + i, str.charCodeAt(i));
   }
 }
+
+// Vite Hot Module Replacement (HMR) cleanup
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    try {
+      destroyEngine();
+    } catch (e) {
+      console.warn("[HMR] Failed to dispose Piper engine:", e);
+    }
+  });
+}
+

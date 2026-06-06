@@ -235,7 +235,7 @@ class PiperReader implements PiperReaderController {
           await new Promise<void>((res) => { this.slotWaiter = res; });
         }
         if (this.destroyed || token !== this.generationToken || playToken !== this.playToken) return;
-        this.fetchAudio(i).catch(() => null);
+        await this.fetchAudio(i).catch(() => null);
         this.bufferedUntil = Math.max(this.bufferedUntil, i);
         this.emit();
       }
@@ -512,3 +512,16 @@ function recombine(tokens: string[], nonPunc?: RegExp): string[] {
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// Vite Hot Module Replacement (HMR) cleanup
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    try {
+      activeController?.destroy();
+      activeController = null;
+    } catch (e) {
+      console.warn("[HMR] Failed to dispose Piper reader controller:", e);
+    }
+  });
+}
+

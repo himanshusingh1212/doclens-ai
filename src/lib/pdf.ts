@@ -247,3 +247,21 @@ export async function extractPdfPages(
 export async function loadPdfDocument(data: ArrayBuffer | Blob) {
   return loadDocFromSource(data);
 }
+
+// Vite Hot Module Replacement (HMR) cleanup
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    try {
+      if (pdfjsPromise) {
+        pdfjsPromise.then((lib) => {
+          try {
+            lib.GlobalWorkerOptions.workerPort?.terminate();
+          } catch { /* ignore */ }
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("[HMR] Failed to dispose PDFJS worker:", e);
+    }
+  });
+}
+
