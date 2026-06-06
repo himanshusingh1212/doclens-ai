@@ -13,8 +13,33 @@ export default defineConfig({
   cloudflare: false,
   tanstackStart: {
     spa: {},
+    prerender: {
+      enabled: false,
+    },
   },
   vite: {
+    ssr: {
+      external: [
+        "piper-tts-web",
+        "@huggingface/transformers",
+        "onnxruntime-web",
+        "lucide-react",
+        "pdfjs-dist",
+      ],
+    },
+    environments: {
+      nitro: {
+        resolve: {
+          external: [
+            "piper-tts-web",
+            "@huggingface/transformers",
+            "onnxruntime-web",
+            "lucide-react",
+            "pdfjs-dist",
+          ],
+        },
+      },
+    },
     build: {
       minify: false,
     },
@@ -26,6 +51,15 @@ export default defineConfig({
             functions: {
               runtime: "nodejs22.x",
             },
+          },
+          rollupConfig: {
+            external: [
+              "piper-tts-web",
+              "@huggingface/transformers",
+              "onnxruntime-web",
+              "lucide-react",
+              "pdfjs-dist",
+            ],
           },
         }),
       ]
