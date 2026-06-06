@@ -31,7 +31,12 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
 
 async function exportAsMarkdown(docId: string) {
   const pages = await getAllPages(docId);
-  const lines: string[] = ["# DocLens AI — Export", "", `> Exported at ${new Date().toISOString()}`, ""];
+  const lines: string[] = [
+    "# DocLens AI — Export",
+    "",
+    `> Exported at ${new Date().toISOString()}`,
+    "",
+  ];
   for (const page of pages) {
     lines.push(`## Page ${page.pageNumber}`, "");
     lines.push("### Extracted Text", "");
@@ -124,13 +129,19 @@ export function RightPanel({
               {showExport && (
                 <div className="absolute right-0 top-full z-20 mt-1 rounded-lg border border-border bg-surface p-1 shadow-xl">
                   <button
-                    onClick={() => { void exportAsMarkdown(docId); setShowExport(false); }}
+                    onClick={() => {
+                      void exportAsMarkdown(docId);
+                      setShowExport(false);
+                    }}
                     className="block w-full rounded px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-surface-2"
                   >
                     Export as Markdown
                   </button>
                   <button
-                    onClick={() => { void exportAsJson(docId); setShowExport(false); }}
+                    onClick={() => {
+                      void exportAsJson(docId);
+                      setShowExport(false);
+                    }}
                     className="block w-full rounded px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-surface-2"
                   >
                     Export as JSON
@@ -156,7 +167,7 @@ export function RightPanel({
         )}
 
         {tab === "text" && (
-          <ExtractedTextTab docId={docId} activePage={activePage} />
+          <ExtractedTextTab docId={docId} activePage={activePage} aiSummary={aiSummary} />
         )}
       </div>
     </div>
@@ -165,7 +176,15 @@ export function RightPanel({
 
 /* ---------- Extracted text tab — single active page ---------- */
 
-function ExtractedTextTab({ docId, activePage }: { docId: string; activePage: number }) {
+function ExtractedTextTab({
+  docId,
+  activePage,
+  aiSummary,
+}: {
+  docId: string;
+  activePage: number;
+  aiSummary: Record<number, PageAiSummaryEntry>;
+}) {
   if (activePage <= 0) {
     return (
       <div className="flex h-full items-center justify-center px-5 py-4">
@@ -184,16 +203,24 @@ function ExtractedTextTab({ docId, activePage }: { docId: string; activePage: nu
         const target = e.target as HTMLElement;
         if (target.closest("button, select, textarea, input, [role='button']")) return;
         window.dispatchEvent(
-          new CustomEvent("doclens:scroll-to-pdf", { detail: { pageNumber: activePage } })
+          new CustomEvent("doclens:scroll-to-pdf", { detail: { pageNumber: activePage } }),
         );
       }}
     >
-      <ExtractedPageRow docId={docId} pageNumber={activePage} />
+      <ExtractedPageRow docId={docId} pageNumber={activePage} summary={aiSummary[activePage]} />
     </div>
   );
 }
 
-function ExtractedPageRow({ docId, pageNumber }: { docId: string; pageNumber: number }) {
+function ExtractedPageRow({
+  docId,
+  pageNumber,
+  summary,
+}: {
+  docId: string;
+  pageNumber: number;
+  summary?: PageAiSummaryEntry;
+}) {
   const [data, setData] = useState<{ text: string; columns: number } | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -205,7 +232,7 @@ function ExtractedPageRow({ docId, pageNumber }: { docId: string; pageNumber: nu
     return () => {
       cancelled = true;
     };
-  }, [docId, pageNumber]);
+  }, [docId, pageNumber, summary]);
 
   if (data === null) {
     return (

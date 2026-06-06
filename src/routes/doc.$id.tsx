@@ -17,13 +17,18 @@ import {
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 
-const extractPdfPagesClient = createClientOnlyFn(async (
-  blob: Blob,
-  onPage: (page: { pageNumber: number; text: string; columns: number; garbageRatio: number }, total: number) => void,
-) => {
-  const { extractPdfPages } = await import("@/lib/pdf");
-  return extractPdfPages(blob, onPage);
-});
+const extractPdfPagesClient = createClientOnlyFn(
+  async (
+    blob: Blob,
+    onPage: (
+      page: { pageNumber: number; text: string; columns: number; garbageRatio: number },
+      total: number,
+    ) => void,
+  ) => {
+    const { extractPdfPages } = await import("@/lib/pdf");
+    return extractPdfPages(blob, onPage);
+  },
+);
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
@@ -74,8 +79,6 @@ function DocPage() {
     };
   }, []);
 
-
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,7 +121,12 @@ function DocPage() {
         return;
       }
       let lastTotal = 0;
-      const collected: { pageNumber: number; text: string; columns: number; garbageRatio: number }[] = [];
+      const collected: {
+        pageNumber: number;
+        text: string;
+        columns: number;
+        garbageRatio: number;
+      }[] = [];
       await extractPdfPagesClient(blob, (page, total) => {
         lastTotal = total;
         collected.push({
@@ -237,10 +245,14 @@ function DocPage() {
                 aria-label="Select page"
               >
                 {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n} className="bg-surface">{n}</option>
+                  <option key={n} value={n} className="bg-surface">
+                    {n}
+                  </option>
                 ))}
               </select>
-              <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">/ {pageCount}</span>
+              <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                / {pageCount}
+              </span>
             </div>
             <button
               onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
@@ -251,7 +263,9 @@ function DocPage() {
               ›
             </button>
             {doneCount > 0 && (
-              <span className="ml-1 text-[10px] text-primary font-medium">{doneCount} translated</span>
+              <span className="ml-1 text-[10px] text-primary font-medium">
+                {doneCount} translated
+              </span>
             )}
           </div>
         )}
