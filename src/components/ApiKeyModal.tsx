@@ -12,6 +12,8 @@ import {
   OPEN_API_KEY_MODAL_EVT,
   onKeyChange,
   validateKey,
+  getCustomKey,
+  setCustomKey,
   type KeyStatus,
 } from "@/lib/openrouter";
 
@@ -26,6 +28,7 @@ export function ApiKeyModal() {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("unknown");
+  const [customKey, setCustomKeyInput] = useState("");
 
   // Listen for global open requests.
   useEffect(() => {
@@ -33,6 +36,7 @@ export function ApiKeyModal() {
       const detail = (e as CustomEvent<{ reason?: string }>).detail;
       setReason(detail?.reason ?? null);
       setStatus(getKeyStatus());
+      setCustomKeyInput(getCustomKey());
       setOpen(true);
     };
     window.addEventListener(OPEN_API_KEY_MODAL_EVT, handler);
@@ -40,22 +44,33 @@ export function ApiKeyModal() {
   }, []);
 
   // Reflect external changes (e.g. saved from Settings).
-  useEffect(() => onKeyChange(() => setStatus(getKeyStatus())), []);
+  useEffect(() => {
+    return onKeyChange(() => {
+      setStatus(getKeyStatus());
+      setCustomKeyInput(getCustomKey());
+    });
+  }, []);
 
   const handleValidate = async () => {
     setStatus("checking");
+    // Save first, then run validate
+    setCustomKey(customKey);
     const ok = await validateKey();
     if (ok) {
       setStatus("valid");
-      toast.success("Server OpenRouter key is configured.");
+      toast.success(
+        customKey.trim()
+          ? "Custom OpenRouter key saved and validated."
+          : "Server OpenRouter key is configured."
+      );
       setOpen(false);
     } else {
       const nextStatus = getKeyStatus();
       setStatus(nextStatus === "missing" ? "missing" : "invalid");
       toast.error(
         nextStatus === "missing"
-          ? "OPENROUTER_API_KEY is not configured on the server."
-          : "OpenRouter rejected the server key.",
+          ? "No API key configured (neither server environment nor custom key)."
+          : "OpenRouter rejected the API key.",
       );
     }
   };
@@ -64,10 +79,9 @@ export function ApiKeyModal() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>OpenRouter environment key</DialogTitle>
+          <DialogTitle>OpenRouter API Key Setup</DialogTitle>
           <DialogDescription>
-            DocLens reads OPENROUTER_API_KEY on the server. The browser never
-            receives the key.
+            DocLens can use the server-wide environment key or you can supply your own custom key (saved locally in your browser).
           </DialogDescription>
         </DialogHeader>
 
@@ -77,8 +91,24 @@ export function ApiKeyModal() {
           </div>
         )}
 
+        <div className="space-y-2">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Custom API Key (Optional)
+          </label>
+          <input
+            type="password"
+            placeholder="sk-or-v1-..."
+            value={customKey}
+            onChange={(e) => setCustomKeyInput(e.target.value)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            If provided, this key overrides the server environment variable. Leave blank to fallback to the server-managed key.
+          </p>
+        </div>
+
         <div className="rounded-md border border-border bg-background px-3 py-2">
-          <StatusLine status={status} />
+          <StatusLine status={status} isCustom={!!customKey.trim()} />
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-1">
@@ -102,7 +132,7 @@ export function ApiKeyModal() {
               disabled={status === "checking"}
               className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground disabled:opacity-40"
             >
-              {status === "checking" ? "checking…" : "check server key"}
+              {status === "checking" ? "checking…" : "save & validate"}
             </button>
           </div>
         </div>
@@ -111,22 +141,26 @@ export function ApiKeyModal() {
   );
 }
 
-function StatusLine({ status }: { status: Status }) {
+function StatusLine({ status, isCustom }: { status: Status; isCustom: boolean }) {
   if (status === "checking")
-    return <p className="font-mono text-[11px] text-muted-foreground">checking server environment…</p>;
+    return <p className="font-mono text-[11px] text-muted-foreground">checking connection status…</p>;
   if (status === "valid")
-    return <p className="font-mono text-[11px] text-primary">connected - server key is valid</p>;
+    return (
+      <p className="font-mono text-[11px] text-primary font-bold">
+        connected - {isCustom ? "custom key" : "server key"} is valid
+      </p>
+    );
   if (status === "missing")
     return (
       <p className="font-mono text-[11px] text-destructive">
-        missing OPENROUTER_API_KEY on the server
+        missing API key (neither server environment nor custom key configured)
       </p>
     );
   if (status === "invalid")
     return (
       <p className="font-mono text-[11px] text-destructive">
-        server key is invalid or expired
+        {isCustom ? "custom key" : "server key"} is invalid or expired
       </p>
     );
-  return <p className="font-mono text-[11px] text-muted-foreground">server key not checked yet</p>;
+  return <p className="font-mono text-[11px] text-muted-foreground">key connection not checked yet</p>;
 }

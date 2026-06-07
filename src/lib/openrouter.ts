@@ -20,6 +20,7 @@ const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
 const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
 export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
 const SERVER_KEY_SENTINEL = "server-managed";
+const CUSTOM_KEY_LS = "doclens.openrouter.customKey";
 const FALLBACK_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
 
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
@@ -30,14 +31,32 @@ function emitKeyChange() {
   }
 }
 
-export function getKey(): string {
-  return SERVER_KEY_SENTINEL;
+export function getCustomKey(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(CUSTOM_KEY_LS) ?? "";
 }
-export function setKey(k: string) {
-  void k;
+
+export function setCustomKey(k: string) {
+  if (typeof window === "undefined") return;
+  if (k) {
+    localStorage.setItem(CUSTOM_KEY_LS, k.trim());
+  } else {
+    localStorage.removeItem(CUSTOM_KEY_LS);
+  }
   emitKeyChange();
 }
+
+export function getKey(): string {
+  return getCustomKey() || SERVER_KEY_SENTINEL;
+}
+
+export function setKey(k: string) {
+  setCustomKey(k);
+}
+
 export function clearKey() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(CUSTOM_KEY_LS);
   localStorage.removeItem(KEY_STATUS_LS);
   emitKeyChange();
 }
@@ -187,27 +206,38 @@ function getServerOpenRouterKey(): string {
   return process.env.OPENROUTER_API_KEY?.trim() ?? "";
 }
 
-const validateServerOpenRouterKey = createServerFn({ method: "GET" }).handler(async () => {
-  "use server";
-  const key = getServerOpenRouterKey();
-  if (!key) return { status: "missing" as KeyStatus };
-  const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-    headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
-  });
-  return { status: res.ok ? ("valid" as KeyStatus) : ("invalid" as KeyStatus) };
-});
+function getEffectiveKey(userKey?: string): string {
+  if (!userKey || userKey === SERVER_KEY_SENTINEL) {
+    return getServerOpenRouterKey();
+  }
+  return userKey;
+}
 
-const fetchServerOpenRouterModels = createServerFn({ method: "GET" }).handler(async () => {
-  "use server";
-  const key = getServerOpenRouterKey();
-  if (!key) throw new Error("OPENROUTER_API_KEY is not configured on the server.");
-  const res = await fetch("https://openrouter.ai/api/v1/models", {
-    headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
+const validateServerOpenRouterKey = createServerFn({ method: "POST" })
+  .inputValidator((input: { userKey?: string } | undefined) => input)
+  .handler(async ({ data }) => {
+    "use server";
+    const key = getEffectiveKey(data?.userKey);
+    if (!key) return { status: "missing" as KeyStatus };
+    const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
+      headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
+    });
+    return { status: res.ok ? ("valid" as KeyStatus) : ("invalid" as KeyStatus) };
   });
-  if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? []) as ORModel[];
-});
+
+const fetchServerOpenRouterModels = createServerFn({ method: "POST" })
+  .inputValidator((input: { userKey?: string } | undefined) => input)
+  .handler(async ({ data }) => {
+    "use server";
+    const key = getEffectiveKey(data?.userKey);
+    if (!key) throw new Error("No OpenRouter API key provided.");
+    const res = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
+    const json = await res.json();
+    return (json.data ?? []) as ORModel[];
+  });
 
 interface CompletionResult {
   ok: boolean;
@@ -217,15 +247,15 @@ interface CompletionResult {
 }
 
 const completeWithServerOpenRouter = createServerFn({ method: "POST" })
-  .inputValidator((input: { payload: Record<string, unknown> }) => input)
+  .inputValidator((input: { payload: Record<string, unknown>; userKey?: string }) => input)
   .handler(async ({ data }): Promise<CompletionResult> => {
     "use server";
-    const key = getServerOpenRouterKey();
+    const key = getEffectiveKey(data.userKey);
     if (!key) {
       return {
         ok: false,
         status: 401,
-        body: "OPENROUTER_API_KEY is not configured on the server.",
+        body: "No OpenRouter API key provided.",
       };
     }
 
@@ -251,9 +281,10 @@ const completeWithServerOpenRouter = createServerFn({ method: "POST" })
     }
   });
 
-export async function validateKey(_key?: string): Promise<boolean> {
+export async function validateKey(key?: string): Promise<boolean> {
   try {
-    const { status } = await validateServerOpenRouterKey();
+    const effectiveKey = key !== undefined ? key : getCustomKey();
+    const { status } = await validateServerOpenRouterKey({ data: { userKey: effectiveKey } });
     setKeyStatus(status);
     return status === "valid";
   } catch {
@@ -262,8 +293,9 @@ export async function validateKey(_key?: string): Promise<boolean> {
   }
 }
 
-export async function fetchModels(_key?: string): Promise<ORModel[]> {
-  return fetchServerOpenRouterModels();
+export async function fetchModels(key?: string): Promise<ORModel[]> {
+  const effectiveKey = key !== undefined ? key : getCustomKey();
+  return fetchServerOpenRouterModels({ data: { userKey: effectiveKey } });
 }
 
 /* -------- Friendly errors -------- */
@@ -415,7 +447,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
 
       const body = { ...opts.payload, stream: false };
       const result: CompletionResult = await completeWithServerOpenRouter({
-        data: { payload: body },
+        data: { payload: body, userKey: opts.key || getCustomKey() },
         signal,
       });
 

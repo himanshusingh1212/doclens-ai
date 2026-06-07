@@ -22,6 +22,8 @@ import {
   setTemperature,
   validateKey,
   EXPLANATION_STYLES,
+  getCustomKey,
+  setCustomKey,
   type ExplanationStyle,
   type GlobalMode,
   type ORModel,
@@ -64,6 +66,7 @@ function SettingsPage() {
   const navigate = useNavigate();
 
   const [keyStatus, setKeyStatus] = useState<"unknown" | "missing" | "valid" | "invalid" | "checking">("unknown");
+  const [customKey, setCustomKeyInput] = useState("");
   const [models, setModels] = useState<ORModel[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelError, setModelError] = useState("");
@@ -121,7 +124,9 @@ function SettingsPage() {
     setTemp(getTemperature());
     setMemoryState(getMemory());
     setSequentialState(getSequential());
-    void handleValidate();
+    const savedKey = getCustomKey();
+    setCustomKeyInput(savedKey);
+    void handleValidate(savedKey);
     void updateStorageStats();
   }, []);
 
@@ -138,9 +143,11 @@ function SettingsPage() {
     }
   };
 
-  const handleValidate = async () => {
+  const handleValidate = async (keyToValidate?: string) => {
     setKeyStatus("checking");
-    const ok = await validateKey();
+    const targetKey = keyToValidate !== undefined ? keyToValidate : customKey;
+    setCustomKey(targetKey);
+    const ok = await validateKey(targetKey);
     if (ok) {
       setKeyStatus("valid");
       void loadModels();
@@ -405,22 +412,54 @@ function SettingsPage() {
               <h3 className="text-lg font-semibold text-foreground">API Management</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              OpenRouter runs through the server using OPENROUTER_API_KEY.
+              DocLens uses the server-managed key by default, but you can enter your own key here to override it.
             </p>
-            <div className="rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-muted-foreground">
-              Browser clients call DocLens server functions. The API key is never exposed to client bundles.
+            
+            <div className="flex flex-col gap-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-semibold text-foreground">Custom API Key (Optional)</label>
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-primary hover:underline"
+                >
+                  Get a key →
+                </a>
+              </div>
+              <input
+                type="password"
+                placeholder="sk-or-v1-..."
+                value={customKey}
+                onChange={(e) => setCustomKeyInput(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Leave blank to fallback to the server environment key. Saved locally in your browser.
+              </p>
             </div>
+
             <button
-              onClick={handleValidate}
+              onClick={() => handleValidate()}
               disabled={keyStatus === "checking"}
               className="w-full rounded-lg bg-accent py-2 font-bold text-accent-foreground transition-all hover:opacity-90 disabled:opacity-40"
             >
-              {keyStatus === "checking" ? "Checking..." : "Verify Server Connection"}
+              {keyStatus === "checking" ? "Checking..." : "Save and Verify Connection"}
             </button>
             <div className="text-xs font-semibold">
-              {keyStatus === "valid" && <span className="text-primary">Server key validated</span>}
-              {keyStatus === "missing" && <span className="text-destructive">Missing OPENROUTER_API_KEY</span>}
-              {keyStatus === "invalid" && <span className="text-destructive">Invalid server key</span>}
+              {keyStatus === "valid" && (
+                <span className="text-primary">
+                  {customKey.trim() ? "Custom key validated" : "Server key validated"}
+                </span>
+              )}
+              {keyStatus === "missing" && (
+                <span className="text-destructive">No API key configured (neither server nor custom key)</span>
+              )}
+              {keyStatus === "invalid" && (
+                <span className="text-destructive">
+                  {customKey.trim() ? "Invalid custom key" : "Invalid server key"}
+                </span>
+              )}
               {keyStatus === "unknown" && <span className="text-muted-foreground">Not checked</span>}
             </div>
           </section>

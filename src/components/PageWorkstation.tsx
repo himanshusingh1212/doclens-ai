@@ -1003,10 +1003,25 @@ function PageCard({
       return;
     }
     ttsRef.current?.destroy();
+
+    // Notify user of TTS engine/worker initialization
+    toast.info("Initializing TTS voice model... Please wait.", {
+      id: `tts-init-${pageNumber}`,
+      duration: 10000,
+    });
+
     const ctrl = createPiperReaderController(state.result, {
       language: eff.language,
-      onSnapshot: setReader,
-      onError: (message) => toast.error(message),
+      onSnapshot: (snapshot) => {
+        if (snapshot.status === "playing" || snapshot.status === "paused") {
+          toast.dismiss(`tts-init-${pageNumber}`);
+        }
+        setReader(snapshot);
+      },
+      onError: (message) => {
+        toast.dismiss(`tts-init-${pageNumber}`);
+        toast.error(message);
+      },
     });
     ttsRef.current = ctrl;
     ctrl.play();
@@ -1023,8 +1038,12 @@ function PageCard({
       else setVoiceSetupOpen(true);
     });
   };
-  const handleTtsPause = () => ttsRef.current?.pause();
+  const handleTtsPause = () => {
+    toast.dismiss(`tts-init-${pageNumber}`);
+    ttsRef.current?.pause();
+  };
   const handleTtsStop = () => {
+    toast.dismiss(`tts-init-${pageNumber}`);
     ttsRef.current?.stop();
     setReader(null);
   };
