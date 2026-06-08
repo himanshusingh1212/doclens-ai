@@ -45,8 +45,10 @@ import {
 import { hasTtsSelection, stopAll as stopAllTts } from "@/lib/tts";
 import {
   createPiperReaderController,
+  prefetchTts,
   type PiperReaderController,
   type ReaderSnapshot,
+  type ReaderStatus,
 } from "@/lib/piper-reader";
 
 interface Props {
@@ -152,11 +154,135 @@ export function PageWorkstation({
     total: number;
     errors: number;
   } | null>(null);
-  const [ttsAutoPlayPage, setTtsAutoPlayPage] = useState<number | null>(null);
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
     null,
   );
+  const [ttsReader, setTtsReader] = useState<ReaderSnapshot | null>(null);
+  const [ttsPlayingPage, setTtsPlayingPage] = useState<number | null>(null);
+  const [ttsWaitingForTranslation, setTtsWaitingForTranslation] = useState<number | null>(null);
+  const ttsRef = useRef<PiperReaderController | null>(null);
+  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
+
+  const startTtsForPage = useCallback(async (pageNumber: number) => {
+    const rec = await getPageData(docId, pageNumber);
+    if (!rec?.pageAi?.result) {
+      toast.error(`Page ${pageNumber} translation text is not available.`);
+      return;
+    }
+    const ready = await hasTtsSelection(globals.language);
+    if (!ready) {
+      setVoiceSetupOpen(true);
+      return;
+    }
+
+    ttsRef.current?.destroy();
+    setTtsPlayingPage(pageNumber);
+
+    toast.info(`Initializing TTS voice model for Page ${pageNumber}...`, {
+      id: `tts-init-${pageNumber}`,
+      duration: 10000,
+    });
+
+    const ctrl = createPiperReaderController(rec.pageAi.result, {
+      language: globals.language,
+      onSnapshot: (snapshot) => {
+        if (snapshot.status === "playing" || snapshot.status === "paused") {
+          toast.dismiss(`tts-init-${pageNumber}`);
+        }
+        setTtsReader(snapshot);
+
+        if (snapshot.status === "ended") {
+          const nextP = pageNumber + 1;
+          if (nextP <= pageCount) {
+            setActivePage(nextP);
+            if (aiSummary[nextP]?.status === "done") {
+              void startTtsForPage(nextP);
+            } else {
+              setTtsWaitingForTranslation(nextP);
+              if (aiSummary[nextP]?.status !== "running") {
+                void runPageWithSetup(nextP);
+              }
+            }
+          } else {
+            setTtsPlayingPage(null);
+            setTtsReader(null);
+            setTtsWaitingForTranslation(null);
+          }
+        }
+
+        if (snapshot.status === "playing") {
+          const nextP = pageNumber + 1;
+          if (nextP <= pageCount && aiSummary[nextP]?.status === "done") {
+            void getPageData(docId, nextP).then((nextRec) => {
+              if (nextRec?.pageAi?.result) {
+                void prefetchTts(nextRec.pageAi.result, globals.language);
+              }
+            });
+          }
+        }
+      },
+      onError: (message) => {
+        toast.dismiss(`tts-init-${pageNumber}`);
+        toast.error(message);
+        setTtsPlayingPage(null);
+        setTtsReader(null);
+        setTtsWaitingForTranslation(null);
+      },
+    });
+    ttsRef.current = ctrl;
+    ctrl.play();
+  }, [docId, globals.language, pageCount, aiSummary]);
+
+  const handleTtsPlay = useCallback(() => {
+    if (ttsReader?.status === "paused" && ttsRef.current) {
+      ttsRef.current.resume();
+      return;
+    }
+    setTtsWaitingForTranslation(null);
+    void startTtsForPage(activePage);
+  }, [activePage, ttsReader?.status, startTtsForPage]);
+
+  const handleTtsPause = useCallback(() => {
+    ttsRef.current?.pause();
+  }, []);
+
+  const handleTtsStop = useCallback(() => {
+    ttsRef.current?.stop();
+    setTtsReader(null);
+    setTtsPlayingPage(null);
+    setTtsWaitingForTranslation(null);
+  }, []);
+
+  // Auto-play when a waiting translation completes
+  useEffect(() => {
+    if (ttsWaitingForTranslation !== null) {
+      const status = aiSummary[ttsWaitingForTranslation]?.status;
+      if (status === "done") {
+        const pageToPlay = ttsWaitingForTranslation;
+        setTtsWaitingForTranslation(null);
+        void startTtsForPage(pageToPlay);
+      } else if (status === "error") {
+        setTtsWaitingForTranslation(null);
+        toast.error(`Translation failed for Page ${ttsWaitingForTranslation}. TTS stopped.`);
+      }
+    }
+  }, [aiSummary, ttsWaitingForTranslation, startTtsForPage]);
+
+  const handleTtsRewind = useCallback(() => {
+    ttsRef.current?.rewind();
+  }, []);
+
+  const handleTtsForward = useCallback(() => {
+    ttsRef.current?.forward();
+  }, []);
+
+  // When a page starts running, stop any active TTS
+  useEffect(() => {
+    if (runningPages.size > 0) {
+      handleTtsStop();
+    }
+  }, [runningPages, handleTtsStop]);
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
 
   // ─── Auto-Translate toggle (persisted per doc) ───
@@ -191,6 +317,7 @@ export function PageWorkstation({
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
       if (batchRef.current) batchRef.current.cancelled = true;
+      ttsRef.current?.destroy();
       // Stop all active TTS playbacks, releasing AudioBuffers and closing contexts, but keeping engine warm
       stopAllTts();
     };
@@ -765,6 +892,12 @@ export function PageWorkstation({
         }}
         onConfirm={handleExplainSetupConfirm}
       />
+      <TtsVoiceSetupDialog
+        open={voiceSetupOpen}
+        language={globals.language}
+        onOpenChange={setVoiceSetupOpen}
+        onReady={handleTtsPlay}
+      />
       {/* ─── Compact toolbar ─── */}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-3">
@@ -778,6 +911,103 @@ export function PageWorkstation({
             )}
           </span>
         </div>
+
+        {/* TTS Player in the middle */}
+        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-border/80 bg-surface-2/40 backdrop-blur-sm shadow-sm">
+          {ttsReader?.status === "loading" && (
+            <span className="flex h-2 w-2 relative mr-0.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+          )}
+          {ttsReader?.status === "playing" && (
+            <span className="flex h-2 w-2 relative mr-0.5">
+              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          )}
+          {ttsWaitingForTranslation !== null && (
+            <span className="flex h-2 w-2 relative mr-0.5">
+              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+          )}
+          {ttsPlayingPage && (
+            <span className="text-[10px] font-semibold text-muted-foreground mr-1">
+              Page {ttsPlayingPage}
+            </span>
+          )}
+          {ttsWaitingForTranslation !== null && (
+            <span className="text-[10px] font-semibold text-muted-foreground mr-1">
+              Translating Page {ttsWaitingForTranslation}…
+            </span>
+          )}
+          
+          {/* Rewind */}
+          {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
+            <button
+              onClick={handleTtsRewind}
+              disabled={!ttsReader.canRewind}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-3 hover:text-foreground disabled:opacity-30"
+              title="Rewind"
+            >
+              ‹
+            </button>
+          )}
+
+          {/* Play / Pause */}
+          {ttsReader?.status !== "playing" && ttsReader?.status !== "loading" ? (
+            <button
+              onClick={handleTtsPlay}
+              disabled={aiSummary[activePage]?.status !== "done"}
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary transition-all hover:bg-primary hover:text-primary-foreground disabled:opacity-35 disabled:hover:bg-primary/10 disabled:hover:text-primary"
+              title={ttsReader?.status === "paused" ? "Resume" : "Listen to page"}
+            >
+              ▶
+            </button>
+          ) : (
+            <button
+              onClick={handleTtsPause}
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground transition-all hover:bg-primary/90"
+              title="Pause"
+            >
+              ❚❚
+            </button>
+          )}
+
+          {/* Forward */}
+          {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
+            <button
+              onClick={handleTtsForward}
+              disabled={!ttsReader.canForward}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-3 hover:text-foreground disabled:opacity-30"
+              title="Forward"
+            >
+              ›
+            </button>
+          )}
+
+          {/* Stop */}
+          {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
+            <button
+              onClick={handleTtsStop}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
+              title="Stop"
+            >
+              ■
+            </button>
+          )}
+
+          {/* Settings / Preferences */}
+          <button
+            onClick={() => setVoiceSetupOpen(true)}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-3 hover:text-foreground"
+            title="Voice settings"
+          >
+            ⚙
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           {/* Auto-Translate toggle */}
           <button
@@ -833,15 +1063,8 @@ export function PageWorkstation({
           onPageAiChange={onPageAiChange}
           onRun={() => runPageWithSetup(activePage)}
           onCancel={() => cancelPage(activePage)}
-          autoPlayTts={ttsAutoPlayPage === activePage}
-          onTtsStarted={() => setTtsAutoPlayPage(null)}
-          onTtsComplete={(pNum) => {
-            const nextP = pNum + 1;
-            if (nextP <= pageCount && aiSummary[nextP]?.status === "done") {
-              setTtsAutoPlayPage(nextP);
-              setActivePage(nextP);
-            }
-          }}
+          reader={ttsPlayingPage === activePage ? ttsReader : null}
+          onSeek={(idx) => ttsRef.current?.seek(idx)}
         />
 
         {/* ─── Floating background-progress pill ─── */}
@@ -888,9 +1111,8 @@ interface CardLoaderProps {
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
   onRun: () => void;
   onCancel: () => void;
-  autoPlayTts?: boolean;
-  onTtsStarted?: () => void;
-  onTtsComplete?: (pageNumber: number) => void;
+  reader: ReaderSnapshot | null;
+  onSeek: (index: number) => void;
 }
 
 function PageCardLoader(props: CardLoaderProps) {
@@ -955,9 +1177,8 @@ function PageCardLoader(props: CardLoaderProps) {
       onUpdate={handleUpdate}
       onRun={props.onRun}
       onCancel={props.onCancel}
-      autoPlayTts={props.autoPlayTts}
-      onTtsStarted={props.onTtsStarted}
-      onTtsComplete={props.onTtsComplete}
+      reader={props.reader}
+      onSeek={props.onSeek}
     />
   );
 }
@@ -977,9 +1198,8 @@ interface CardProps {
   onUpdate: (patch: Partial<PageAi>) => void;
   onRun: () => void;
   onCancel: () => void;
-  autoPlayTts?: boolean;
-  onTtsStarted?: () => void;
-  onTtsComplete?: (pageNumber: number) => void;
+  reader: ReaderSnapshot | null;
+  onSeek: (index: number) => void;
 }
 
 function PageCard({
@@ -993,18 +1213,14 @@ function PageCard({
   onUpdate,
   onRun,
   onCancel,
-  autoPlayTts,
-  onTtsStarted,
-  onTtsComplete,
+  reader,
+  onSeek,
 }: CardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
-  const [reader, setReader] = useState<ReaderSnapshot | null>(null);
-  const ttsRef = useRef<PiperReaderController | null>(null);
   const [highlighted, setHighlighted] = useState(false);
-  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = (e: Event) => {
@@ -1018,21 +1234,6 @@ function PageCard({
     window.addEventListener("doclens:scroll-to-workstation", handleScroll);
     return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
   }, [pageNumber]);
-
-  // Strict cleanup on unmount: destroy TTS controller fully.
-  useEffect(() => {
-    return () => {
-      ttsRef.current?.destroy();
-      ttsRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isRunning) {
-      ttsRef.current?.stop();
-      setReader(null);
-    }
-  }, [isRunning]);
 
   const autoPayload = useMemo(() => {
     return buildPagePayload({
@@ -1073,70 +1274,6 @@ function PageCard({
     setEditingJson(false);
   };
 
-  const startTts = useCallback(() => {
-    if (!state.result) return;
-    if (reader?.status === "paused" && ttsRef.current) {
-      ttsRef.current.resume();
-      return;
-    }
-    ttsRef.current?.destroy();
-
-    // Notify user of TTS engine/worker initialization
-    toast.info("Initializing TTS voice model... Please wait.", {
-      id: `tts-init-${pageNumber}`,
-      duration: 10000,
-    });
-
-    const ctrl = createPiperReaderController(state.result, {
-      language: eff.language,
-      onSnapshot: (snapshot) => {
-        if (snapshot.status === "playing" || snapshot.status === "paused") {
-          toast.dismiss(`tts-init-${pageNumber}`);
-        }
-        setReader(snapshot);
-        if (snapshot.status === "ended") {
-          onTtsComplete?.(pageNumber);
-        }
-      },
-      onError: (message) => {
-        toast.dismiss(`tts-init-${pageNumber}`);
-        toast.error(message);
-      },
-    });
-    ttsRef.current = ctrl;
-    ctrl.play();
-  }, [state.result, reader?.status, eff.language, pageNumber, onTtsComplete]);
-
-  const handleTtsPlay = useCallback(() => {
-    if (!state.result) return;
-    if (reader?.status === "paused" && ttsRef.current) {
-      ttsRef.current.resume();
-      return;
-    }
-    void hasTtsSelection(eff.language).then((ready) => {
-      if (ready) startTts();
-      else setVoiceSetupOpen(true);
-    });
-  }, [state.result, reader?.status, eff.language, startTts]);
-  const handleTtsPause = () => {
-    toast.dismiss(`tts-init-${pageNumber}`);
-    ttsRef.current?.pause();
-  };
-  const handleTtsStop = () => {
-    toast.dismiss(`tts-init-${pageNumber}`);
-    ttsRef.current?.stop();
-    setReader(null);
-  };
-  const handleTtsForward = () => ttsRef.current?.forward();
-  const handleTtsRewind = () => ttsRef.current?.rewind();
-  const handleTtsSeek = (index: number) => ttsRef.current?.seek(index);
-
-  useEffect(() => {
-    if (autoPlayTts && state.result) {
-      onTtsStarted?.();
-      handleTtsPlay();
-    }
-  }, [autoPlayTts, state.result, onTtsStarted, handleTtsPlay]);
 
   /* Determine button label from mode */
   const modeLabel = MODE_INSTRUCTIONS[eff.mode]?.label || "Translate";
@@ -1146,12 +1283,6 @@ function PageCard({
     <article
       className={`reader-card ${highlighted ? "highlight-card" : ""} ${isRunning ? "!border-primary/20" : ""}`}
     >
-      <TtsVoiceSetupDialog
-        open={voiceSetupOpen}
-        language={eff.language}
-        onOpenChange={setVoiceSetupOpen}
-        onReady={startTts}
-      />
       {/* ─── Header ─── */}
       <header className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -1179,58 +1310,6 @@ function PageCard({
           )}
         </div>
         <div className="flex items-center gap-1">
-          {/* TTS controls */}
-          {state.result && (
-            <>
-              {reader?.status !== "playing" && reader?.status !== "loading" ? (
-                <button
-                  onClick={handleTtsPlay}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary"
-                  title={reader?.status === "paused" ? "Resume" : "Listen"}
-                >
-                  ▶
-                </button>
-              ) : (
-                <button
-                  onClick={handleTtsPause}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-primary transition-colors hover:bg-surface-2"
-                  title="Pause"
-                >
-                  ❚❚
-                </button>
-              )}
-              {reader && reader.status !== "idle" && reader.status !== "ended" && (
-                <>
-                  <button
-                    onClick={handleTtsRewind}
-                    disabled={!reader.canRewind}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
-                    title="Rewind"
-                  >
-                    ‹
-                  </button>
-                  <button
-                    onClick={handleTtsForward}
-                    disabled={!reader.canForward}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
-                    title="Forward"
-                  >
-                    ›
-                  </button>
-                </>
-              )}
-              {reader && reader.status !== "idle" && reader.status !== "ended" && (
-                <button
-                  onClick={handleTtsStop}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-destructive"
-                  title="Stop"
-                >
-                  ■
-                </button>
-              )}
-            </>
-          )}
-
           {/* Settings gear */}
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -1344,7 +1423,7 @@ function PageCard({
             )}
           </div>
         ) : state.result ? (
-          <ReadableResult text={state.result} reader={reader} onSeek={handleTtsSeek} />
+          <ReadableResult text={state.result} reader={reader} onSeek={onSeek} />
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
             Click <span className="font-semibold text-primary">{modeLabel}</span> to process this

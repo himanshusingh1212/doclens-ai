@@ -53,6 +53,9 @@ const PIPER_SAMPLE_RATE = 22050;
 let activeController: PiperReader | null = null;
 let enginePromise: Promise<PiperEngineModule> | null = null;
 
+const globalCache = new Map<string, Promise<AudioEntry>>();
+const globalCacheLru = new Map<string, number>();
+
 export function createPiperReaderController(
   text: string,
   options: Options = {},
@@ -65,6 +68,48 @@ export function createPiperReaderController(
 
 export function stopPiperReader() {
   activeController?.stop();
+}
+
+export async function prefetchTts(text: string, language: string) {
+  try {
+    const { chunks } = chunkTextWithParagraphs(text);
+    if (!chunks.length) return;
+    const engine = await loadPiperEngine();
+    const voiceId = await engine.pickVoiceForLanguage(language);
+    if (!voiceId) return;
+
+    // Prefetch first 2 chunks
+    const count = Math.min(chunks.length, 2);
+    for (let i = 0; i < count; i++) {
+      const chunkText = chunks[i];
+      const key = `${voiceId}:${chunkText}`;
+      if (!globalCache.has(key)) {
+        const promise = (async () => {
+          const audioData = await engine.synthesizeAudio(chunkText, voiceId);
+          const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+          const ctx = new Ctor({ sampleRate: PIPER_SAMPLE_RATE });
+          let buffer: AudioBuffer;
+          if (audioData.pcm) {
+            buffer = ctx.createBuffer(1, audioData.pcm.length, audioData.sampleRate ?? 22050);
+            buffer.getChannelData(0).set(audioData.pcm);
+          } else if (audioData.blob) {
+            const arrayBuffer = await audioData.blob.arrayBuffer();
+            const copy = new ArrayBuffer(arrayBuffer.byteLength);
+            new Uint8Array(copy).set(new Uint8Array(arrayBuffer));
+            buffer = await ctx.decodeAudioData(copy);
+          } else {
+            throw new Error("No audio data");
+          }
+          ctx.close().catch(() => {});
+          return { buffer };
+        })();
+        globalCache.set(key, promise);
+        globalCacheLru.set(key, performance.now());
+      }
+    }
+  } catch (e) {
+    console.warn("TTS Prefetch failed:", e);
+  }
 }
 
 function loadPiperEngine(): Promise<PiperEngineModule> {
@@ -91,11 +136,6 @@ class PiperReader implements PiperReaderController {
   private currentRate = 1;
   private currentBuffer: AudioBuffer | null = null;
   private sourceDone: (() => void) | null = null;
-  private cache = new Map<string, Promise<AudioEntry>>();
-  /** LRU last-access timestamps (used to evict the right entry without
-   *  dropping the buffer we're about to play). */
-  private cacheLru = new Map<string, number>();
-  /** Resolves when the play loop consumes a buffer — replaces busy-poll. */
   private slotWaiter: (() => void) | null = null;
 
   constructor(
@@ -158,8 +198,6 @@ class PiperReader implements PiperReaderController {
     this.currentOffset = 0;
     this.currentBuffer = null;
     this.bufferedUntil = -1;
-    this.cache.clear();
-    this.cacheLru.clear();
     this.status = "idle";
     this.emit();
   }
@@ -167,8 +205,6 @@ class PiperReader implements PiperReaderController {
   destroy() {
     this.destroyed = true;
     this.stop();
-    this.cache.clear();
-    this.cacheLru.clear();
     this.notifySlot();
     if (activeController === this) activeController = null;
   }
@@ -290,8 +326,6 @@ class PiperReader implements PiperReaderController {
     if (!this.destroyed && token === this.playToken) {
       this.status = "ended";
       this.options.onEnd?.();
-      this.cache.clear();
-      this.cacheLru.clear();
       this.emit();
     }
   }
@@ -335,24 +369,24 @@ class PiperReader implements PiperReaderController {
   private async fetchAudio(index: number): Promise<AudioEntry> {
     const text = this.chunks[index];
     const key = `${this.voiceId}:${text}`;
-    let promise = this.cache.get(key);
+    let promise = globalCache.get(key);
     if (!promise) {
       promise = this.generateAudio(text);
-      this.cache.set(key, promise);
+      globalCache.set(key, promise);
     }
     // True LRU: touch on every access, evict the oldest entry that is NOT
     // the currently-playing or next-up chunk (so seek-back can find buffers
     // and the play head never stalls on a freshly-evicted entry).
-    this.cacheLru.set(key, performance.now());
-    if (this.cache.size > MAX_CACHE_ENTRIES) {
+    globalCacheLru.set(key, performance.now());
+    if (globalCache.size > MAX_CACHE_ENTRIES) {
       const currentKey = `${this.voiceId}:${this.chunks[this.index]}`;
       const nextKey = `${this.voiceId}:${this.chunks[this.index + 1] ?? ""}`;
-      const sorted = [...this.cacheLru.entries()].sort((a, b) => a[1] - b[1]);
+      const sorted = [...globalCacheLru.entries()].sort((a, b) => a[1] - b[1]);
       for (const [oldKey] of sorted) {
-        if (this.cache.size <= MAX_CACHE_ENTRIES) break;
+        if (globalCache.size <= MAX_CACHE_ENTRIES) break;
         if (oldKey === currentKey || oldKey === nextKey || oldKey === key) continue;
-        this.cache.delete(oldKey);
-        this.cacheLru.delete(oldKey);
+        globalCache.delete(oldKey);
+        globalCacheLru.delete(oldKey);
       }
     }
     return promise;
