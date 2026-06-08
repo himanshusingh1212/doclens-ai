@@ -29,6 +29,7 @@ export interface PiperReaderController {
   seek(index: number): void;
   forward(): void;
   rewind(): void;
+  setPlaybackRate(rate: number): void;
   getSnapshot(): ReaderSnapshot;
 }
 
@@ -68,6 +69,10 @@ export function createPiperReaderController(
 
 export function stopPiperReader() {
   activeController?.stop();
+}
+
+export function setPiperReaderPlaybackRate(rate: number) {
+  activeController?.setPlaybackRate(rate);
 }
 
 export async function prefetchTts(text: string, language: string) {
@@ -207,6 +212,18 @@ class PiperReader implements PiperReaderController {
     this.stop();
     this.notifySlot();
     if (activeController === this) activeController = null;
+  }
+
+  setPlaybackRate(rate: number) {
+    if (this.audioCtx && this.source) {
+      const elapsed = Math.max(0, this.audioCtx.currentTime - this.currentStartedAt);
+      this.currentOffset += elapsed * this.currentRate;
+      this.currentStartedAt = this.audioCtx.currentTime;
+    }
+    this.currentRate = rate;
+    if (this.source) {
+      this.source.playbackRate.value = rate;
+    }
   }
 
   seek(index: number) {

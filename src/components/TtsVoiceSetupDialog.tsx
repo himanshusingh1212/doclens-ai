@@ -16,7 +16,12 @@ import {
   setPreferredPiperVoice,
   setTtsEngine,
   type PiperVoiceMeta,
+  getTtsRate,
+  setTtsRate,
+  getTtsPitch,
+  setTtsPitch,
 } from "@/lib/tts";
+import { setPiperReaderPlaybackRate } from "@/lib/piper-reader";
 
 interface Props {
   open: boolean;
@@ -30,6 +35,26 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
   const [installed, setInstalled] = useState<string[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [rate, setRateState] = useState(() => getTtsRate());
+  const [pitch, setPitchState] = useState(() => getTtsPitch());
+
+  useEffect(() => {
+    if (open) {
+      setRateState(getTtsRate());
+      setPitchState(getTtsPitch());
+    }
+  }, [open]);
+
+  const handleRateChange = (newRate: number) => {
+    setRateState(newRate);
+    setTtsRate(newRate);
+    setPiperReaderPlaybackRate(newRate);
+  };
+
+  const handlePitchChange = (newPitch: number) => {
+    setPitchState(newPitch);
+    setTtsPitch(newPitch);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -144,6 +169,51 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
                   );
                 })
               )}
+            </div>
+          </section>
+
+          {/* Voice Tuning Section */}
+          <section className="rounded-lg border border-border bg-surface p-4">
+            <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
+              Voice Tuning
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* Speed */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-foreground">Speed</span>
+                  <span className="font-mono text-xs text-muted-foreground">{rate.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={rate}
+                  onChange={(e) => handleRateChange(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Pitch */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-foreground">Pitch</span>
+                    <span className="text-[10px] text-muted-foreground/80">(Browser legacy voice only)</span>
+                  </div>
+                  <span className="font-mono text-xs text-muted-foreground">{pitch.toFixed(1)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={pitch}
+                  onChange={(e) => handlePitchChange(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
             </div>
           </section>
         </div>
