@@ -160,6 +160,8 @@ export function PageWorkstation({
   );
   const [ttsReader, setTtsReader] = useState<ReaderSnapshot | null>(null);
   const [ttsPlayingPage, setTtsPlayingPage] = useState<number | null>(null);
+  const ttsPlayingPageRef = useRef<number | null>(null);
+  ttsPlayingPageRef.current = ttsPlayingPage;
   const [ttsWaitingForTranslation, setTtsWaitingForTranslation] = useState<number | null>(null);
   const ttsRef = useRef<PiperReaderController | null>(null);
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
@@ -277,12 +279,12 @@ export function PageWorkstation({
     ttsRef.current?.forward();
   }, []);
 
-  // When a page starts running, stop any active TTS
+  // When a page starts running, stop any active TTS if it is the page currently playing
   useEffect(() => {
-    if (runningPages.size > 0) {
+    if (ttsPlayingPage !== null && runningPages.has(ttsPlayingPage)) {
       handleTtsStop();
     }
-  }, [runningPages, handleTtsStop]);
+  }, [runningPages, ttsPlayingPage, handleTtsStop]);
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
 
   // ─── Auto-Translate toggle (persisted per doc) ───
@@ -448,7 +450,10 @@ export function PageWorkstation({
       if (!eff.modelId) return;
       if (batch?.cancelled) return;
 
-      stopAllTts();
+      if (pageNumber === ttsPlayingPageRef.current) {
+        handleTtsStop();
+        stopAllTts();
+      }
 
       // One-shot selection override (from PDF text selection → "Translate")
       const selOverride = selectionOverridesRef.current.get(pageNumber);
