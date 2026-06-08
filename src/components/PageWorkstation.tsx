@@ -152,6 +152,7 @@ export function PageWorkstation({
     total: number;
     errors: number;
   } | null>(null);
+  const [ttsAutoPlayPage, setTtsAutoPlayPage] = useState<number | null>(null);
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
     null,
@@ -832,6 +833,15 @@ export function PageWorkstation({
           onPageAiChange={onPageAiChange}
           onRun={() => runPageWithSetup(activePage)}
           onCancel={() => cancelPage(activePage)}
+          autoPlayTts={ttsAutoPlayPage === activePage}
+          onTtsStarted={() => setTtsAutoPlayPage(null)}
+          onTtsComplete={(pNum) => {
+            const nextP = pNum + 1;
+            if (nextP <= pageCount && aiSummary[nextP]?.status === "done") {
+              setTtsAutoPlayPage(nextP);
+              setActivePage(nextP);
+            }
+          }}
         />
 
         {/* ─── Floating background-progress pill ─── */}
@@ -878,6 +888,9 @@ interface CardLoaderProps {
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
   onRun: () => void;
   onCancel: () => void;
+  autoPlayTts?: boolean;
+  onTtsStarted?: () => void;
+  onTtsComplete?: (pageNumber: number) => void;
 }
 
 function PageCardLoader(props: CardLoaderProps) {
@@ -942,6 +955,9 @@ function PageCardLoader(props: CardLoaderProps) {
       onUpdate={handleUpdate}
       onRun={props.onRun}
       onCancel={props.onCancel}
+      autoPlayTts={props.autoPlayTts}
+      onTtsStarted={props.onTtsStarted}
+      onTtsComplete={props.onTtsComplete}
     />
   );
 }
@@ -961,6 +977,9 @@ interface CardProps {
   onUpdate: (patch: Partial<PageAi>) => void;
   onRun: () => void;
   onCancel: () => void;
+  autoPlayTts?: boolean;
+  onTtsStarted?: () => void;
+  onTtsComplete?: (pageNumber: number) => void;
 }
 
 function PageCard({
@@ -974,6 +993,9 @@ function PageCard({
   onUpdate,
   onRun,
   onCancel,
+  autoPlayTts,
+  onTtsStarted,
+  onTtsComplete,
 }: CardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [editingJson, setEditingJson] = useState(false);
@@ -1051,7 +1073,7 @@ function PageCard({
     setEditingJson(false);
   };
 
-  const startTts = () => {
+  const startTts = useCallback(() => {
     if (!state.result) return;
     if (reader?.status === "paused" && ttsRef.current) {
       ttsRef.current.resume();
@@ -1072,6 +1094,9 @@ function PageCard({
           toast.dismiss(`tts-init-${pageNumber}`);
         }
         setReader(snapshot);
+        if (snapshot.status === "ended") {
+          onTtsComplete?.(pageNumber);
+        }
       },
       onError: (message) => {
         toast.dismiss(`tts-init-${pageNumber}`);
@@ -1080,9 +1105,9 @@ function PageCard({
     });
     ttsRef.current = ctrl;
     ctrl.play();
-  };
+  }, [state.result, reader?.status, eff.language, pageNumber, onTtsComplete]);
 
-  const handleTtsPlay = () => {
+  const handleTtsPlay = useCallback(() => {
     if (!state.result) return;
     if (reader?.status === "paused" && ttsRef.current) {
       ttsRef.current.resume();
@@ -1092,7 +1117,7 @@ function PageCard({
       if (ready) startTts();
       else setVoiceSetupOpen(true);
     });
-  };
+  }, [state.result, reader?.status, eff.language, startTts]);
   const handleTtsPause = () => {
     toast.dismiss(`tts-init-${pageNumber}`);
     ttsRef.current?.pause();
@@ -1105,6 +1130,13 @@ function PageCard({
   const handleTtsForward = () => ttsRef.current?.forward();
   const handleTtsRewind = () => ttsRef.current?.rewind();
   const handleTtsSeek = (index: number) => ttsRef.current?.seek(index);
+
+  useEffect(() => {
+    if (autoPlayTts && state.result) {
+      onTtsStarted?.();
+      handleTtsPlay();
+    }
+  }, [autoPlayTts, state.result, onTtsStarted, handleTtsPlay]);
 
   /* Determine button label from mode */
   const modeLabel = MODE_INSTRUCTIONS[eff.mode]?.label || "Translate";
