@@ -15,7 +15,6 @@ import {
   getMode,
   getOutputLanguage,
   getSelectedModel,
-
   getStyle,
   getTemperature,
   memoryExcerpt,
@@ -28,7 +27,6 @@ import {
   setOutputLanguage,
   setStyle as saveStyle,
   streamCompletion,
-
   validateKey,
   type ExplanationStyle,
   type GlobalMode,
@@ -44,10 +42,7 @@ import {
   type PageAiSummaryEntry,
   type PageOverrides,
 } from "@/lib/storage";
-import {
-  hasTtsSelection,
-  stopAll as stopAllTts,
-} from "@/lib/tts";
+import { hasTtsSelection, stopAll as stopAllTts } from "@/lib/tts";
 import {
   createPiperReaderController,
   type PiperReaderController,
@@ -64,7 +59,16 @@ interface Props {
 }
 
 const STYLES = EXPLANATION_STYLES.map((s) => s.id);
-const QUICK_LANGS = ["हिंदी", "বাংলা", "తెలుగు", "മലയാളം", "English", "Spanish", "French", "Japanese"];
+const QUICK_LANGS = [
+  "हिंदी",
+  "বাংলা",
+  "తెలుగు",
+  "മലയാളം",
+  "English",
+  "Spanish",
+  "French",
+  "Japanese",
+];
 
 /** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
 const STREAM_FLUSH_MS = 150;
@@ -73,9 +77,7 @@ interface BatchRun {
   cancelled: boolean;
 }
 
-type PendingExplainAction =
-  | { type: "page"; pageNumber: number }
-  | { type: "next" };
+type PendingExplainAction = { type: "page"; pageNumber: number } | { type: "next" };
 
 interface Globals {
   mode: GlobalMode;
@@ -128,7 +130,14 @@ function summarize(ai: PageAi): PageAiSummaryEntry {
   };
 }
 
-export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, activePage, setActivePage }: Props) {
+export function PageWorkstation({
+  docId,
+  pageCount,
+  aiSummary,
+  onPageAiChange,
+  activePage,
+  setActivePage,
+}: Props) {
   const [globals, setGlobals] = useState<Globals>(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [runningPages, setRunningPages] = useState<Set<number>>(new Set());
@@ -138,14 +147,22 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   const abortMap = useRef<Map<number, AbortController>>(new Map());
   const batchRef = useRef<BatchRun | null>(null);
   const [batchActive, setBatchActive] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    current: number;
+    total: number;
+    errors: number;
+  } | null>(null);
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
-  const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(null);
+  const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
+    null,
+  );
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
 
   // ─── Auto-Translate toggle (persisted per doc) ───
   const autoTranslateKey = `doclens.autoTranslate.${docId}`;
-  const [autoTranslate, setAutoTranslateRaw] = useState(() => localStorage.getItem(`doclens.autoTranslate.${docId}`) === "1");
+  const [autoTranslate, setAutoTranslateRaw] = useState(
+    () => localStorage.getItem(`doclens.autoTranslate.${docId}`) === "1",
+  );
   const autoTranslateRef = useRef(autoTranslate);
   autoTranslateRef.current = autoTranslate;
   const setAutoTranslate = (on: boolean) => {
@@ -205,25 +222,29 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
       setModelResolved(true);
       return;
     }
-    void getEffectiveSelectedModel().then((modelId) => {
-      if (!mountedRef.current) return;
-      setModelResolved(true);
-      if (!modelId || getSelectedModel()) return;
-      setGlobals((current) => {
-        if (current.modelId) return current;
-        const next = { ...current, modelId };
-        globalsRef.current = next;
-        return next;
+    void getEffectiveSelectedModel()
+      .then((modelId) => {
+        if (!mountedRef.current) return;
+        setModelResolved(true);
+        if (!modelId || getSelectedModel()) return;
+        setGlobals((current) => {
+          if (current.modelId) return current;
+          const next = { ...current, modelId };
+          globalsRef.current = next;
+          return next;
+        });
+      })
+      .catch(() => {
+        if (mountedRef.current) setModelResolved(true);
       });
-    }).catch(() => {
-      if (mountedRef.current) setModelResolved(true);
-    });
   }, []);
 
   useEffect(() => {
     const k = getKey();
     if (!k) return;
-    fetchModels(k).then(setModels).catch(() => {});
+    fetchModels(k)
+      .then(setModels)
+      .catch(() => {});
   }, []);
 
   const [keyStatus, setKeyStatusState] = useState<KeyStatus>("unknown");
@@ -232,7 +253,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     return onKeyChange(() => {
       setKeyStatusState(getKeyStatus());
       const k = getKey();
-      if (k) fetchModels(k).then(setModels).catch(() => {});
+      if (k)
+        fetchModels(k)
+          .then(setModels)
+          .catch(() => {});
     });
   }, []);
 
@@ -274,7 +298,11 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
   /* ---------- Per-page execution ---------- */
 
   const runPage = useCallback(
-    async (pageNumber: number, prevExcerpt?: string, batch?: BatchRun): Promise<string | undefined> => {
+    async (
+      pageNumber: number,
+      prevExcerpt?: string,
+      batch?: BatchRun,
+    ): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
       if (!key) {
@@ -282,7 +310,6 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         return;
       }
       if (batch?.cancelled) return;
-
 
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
@@ -338,7 +365,12 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
 
       // Persist running status
       await upsertPageAi(docId, pageNumber, { status: "running", error: undefined });
-      onPageAiChangeRef.current(pageNumber, { status: "running", hasResult: !!state.result, isCustom: state.isCustom, settingsHash: state.settingsHash });
+      onPageAiChangeRef.current(pageNumber, {
+        status: "running",
+        hasResult: !!state.result,
+        isCustom: state.isCustom,
+        settingsHash: state.settingsHash,
+      });
 
       // ---- Debounced UI flush ----
       const bufferRef = { current: "" };
@@ -374,12 +406,15 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
           error: undefined,
           settingsHash: hash,
         });
-        onPageAiChangeRef.current(pageNumber, summarize({
-          ...state,
-          status: "done",
-          result,
-          settingsHash: hash,
-        }));
+        onPageAiChangeRef.current(
+          pageNumber,
+          summarize({
+            ...state,
+            status: "done",
+            result,
+            settingsHash: hash,
+          }),
+        );
         return result;
       } catch (e) {
         if ((e as Error).name === "AbortError") {
@@ -397,7 +432,6 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
             toast.error(err);
           }
         }
-
       } finally {
         clearInterval(flushTimer);
         abortMap.current.delete(pageNumber);
@@ -437,14 +471,17 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     return () => window.removeEventListener("doclens:translate-selection", handler);
   }, [docId]);
 
-  const runPageWithSetup = useCallback((pageNumber: number) => {
-    if (shouldShowExplainSetup()) {
-      setPendingExplainAction({ type: "page", pageNumber });
-      setExplainSetupOpen(true);
-      return;
-    }
-    void runPage(pageNumber);
-  }, [runPage, shouldShowExplainSetup]);
+  const runPageWithSetup = useCallback(
+    (pageNumber: number) => {
+      if (shouldShowExplainSetup()) {
+        setPendingExplainAction({ type: "page", pageNumber });
+        setExplainSetupOpen(true);
+        return;
+      }
+      void runPage(pageNumber);
+    },
+    [runPage, shouldShowExplainSetup],
+  );
 
   /**
    * Background-translate the next N pages after the current `activePage`.
@@ -475,7 +512,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     const skipped: number[] = [];
     for (const n of candidates) {
       const pageRec = await getPageData(docId, n);
-      if (!pageRec) { skipped.push(n); continue; }
+      if (!pageRec) {
+        skipped.push(n);
+        continue;
+      }
       const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
       const currentGlobals = globalsRef.current;
       const eff = effective(currentGlobals, state.overrides);
@@ -488,10 +528,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         memory: eff.memory,
       });
       const alreadyDone =
-        state.status === "done" &&
-        state.settingsHash === hash &&
-        !state.isCustom &&
-        !!state.result;
+        state.status === "done" && state.settingsHash === hash && !state.isCustom && !!state.result;
       if (alreadyDone) skipped.push(n);
       else pagesToRun.push(n);
     }
@@ -503,7 +540,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     }
 
     if (skipped.length > 0) {
-      toast.info(`Skipping ${skipped.length} already-translated page${skipped.length > 1 ? "s" : ""}.`, { duration: 2500 });
+      toast.info(
+        `Skipping ${skipped.length} already-translated page${skipped.length > 1 ? "s" : ""}.`,
+        { duration: 2500 },
+      );
     }
 
     const batch: BatchRun = { cancelled: false };
@@ -539,7 +579,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         errorCount++;
       }
       processedCount++;
-      if (mountedRef.current) setBatchProgress({ current: processedCount, total, errors: errorCount });
+      if (mountedRef.current)
+        setBatchProgress({ current: processedCount, total, errors: errorCount });
     }
 
     if (batch.cancelled) {
@@ -550,7 +591,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         { duration: 4000 },
       );
     } else if (total > 0) {
-      toast.success(`Background: ${total} page${total > 1 ? "s" : ""} translated.`, { duration: 2500 });
+      toast.success(`Background: ${total} page${total > 1 ? "s" : ""} translated.`, {
+        duration: 2500,
+      });
     }
 
     if (mountedRef.current && batchRef.current === batch) {
@@ -607,10 +650,13 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
       void runNextPages();
     }, 300);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage]);
 
-  const handleExplainSetupConfirm = async (settings: { language: string; style: ExplanationStyle }) => {
+  const handleExplainSetupConfirm = async (settings: {
+    language: string;
+    style: ExplanationStyle;
+  }) => {
     saveMode("explain");
     setOutputLanguage(settings.language);
     saveStyle(settings.style);
@@ -662,7 +708,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-xs">
-          <div className={`text-sm font-medium ${invalid ? "text-destructive" : "text-foreground"}`}>
+          <div
+            className={`text-sm font-medium ${invalid ? "text-destructive" : "text-foreground"}`}
+          >
             {invalid ? "API Key Invalid" : missing || noKey ? "API Key Required" : "Setup Required"}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -693,7 +741,6 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
     );
   }
 
-
   if (pageCount === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -722,7 +769,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
             {doneCount > 0 ? (
-              <>{doneCount} of {pageCount} pages translated</>
+              <>
+                {doneCount} of {pageCount} pages translated
+              </>
             ) : (
               <>{pageCount} pages ready</>
             )}
@@ -737,17 +786,23 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
                 ? "bg-primary/15 text-primary ring-1 ring-primary/30"
                 : "bg-surface-2/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
-            title={autoTranslate
-              ? "Auto-translate is ON — pages ahead are translated in the background as you read"
-              : "Turn on auto-translate to pre-translate upcoming pages"}
+            title={
+              autoTranslate
+                ? "Auto-translate is ON — pages ahead are translated in the background as you read"
+                : "Turn on auto-translate to pre-translate upcoming pages"
+            }
           >
             {/* Toggle pill */}
-            <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${
-              autoTranslate ? "bg-primary" : "bg-muted-foreground/30"
-            }`}>
-              <span className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                autoTranslate ? "translate-x-3.5" : "translate-x-0.5"
-              }`} />
+            <span
+              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${
+                autoTranslate ? "bg-primary" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                  autoTranslate ? "translate-x-3.5" : "translate-x-0.5"
+                }`}
+              />
             </span>
             Auto-Translate
           </button>
@@ -762,7 +817,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, a
           const target = e.target as HTMLElement;
           if (target.closest("button, select, textarea, input, [role='button']")) return;
           window.dispatchEvent(
-            new CustomEvent("doclens:scroll-to-pdf", { detail: { pageNumber: activePage } })
+            new CustomEvent("doclens:scroll-to-pdf", { detail: { pageNumber: activePage } }),
           );
         }}
       >
@@ -1056,7 +1111,9 @@ function PageCard({
   const hasResult = !!state.result || isRunning;
 
   return (
-    <article className={`reader-card ${highlighted ? "highlight-card" : ""} ${isRunning ? "!border-primary/20" : ""}`}>
+    <article
+      className={`reader-card ${highlighted ? "highlight-card" : ""} ${isRunning ? "!border-primary/20" : ""}`}
+    >
       <TtsVoiceSetupDialog
         open={voiceSetupOpen}
         language={eff.language}
@@ -1079,10 +1136,14 @@ function PageCard({
             <span className="flex h-1.5 w-1.5 rounded-full bg-destructive" title="Error" />
           )}
           {state.isCustom && (
-            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">Custom</span>
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+              Custom
+            </span>
           )}
           {overrideCount > 0 && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{overrideCount} override{overrideCount > 1 ? "s" : ""}</span>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              {overrideCount} override{overrideCount > 1 ? "s" : ""}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -1251,14 +1312,11 @@ function PageCard({
             )}
           </div>
         ) : state.result ? (
-          <ReadableResult
-            text={state.result}
-            reader={reader}
-            onSeek={handleTtsSeek}
-          />
+          <ReadableResult text={state.result} reader={reader} onSeek={handleTtsSeek} />
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
-            Click <span className="font-semibold text-primary">{modeLabel}</span> to process this page.
+            Click <span className="font-semibold text-primary">{modeLabel}</span> to process this
+            page.
           </p>
         )}
       </div>
@@ -1277,6 +1335,30 @@ function ReadableResult({
 }) {
   if (!reader?.chunks.length) {
     return <div className="whitespace-pre-wrap break-words">{text}</div>;
+  }
+
+  if (reader.paragraphs?.length) {
+    return (
+      <div className="space-y-4">
+        {reader.paragraphs.map((paragraph, pIdx) => (
+          <p key={pIdx} className="whitespace-pre-wrap break-words">
+            {paragraph.chunks.map((chunk, cIdx) => (
+              <span
+                key={`${chunk.index}-${chunk.text.slice(0, 16)}`}
+                onClick={() => onSeek(chunk.index)}
+                className={`reader-chunk ${chunk.index === reader.index ? "reader-chunk-active" : ""} ${
+                  chunk.index <= reader.bufferedUntil ? "reader-chunk-buffered" : ""
+                }`}
+                title="Seek here"
+              >
+                {chunk.text}
+                {cIdx < paragraph.chunks.length - 1 ? " " : ""}
+              </span>
+            ))}
+          </p>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -1318,7 +1400,9 @@ function SmallSelect({
         className="mt-1 w-full rounded-md border border-border bg-background/50 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-primary"
       >
         {options.map(([v, l]) => (
-          <option key={v} value={v}>{l}</option>
+          <option key={v} value={v}>
+            {l}
+          </option>
         ))}
       </select>
     </label>
@@ -1370,11 +1454,10 @@ function OverrideControls({
           value={overrides?.modelId ?? ""}
           onChange={(v) => onSetOverride({ modelId: v || undefined })}
           options={[
-            [
-              "",
-              (models.find((m) => m.id === eff.modelId)?.name ?? eff.modelId).slice(0, 32),
-            ],
-            ...models.slice(0, 80).map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string]),
+            ["", (models.find((m) => m.id === eff.modelId)?.name ?? eff.modelId).slice(0, 32)],
+            ...models
+              .slice(0, 80)
+              .map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string]),
           ]}
         />
         <label className="block">

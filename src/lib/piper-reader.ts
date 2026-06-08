@@ -12,6 +12,12 @@ export interface ReaderSnapshot {
   error?: string;
   canForward: boolean;
   canRewind: boolean;
+  paragraphs?: {
+    chunks: {
+      text: string;
+      index: number;
+    }[];
+  }[];
 }
 
 export interface PiperReaderController {
@@ -47,7 +53,10 @@ const PIPER_SAMPLE_RATE = 22050;
 let activeController: PiperReader | null = null;
 let enginePromise: Promise<PiperEngineModule> | null = null;
 
-export function createPiperReaderController(text: string, options: Options = {}): PiperReaderController {
+export function createPiperReaderController(
+  text: string,
+  options: Options = {},
+): PiperReaderController {
   activeController?.destroy();
   const controller = new PiperReader(text, options);
   activeController = controller;
@@ -66,6 +75,7 @@ function loadPiperEngine(): Promise<PiperEngineModule> {
 class PiperReader implements PiperReaderController {
   private text: string;
   private chunks: string[];
+  private paragraphs: { chunks: { text: string; index: number }[] }[] = [];
   private status: ReaderStatus = "idle";
   private index = 0;
   private bufferedUntil = -1;
@@ -88,9 +98,14 @@ class PiperReader implements PiperReaderController {
   /** Resolves when the play loop consumes a buffer — replaces busy-poll. */
   private slotWaiter: (() => void) | null = null;
 
-  constructor(text: string, private options: Options) {
+  constructor(
+    text: string,
+    private options: Options,
+  ) {
     this.text = typeof text === "string" ? text : "";
-    this.chunks = chunkForReading(this.text);
+    const { chunks, paragraphs } = chunkTextWithParagraphs(this.text);
+    this.chunks = chunks;
+    this.paragraphs = paragraphs;
     this.emit();
   }
 
@@ -117,7 +132,8 @@ class PiperReader implements PiperReaderController {
     this.paused = true;
     this.status = "paused";
     if (this.source) {
-      this.currentOffset += Math.max(0, this.audioCtx.currentTime - this.currentStartedAt) * this.currentRate;
+      this.currentOffset +=
+        Math.max(0, this.audioCtx.currentTime - this.currentStartedAt) * this.currentRate;
       this.stopSource();
     }
     void this.audioCtx.suspend().catch(() => {});
@@ -161,7 +177,8 @@ class PiperReader implements PiperReaderController {
     if (!Number.isFinite(index) || index < 0 || index >= this.chunks.length) return;
     this.index = index;
     this.currentOffset = 0;
-    const wasActive = this.status === "playing" || this.status === "paused" || this.status === "loading";
+    const wasActive =
+      this.status === "playing" || this.status === "paused" || this.status === "loading";
     this.stopSource();
     this.emit();
     if (wasActive) void this.startAt(index);
@@ -189,6 +206,7 @@ class PiperReader implements PiperReaderController {
       error: undefined,
       canForward: this.index + 1 < this.chunks.length,
       canRewind: this.index > 0 || this.currentOffset > 0,
+      paragraphs: this.paragraphs,
     };
   }
 
@@ -222,7 +240,8 @@ class PiperReader implements PiperReaderController {
     const token = ++this.generationToken;
     void (async () => {
       for (let i = startIndex; i < this.chunks.length; i++) {
-        if (this.destroyed || token !== this.generationToken || playToken !== this.playToken) return;
+        if (this.destroyed || token !== this.generationToken || playToken !== this.playToken)
+          return;
         // Wait for the play loop to consume a slot, signalled via a promise.
         // Replaces the previous busy-poll (delay(40)) which woke 25× per
         // second per active reader for no useful work.
@@ -232,9 +251,12 @@ class PiperReader implements PiperReaderController {
           token === this.generationToken &&
           playToken === this.playToken
         ) {
-          await new Promise<void>((res) => { this.slotWaiter = res; });
+          await new Promise<void>((res) => {
+            this.slotWaiter = res;
+          });
         }
-        if (this.destroyed || token !== this.generationToken || playToken !== this.playToken) return;
+        if (this.destroyed || token !== this.generationToken || playToken !== this.playToken)
+          return;
         await this.fetchAudio(i).catch(() => null);
         this.bufferedUntil = Math.max(this.bufferedUntil, i);
         this.emit();
@@ -243,7 +265,11 @@ class PiperReader implements PiperReaderController {
   }
 
   private notifySlot() {
-    if (this.slotWaiter) { const r = this.slotWaiter; this.slotWaiter = null; r(); }
+    if (this.slotWaiter) {
+      const r = this.slotWaiter;
+      this.slotWaiter = null;
+      r();
+    }
   }
 
   private async playLoop(token: number) {
@@ -352,7 +378,13 @@ class PiperReader implements PiperReaderController {
 
   private ensureAudioContext(): AudioContext {
     if (!this.audioCtx || this.audioCtx.state === "closed") {
-      const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+      const Ctor =
+        window.AudioContext ||
+        (
+          window as Window & {
+            webkitAudioContext?: typeof AudioContext;
+          }
+        ).webkitAudioContext;
       // Match Piper's native sample rate to avoid browser-side resampling
       // (which silently doubles CPU on the audio thread on most laptops).
       try {
@@ -372,8 +404,16 @@ class PiperReader implements PiperReaderController {
     source.onended = null;
     const done = this.sourceDone;
     this.sourceDone = null;
-    try { source.stop(); } catch { /* ignore */ }
-    try { source.disconnect(); } catch { /* ignore */ }
+    try {
+      source.stop();
+    } catch {
+      /* ignore */
+    }
+    try {
+      source.disconnect();
+    } catch {
+      /* ignore */
+    }
     done?.();
   }
 
@@ -392,15 +432,53 @@ class PiperReader implements PiperReaderController {
   }
 }
 
-function chunkForReading(text: string | null | undefined): string[] {
-  const cleaned = (text ?? "").replace(/\s+/g, " ").trim();
+function chunkTextWithParagraphs(text: string | null | undefined): {
+  chunks: string[];
+  paragraphs: { chunks: { text: string; index: number }[] }[];
+} {
+  const rawText = text ?? "";
+  const paragraphTexts = rawText.split(/\r?\n\r?\n+/);
+
+  const chunks: string[] = [];
+  const paragraphs: { chunks: { text: string; index: number }[] }[] = [];
+
+  let globalIndex = 0;
+  for (const pText of paragraphTexts) {
+    const trimmedP = pText.trim();
+    if (!trimmedP) continue;
+
+    const pChunks = chunkParagraphForReading(trimmedP);
+    const pChunksWithIndex = pChunks.map((chunkText) => {
+      chunks.push(chunkText);
+      const index = globalIndex;
+      globalIndex++;
+      return { text: chunkText, index };
+    });
+
+    if (pChunksWithIndex.length > 0) {
+      paragraphs.push({ chunks: pChunksWithIndex });
+    }
+  }
+
+  return { chunks, paragraphs };
+}
+
+function chunkParagraphForReading(paragraphText: string): string[] {
+  const cleaned = paragraphText.replace(/\s+/g, " ").trim();
   if (!cleaned) return [];
   const isEastAsian = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(cleaned);
   const punctuator = isEastAsian ? new EastAsianPunctuator() : new LatinPunctuator();
-  return new CharBreaker(420, punctuator, 220).breakText(cleaned).map((chunk) => {
-    const trimmed = chunk.trim();
-    return /[\w)]$/.test(trimmed) ? `${trimmed}.` : trimmed;
-  }).filter(Boolean);
+  return new CharBreaker(420, punctuator, 220)
+    .breakText(cleaned)
+    .map((chunk) => {
+      const trimmed = chunk.trim();
+      return /[\w)]$/.test(trimmed) ? `${trimmed}.` : trimmed;
+    })
+    .filter(Boolean);
+}
+
+function chunkForReading(text: string | null | undefined): string[] {
+  return chunkTextWithParagraphs(text).chunks;
 }
 
 class CharBreaker {
@@ -411,7 +489,11 @@ class CharBreaker {
   ) {}
 
   breakText(text: string): string[] {
-    return this.merge(this.punctuator.getParagraphs(text), (p) => this.breakParagraph(p), this.combineThreshold);
+    return this.merge(
+      this.punctuator.getParagraphs(text),
+      (p) => this.breakParagraph(p),
+      this.combineThreshold,
+    );
   }
 
   private breakParagraph(text: string): string[] {
@@ -428,11 +510,16 @@ class CharBreaker {
 
   private breakWord(text: string): string[] {
     const out: string[] = [];
-    for (let i = 0; i < text.length; i += this.charLimit) out.push(text.slice(i, i + this.charLimit));
+    for (let i = 0; i < text.length; i += this.charLimit)
+      out.push(text.slice(i, i + this.charLimit));
     return out;
   }
 
-  private merge(parts: string[], breakPart: (part: string) => string[], limit = this.charLimit): string[] {
+  private merge(
+    parts: string[],
+    breakPart: (part: string) => string[],
+    limit = this.charLimit,
+  ): string[] {
     const result: string[] = [];
     let group = "";
     for (const part of parts) {
@@ -503,7 +590,8 @@ function recombine(tokens: string[], nonPunc?: RegExp): string[] {
   for (let i = 0; i < tokens.length; i += 2) {
     const part = i + 1 < tokens.length ? tokens[i] + tokens[i + 1] : tokens[i];
     if (!part) continue;
-    if (nonPunc && result.length && nonPunc.test(result[result.length - 1])) result[result.length - 1] += part;
+    if (nonPunc && result.length && nonPunc.test(result[result.length - 1]))
+      result[result.length - 1] += part;
     else result.push(part);
   }
   return result;
@@ -524,4 +612,3 @@ if (import.meta.hot) {
     }
   });
 }
-
