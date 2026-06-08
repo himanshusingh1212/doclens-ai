@@ -17,6 +17,12 @@ export default defineConfig({
     },
   },
   vite: {
+    server: {
+      headers: {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
+      },
+    },
     ssr: {
       external: [
         "piper-tts-web",
