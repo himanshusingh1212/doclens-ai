@@ -24,16 +24,19 @@ graph TD
 ```
 
 ### Squad A — PDF Extraction
+
 - **Scope:** Ingests document binaries, extracts text content, handles layout analysis, and generates page thumbnails.
 - **Details:** [[Squad A — PDF Extraction]]
 - **Pipeline:** [[PDF Extraction Pipeline]]
 
 ### Squad B — Translation
+
 - **Scope:** Connects to LLM services, handles translation logic, matches terminology lists, and manages context memory.
 - **Details:** [[Squad B — Translation]]
 - **Pipeline:** [[Translation Pipeline]]
 
 ### Squad C — TTS
+
 - **Scope:** Manages text-to-speech features, configures voice engines, handles WASM loading, and coordinates playback.
 - **Details:** [[Squad C — TTS]]
 - **Pipeline:** [[TTS Pipeline]]
@@ -54,4 +57,4 @@ graph TD
 
 ---
 
-*Part of [[00 — MOC — Project]]*
+_Part of [[00 — MOC — Project]]_

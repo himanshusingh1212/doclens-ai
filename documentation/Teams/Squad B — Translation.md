@@ -23,12 +23,12 @@
 
 ## Team Roles
 
-| Role | Count | Primary Focus |
-|------|-------|---------------|
-| **Squad Lead** | 1 | Team lead, coordinates translation pipelines |
-| **NLP Translation Engineers** | 4 | Stream translation and prompt configuration (Depth 1) |
-| **Language QA** | 4 | Translation quality verification and localization (Depth 1) |
-| **Terminology Management** | 4 | Glossary integration and translation memory (Depth 2) |
+| Role                          | Count | Primary Focus                                               |
+| ----------------------------- | ----- | ----------------------------------------------------------- |
+| **Squad Lead**                | 1     | Team lead, coordinates translation pipelines                |
+| **NLP Translation Engineers** | 4     | Stream translation and prompt configuration (Depth 1)       |
+| **Language QA**               | 4     | Translation quality verification and localization (Depth 1) |
+| **Terminology Management**    | 4     | Glossary integration and translation memory (Depth 2)       |
 
 ---
 
@@ -40,4 +40,4 @@
 
 ---
 
-*Part of [[MOC — Teams]]*
+_Part of [[MOC — Teams]]_

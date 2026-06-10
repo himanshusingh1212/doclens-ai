@@ -37,4 +37,4 @@ Provides a persistent navigation shell for all pages except the workspace reader
 
 ---
 
-*Part of [[MOC — Components]]*
+_Part of [[MOC — Components]]_

@@ -58,11 +58,15 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
 
   useEffect(() => {
     if (!open) return;
-    void listInstalledPiperVoices().then(setInstalled).catch(() => setInstalled([]));
-    void listPiperVoices().then(setPiperVoices).catch(() => {
-      setPiperVoices([]);
-      toast.error("Could not load Piper voice catalog.");
-    });
+    void listInstalledPiperVoices()
+      .then(setInstalled)
+      .catch(() => setInstalled([]));
+    void listPiperVoices()
+      .then(setPiperVoices)
+      .catch(() => {
+        setPiperVoices([]);
+        toast.error("Could not load Piper voice catalog.");
+      });
   }, [open]);
 
   const code = langKey(language).split("-")[0].toLowerCase();
@@ -72,7 +76,9 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
       .filter((voice) => {
         return matchesPiperLanguage(voice, language, code);
       })
-      .sort((a, b) => qualityRank(a.quality) - qualityRank(b.quality) || a.name.localeCompare(b.name))
+      .sort(
+        (a, b) => qualityRank(a.quality) - qualityRank(b.quality) || a.name.localeCompare(b.name),
+      )
       .slice(0, 12);
   }, [piperVoices, code, language]);
 
@@ -140,11 +146,16 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
                       key={voice.key}
                       className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0"
                     >
-                      <span className={`h-3 w-3 rounded-full border ${selectedPiper === voice.key ? "border-primary bg-primary" : "border-border"}`} />
+                      <span
+                        className={`h-3 w-3 rounded-full border ${selectedPiper === voice.key ? "border-primary bg-primary" : "border-border"}`}
+                      />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground">{voice.name}</div>
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {voice.name}
+                        </div>
                         <div className="font-mono text-[10px] text-muted-foreground">
-                          {voice.language.name_native} · {voice.quality} · {((voice.sizeBytes || 0) / 1e6).toFixed(1)} MB
+                          {voice.language.name_native} · {voice.quality} ·{" "}
+                          {((voice.sizeBytes || 0) / 1e6).toFixed(1)} MB
                         </div>
                       </div>
                       {downloading === voice.key ? (
@@ -182,7 +193,9 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-foreground">Speed</span>
-                  <span className="font-mono text-xs text-muted-foreground">{rate.toFixed(1)}x</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {rate.toFixed(1)}x
+                  </span>
                 </div>
                 <input
                   type="range"
@@ -200,9 +213,13 @@ export function TtsVoiceSetupDialog({ open, language, onOpenChange, onReady }: P
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium text-foreground">Pitch</span>
-                    <span className="text-[10px] text-muted-foreground/80">(Browser legacy voice only)</span>
+                    <span className="text-[10px] text-muted-foreground/80">
+                      (Browser legacy voice only)
+                    </span>
                   </div>
-                  <span className="font-mono text-xs text-muted-foreground">{pitch.toFixed(1)}</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {pitch.toFixed(1)}
+                  </span>
                 </div>
                 <input
                   type="range"

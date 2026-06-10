@@ -23,6 +23,7 @@ The **Engineering Head** is responsible for the overall technical architecture, 
 ## Team Size & Structure
 
 Direct reports include:
+
 - 3 Squad Leads ([[Squad A — PDF Extraction]], [[Squad B — Translation]], [[Squad C — TTS]])
 - Lead Project Manager ([[Project Management]])
 - Shared Services Lead ([[Shared Services]])
@@ -37,4 +38,4 @@ Direct reports include:
 
 ---
 
-*Part of [[MOC — Teams]]*
+_Part of [[MOC — Teams]]_

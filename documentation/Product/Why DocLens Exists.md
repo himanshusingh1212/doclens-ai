@@ -8,18 +8,19 @@
 
 Millions of PDF documents — textbooks, research papers, legal contracts, government forms — are published in languages the reader doesn't speak. Existing solutions have critical gaps:
 
-| Existing Approach | Limitation |
-|------------------|------------|
-| Google Translate (web) | Copy-paste workflow, loses document structure, no offline |
-| Adobe Acrobat | No AI translation, expensive, cloud-dependent |
-| ChatGPT / Claude | Manual copy-paste per page, no document-native UX, data leaves device |
-| DeepL | No PDF viewer, no TTS, no per-page control |
+| Existing Approach      | Limitation                                                            |
+| ---------------------- | --------------------------------------------------------------------- |
+| Google Translate (web) | Copy-paste workflow, loses document structure, no offline             |
+| Adobe Acrobat          | No AI translation, expensive, cloud-dependent                         |
+| ChatGPT / Claude       | Manual copy-paste per page, no document-native UX, data leaves device |
+| DeepL                  | No PDF viewer, no TTS, no per-page control                            |
 
 ---
 
 ## The Vision
 
 A **single tool** where users can:
+
 1. Open a PDF document
 2. See the original alongside an AI translation or explanation
 3. Listen to the result in a natural-sounding voice
@@ -54,4 +55,4 @@ A **single tool** where users can:
 
 ---
 
-*Part of [[MOC — Product]]*
+_Part of [[MOC — Product]]_

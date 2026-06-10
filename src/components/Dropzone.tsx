@@ -36,10 +36,9 @@ export function Dropzone({ onFile }: { onFile: (file: File) => void }) {
 
       // Warn on large files
       if (file.size > WARN_FILE_SIZE) {
-        toast.warning(
-          `Large file (${formatSize(file.size)}). Processing may take a while.`,
-          { duration: 5000 },
-        );
+        toast.warning(`Large file (${formatSize(file.size)}). Processing may take a while.`, {
+          duration: 5000,
+        });
       }
 
       // Validate the file isn't empty

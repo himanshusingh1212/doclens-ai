@@ -12,11 +12,11 @@
 
 ## Three Core Capabilities
 
-| Capability | Description | Powered By |
-|-----------|-------------|------------|
-| **Read it** | Render PDFs with selectable text, page navigation, and retina-quality canvas rendering | [[PDF.js]], [[PdfViewer]] |
-| **Hear it** | Convert translated text into natural speech with sentence-level highlighting | [[Piper Neural TTS]], [[Web Speech API]] |
-| **Own it** | Translate or explain any page into 90+ languages using AI models | [[OpenRouter API]], [[AI Translation]] |
+| Capability  | Description                                                                            | Powered By                               |
+| ----------- | -------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **Read it** | Render PDFs with selectable text, page navigation, and retina-quality canvas rendering | [[PDF.js]], [[PdfViewer]]                |
+| **Hear it** | Convert translated text into natural speech with sentence-level highlighting           | [[Piper Neural TTS]], [[Web Speech API]] |
+| **Own it**  | Translate or explain any page into 90+ languages using AI models                       | [[OpenRouter API]], [[AI Translation]]   |
 
 ---
 
@@ -32,13 +32,13 @@
 
 ## Who Uses It
 
-| Persona | Use Case |
-|---------|----------|
-| **Language learners** | Read academic PDFs explained in their native language |
-| **Researchers** | Quickly translate foreign-language papers |
-| **Students** | Get simplified explanations of complex textbook pages |
-| **Developers** | Process technical documentation with full AI control (JSON editor, model selection) |
-| **Accessibility users** | Listen to translated content via neural TTS |
+| Persona                 | Use Case                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| **Language learners**   | Read academic PDFs explained in their native language                               |
+| **Researchers**         | Quickly translate foreign-language papers                                           |
+| **Students**            | Get simplified explanations of complex textbook pages                               |
+| **Developers**          | Process technical documentation with full AI control (JSON editor, model selection) |
+| **Accessibility users** | Listen to translated content via neural TTS                                         |
 
 ---
 
@@ -63,4 +63,4 @@ DocLens has four main pages:
 
 ---
 
-*Part of [[MOC — Product]]*
+_Part of [[MOC — Product]]_

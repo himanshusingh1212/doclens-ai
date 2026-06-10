@@ -7,17 +7,17 @@
 
 ## 🗺️ Start Here
 
-| Area | Description |
-|------|-------------|
-| [[MOC — Product]] | What DocLens is, why it exists, design system, tech stack |
-| [[MOC — User Flows]] | How users interact with the product end-to-end |
-| [[MOC — Pages]] | The four application pages and their UI/UX design |
-| [[MOC — Features]] | Every feature in detail — PDF viewer, AI translation, TTS, etc. |
-| [[MOC — Components]] | Reusable React components powering the UI |
-| [[MOC — Pipelines]] | The three core data pipelines: Extract → Translate → Speak |
-| [[MOC — APIs]] | External services and browser APIs the app depends on |
-| [[MOC — Teams]] | Organizational structure — squads, shared services, flex reserve |
-| [[MOC — Roles]] | Individual role definitions across all teams |
+| Area                 | Description                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| [[MOC — Product]]    | What DocLens is, why it exists, design system, tech stack        |
+| [[MOC — User Flows]] | How users interact with the product end-to-end                   |
+| [[MOC — Pages]]      | The four application pages and their UI/UX design                |
+| [[MOC — Features]]   | Every feature in detail — PDF viewer, AI translation, TTS, etc.  |
+| [[MOC — Components]] | Reusable React components powering the UI                        |
+| [[MOC — Pipelines]]  | The three core data pipelines: Extract → Translate → Speak       |
+| [[MOC — APIs]]       | External services and browser APIs the app depends on            |
+| [[MOC — Teams]]      | Organizational structure — squads, shared services, flex reserve |
+| [[MOC — Roles]]      | Individual role definitions across all teams                     |
 
 ---
 
@@ -38,4 +38,4 @@ Original design documents and external reference logs/SOPs are archived in `_sou
 
 ---
 
-*Last updated: 2026-06-04*
+_Last updated: 2026-06-04_

@@ -67,4 +67,4 @@ Uses a 50/50 vertical split layout on desktop, stacking into a single column on 
 
 ---
 
-*Part of [[MOC — Pages]]*
+_Part of [[MOC — Pages]]_

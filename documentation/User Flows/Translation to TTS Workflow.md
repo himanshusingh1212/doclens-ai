@@ -7,11 +7,13 @@
 ## Steps
 
 ### 1. Translation Complete
+
 - A page card on the [[Workspace Page]] shows the completed AI result
 - A green dot (●) indicates "done" status in the card header
 - The ▶ Play button appears in the card header
 
 ### 2. First-Time Voice Setup
+
 - User clicks ▶ Play
 - If no voice is configured for the current language → [[ExplainSetupDialog|TTS Voice Setup Dialog]] opens
 - User selects a [[Piper Neural TTS|Piper voice]] from the catalog
@@ -19,27 +21,31 @@
 - After install: playback starts automatically
 
 ### 3. Playback
+
 - The [[Text-to-Speech]] system splits the result into sentence chunks
 - Each chunk is synthesized via [[Piper WASM Engine]] (or [[Web Speech API]] fallback)
 - Current sentence highlighted with `.reader-chunk-active` (green glow)
 - Buffered sentences show `.reader-chunk-buffered` (subtle underline)
 
 ### 4. Playback Controls
+
 Located in the page card header:
 
-| Button | Action |
-|--------|--------|
-| ▶ Play | Start or resume |
-| ❚❚ Pause | Pause playback |
-| ‹ Rewind | Previous sentence |
-| › Forward | Next sentence |
-| ■ Stop | Stop and reset |
+| Button    | Action            |
+| --------- | ----------------- |
+| ▶ Play    | Start or resume   |
+| ❚❚ Pause  | Pause playback    |
+| ‹ Rewind  | Previous sentence |
+| › Forward | Next sentence     |
+| ■ Stop    | Stop and reset    |
 
 ### 5. Sentence Seeking
+
 - Click any sentence chunk in the result text → TTS jumps to that position
 - Enables random-access listening within the translated content
 
 ### 6. Speed & Pitch Control
+
 - Configured on the [[Voice Settings Page]]
 - Speed: 0.25× to 4× (default 1.0×)
 - Pitch: 0 to 2 (default 1.0)
@@ -79,4 +85,4 @@ flowchart TD
 
 ---
 
-*Part of [[MOC — User Flows]]*
+_Part of [[MOC — User Flows]]_

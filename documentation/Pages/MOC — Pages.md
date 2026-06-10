@@ -6,18 +6,19 @@
 
 ## Application Routes & Pages
 
-| Page | Route | Source File | Purpose |
-|------|-------|-------------|---------|
-| [[Library Page]] | `/` | `index.tsx` | Landing experience, document upload, storage browsing |
-| [[Workspace Page]] | `/doc/$id` | `doc.$id.tsx` | Main split-panel reader, AI translation, TTS playback |
-| [[General Settings Page]] | `/settings` | `settings.tsx` | Global AI configs, connection status, memory diagnostics |
-| [[Voice Settings Page]] | `/settings/voice` | `settings_.voice.tsx` | TTS engine toggle, Piper catalog, browser voice selector |
+| Page                      | Route             | Source File           | Purpose                                                  |
+| ------------------------- | ----------------- | --------------------- | -------------------------------------------------------- |
+| [[Library Page]]          | `/`               | `index.tsx`           | Landing experience, document upload, storage browsing    |
+| [[Workspace Page]]        | `/doc/$id`        | `doc.$id.tsx`         | Main split-panel reader, AI translation, TTS playback    |
+| [[General Settings Page]] | `/settings`       | `settings.tsx`        | Global AI configs, connection status, memory diagnostics |
+| [[Voice Settings Page]]   | `/settings/voice` | `settings_.voice.tsx` | TTS engine toggle, Piper catalog, browser voice selector |
 
 ---
 
 ## Layout & Architecture
 
 All pages (except the Workspace) are wrapped in the shared navigation shell:
+
 - [[SidebarLayout]] — persistent navigation sidebar (Library, Settings, Voice Settings) and mobile drawer.
 
 ```mermaid
@@ -39,4 +40,4 @@ graph TD
 
 ---
 
-*Part of [[00 — MOC — Project]]*
+_Part of [[00 — MOC — Project]]_

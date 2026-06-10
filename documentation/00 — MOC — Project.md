@@ -54,15 +54,15 @@ graph LR
     Product[🏠 Product] --> Pages[📄 Pages]
     Product --> Pipelines[⚙️ Pipelines]
     Product --> Teams[👥 Teams]
-    
+
     Pages --> Features[✨ Features]
     Pages --> Components[🧩 Components]
-    
+
     Features --> APIs[🔌 APIs]
     Features --> Pipelines
-    
+
     Pipelines --> Teams
     Teams --> Roles[🎭 Roles]
-    
+
     APIs --> Pipelines
 ```

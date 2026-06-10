@@ -35,45 +35,189 @@ export const Route = createFileRoute("/settings_/voice")({
 /* ---------- Comprehensive language list ---------- */
 
 const ALL_LANGUAGES = [
-  "Afrikaans", "Albanian", "Amharic", "Arabic", "Armenian",
-  "Assamese", "Azerbaijani", "Bangla", "Basque", "Belarusian",
-  "Bodo", "Bosnian", "Bulgarian", "Burmese", "Cantonese",
-  "Catalan", "Chinese", "Croatian", "Czech", "Danish",
-  "Dutch", "English", "Estonian", "Filipino", "Finnish",
-  "French", "Galician", "Georgian", "German", "Greek",
-  "Gujarati", "Hausa", "Hebrew", "Hindi", "Hungarian",
-  "Icelandic", "Igbo", "Indonesian", "Irish", "Italian",
-  "Japanese", "Javanese", "Kannada", "Kazakh", "Khmer",
-  "Korean", "Kurdish", "Kyrgyz", "Lao", "Latvian",
-  "Lithuanian", "Macedonian", "Malay", "Malayalam", "Maltese",
-  "Manipuri", "Marathi", "Mongolian", "Nepali", "Norwegian",
-  "Odia", "Pashto", "Persian", "Polish", "Portuguese",
-  "Punjabi", "Romanian", "Russian", "Sanskrit", "Serbian",
-  "Sindhi", "Sinhala", "Slovak", "Slovenian", "Somali",
-  "Spanish", "Sundanese", "Swahili", "Swedish", "Tamil",
-  "Telugu", "Thai", "Turkish", "Ukrainian", "Urdu",
-  "Uzbek", "Vietnamese", "Welsh", "Yoruba", "Zulu",
+  "Afrikaans",
+  "Albanian",
+  "Amharic",
+  "Arabic",
+  "Armenian",
+  "Assamese",
+  "Azerbaijani",
+  "Bangla",
+  "Basque",
+  "Belarusian",
+  "Bodo",
+  "Bosnian",
+  "Bulgarian",
+  "Burmese",
+  "Cantonese",
+  "Catalan",
+  "Chinese",
+  "Croatian",
+  "Czech",
+  "Danish",
+  "Dutch",
+  "English",
+  "Estonian",
+  "Filipino",
+  "Finnish",
+  "French",
+  "Galician",
+  "Georgian",
+  "German",
+  "Greek",
+  "Gujarati",
+  "Hausa",
+  "Hebrew",
+  "Hindi",
+  "Hungarian",
+  "Icelandic",
+  "Igbo",
+  "Indonesian",
+  "Irish",
+  "Italian",
+  "Japanese",
+  "Javanese",
+  "Kannada",
+  "Kazakh",
+  "Khmer",
+  "Korean",
+  "Kurdish",
+  "Kyrgyz",
+  "Lao",
+  "Latvian",
+  "Lithuanian",
+  "Macedonian",
+  "Malay",
+  "Malayalam",
+  "Maltese",
+  "Manipuri",
+  "Marathi",
+  "Mongolian",
+  "Nepali",
+  "Norwegian",
+  "Odia",
+  "Pashto",
+  "Persian",
+  "Polish",
+  "Portuguese",
+  "Punjabi",
+  "Romanian",
+  "Russian",
+  "Sanskrit",
+  "Serbian",
+  "Sindhi",
+  "Sinhala",
+  "Slovak",
+  "Slovenian",
+  "Somali",
+  "Spanish",
+  "Sundanese",
+  "Swahili",
+  "Swedish",
+  "Tamil",
+  "Telugu",
+  "Thai",
+  "Turkish",
+  "Ukrainian",
+  "Urdu",
+  "Uzbek",
+  "Vietnamese",
+  "Welsh",
+  "Yoruba",
+  "Zulu",
 ];
 
 const LANG_CODE_MAP: Record<string, string> = {
-  afrikaans: "af", albanian: "sq", amharic: "am", arabic: "ar", armenian: "hy",
-  assamese: "as", azerbaijani: "az", bangla: "bn", basque: "eu", belarusian: "be",
-  bodo: "brx", bosnian: "bs", bulgarian: "bg", burmese: "my", cantonese: "yue",
-  catalan: "ca", chinese: "zh", croatian: "hr", czech: "cs", danish: "da",
-  dutch: "nl", english: "en", estonian: "et", filipino: "fil", finnish: "fi",
-  french: "fr", galician: "gl", georgian: "ka", german: "de", greek: "el",
-  gujarati: "gu", hausa: "ha", hebrew: "he", hindi: "hi", hungarian: "hu",
-  icelandic: "is", igbo: "ig", indonesian: "id", irish: "ga", italian: "it",
-  japanese: "ja", javanese: "jv", kannada: "kn", kazakh: "kk", khmer: "km",
-  korean: "ko", kurdish: "ku", kyrgyz: "ky", lao: "lo", latvian: "lv",
-  lithuanian: "lt", macedonian: "mk", malay: "ms", malayalam: "ml", maltese: "mt",
-  manipuri: "mni", marathi: "mr", mongolian: "mn", nepali: "ne", norwegian: "no",
-  odia: "or", pashto: "ps", persian: "fa", polish: "pl", portuguese: "pt",
-  punjabi: "pa", romanian: "ro", russian: "ru", sanskrit: "sa", serbian: "sr",
-  sindhi: "sd", sinhala: "si", slovak: "sk", slovenian: "sl", somali: "so",
-  spanish: "es", sundanese: "su", swahili: "sw", swedish: "sv", tamil: "ta",
-  telugu: "te", thai: "th", turkish: "tr", ukrainian: "uk", urdu: "ur",
-  uzbek: "uz", vietnamese: "vi", welsh: "cy", yoruba: "yo", zulu: "zu",
+  afrikaans: "af",
+  albanian: "sq",
+  amharic: "am",
+  arabic: "ar",
+  armenian: "hy",
+  assamese: "as",
+  azerbaijani: "az",
+  bangla: "bn",
+  basque: "eu",
+  belarusian: "be",
+  bodo: "brx",
+  bosnian: "bs",
+  bulgarian: "bg",
+  burmese: "my",
+  cantonese: "yue",
+  catalan: "ca",
+  chinese: "zh",
+  croatian: "hr",
+  czech: "cs",
+  danish: "da",
+  dutch: "nl",
+  english: "en",
+  estonian: "et",
+  filipino: "fil",
+  finnish: "fi",
+  french: "fr",
+  galician: "gl",
+  georgian: "ka",
+  german: "de",
+  greek: "el",
+  gujarati: "gu",
+  hausa: "ha",
+  hebrew: "he",
+  hindi: "hi",
+  hungarian: "hu",
+  icelandic: "is",
+  igbo: "ig",
+  indonesian: "id",
+  irish: "ga",
+  italian: "it",
+  japanese: "ja",
+  javanese: "jv",
+  kannada: "kn",
+  kazakh: "kk",
+  khmer: "km",
+  korean: "ko",
+  kurdish: "ku",
+  kyrgyz: "ky",
+  lao: "lo",
+  latvian: "lv",
+  lithuanian: "lt",
+  macedonian: "mk",
+  malay: "ms",
+  malayalam: "ml",
+  maltese: "mt",
+  manipuri: "mni",
+  marathi: "mr",
+  mongolian: "mn",
+  nepali: "ne",
+  norwegian: "no",
+  odia: "or",
+  pashto: "ps",
+  persian: "fa",
+  polish: "pl",
+  portuguese: "pt",
+  punjabi: "pa",
+  romanian: "ro",
+  russian: "ru",
+  sanskrit: "sa",
+  serbian: "sr",
+  sindhi: "sd",
+  sinhala: "si",
+  slovak: "sk",
+  slovenian: "sl",
+  somali: "so",
+  spanish: "es",
+  sundanese: "su",
+  swahili: "sw",
+  swedish: "sv",
+  tamil: "ta",
+  telugu: "te",
+  thai: "th",
+  turkish: "tr",
+  ukrainian: "uk",
+  urdu: "ur",
+  uzbek: "uz",
+  vietnamese: "vi",
+  welsh: "cy",
+  yoruba: "yo",
+  zulu: "zu",
 };
 
 function langCode(label: string): string {
@@ -180,7 +324,7 @@ function VoicePage() {
       await refreshInstalled();
       // Mark installed in catalog cache
       if (piperVoices) {
-        setPiperVoices(piperVoices.map((p) => p.key === v.key ? { ...p, installed: true } : p));
+        setPiperVoices(piperVoices.map((p) => (p.key === v.key ? { ...p, installed: true } : p)));
       }
       toast.success(`Installed ${v.name} (${v.language.name_english})`);
     } catch (e) {
@@ -196,7 +340,9 @@ function VoicePage() {
       await removePiperVoice(voiceId);
       await refreshInstalled();
       if (piperVoices) {
-        setPiperVoices(piperVoices.map((p) => p.key === voiceId ? { ...p, installed: false } : p));
+        setPiperVoices(
+          piperVoices.map((p) => (p.key === voiceId ? { ...p, installed: false } : p)),
+        );
       }
       if (preferredPiper === voiceId) {
         localStorage.removeItem("doclens.piper.preferredVoice");
@@ -250,9 +396,7 @@ function VoicePage() {
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(
-        (v) =>
-          v.name.toLowerCase().includes(q) ||
-          v.lang.toLowerCase().includes(q),
+        (v) => v.name.toLowerCase().includes(q) || v.lang.toLowerCase().includes(q),
       );
     }
     return list.sort((a, b) => {
@@ -338,7 +482,6 @@ function VoicePage() {
       }}
     >
       <div className="mx-auto w-full max-w-4xl px-8 py-6">
-
         {/* Language selector card */}
         <section className="mb-5 rounded-lg border border-border bg-surface p-5">
           <div className="flex items-center justify-between">
@@ -364,7 +507,9 @@ function VoicePage() {
         <section className="mb-5 rounded-lg border border-border bg-surface p-5">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">neural voice models</div>
+              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                neural voice models
+              </div>
               <div className="mt-1 text-sm text-foreground">
                 Offline Piper voices · Brave-safe · {installed.length} installed
               </div>
@@ -383,7 +528,10 @@ function VoicePage() {
             {(["auto", "neural", "browser"] as TtsEngine[]).map((e) => (
               <button
                 key={e}
-                onClick={() => { setTtsEngine(e); setEngineLocal(e); }}
+                onClick={() => {
+                  setTtsEngine(e);
+                  setEngineLocal(e);
+                }}
                 className={`rounded px-2 py-0.5 ${engine === e ? "bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}
               >
                 {e}
@@ -393,7 +541,8 @@ function VoicePage() {
 
           {installed.length === 0 ? (
             <div className="rounded border border-dashed border-border bg-background/40 px-4 py-3 font-mono text-[11px] text-muted-foreground">
-              No neural voices installed. Click "browse catalog" to download a Piper voice (~20–60 MB each, cached offline).
+              No neural voices installed. Click "browse catalog" to download a Piper voice (~20–60
+              MB each, cached offline).
             </div>
           ) : (
             <ul className="divide-y divide-border rounded border border-border">
@@ -411,7 +560,9 @@ function VoicePage() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="truncate font-mono text-[12px] text-foreground">{id}</div>
-                      <div className="font-mono text-[10px] text-muted-foreground">{meta?.language.name_english || ""}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {meta?.language.name_english || ""}
+                      </div>
                     </div>
                     <button
                       onClick={() => handleTestPiper(id)}
@@ -441,13 +592,22 @@ function VoicePage() {
                 speed · <span className="text-primary">{ttsRate.toFixed(2)}×</span>
               </span>
               <input
-                type="range" min={0.25} max={4} step={0.05}
+                type="range"
+                min={0.25}
+                max={4}
+                step={0.05}
                 value={ttsRate}
-                onChange={(e) => { const v = parseFloat(e.target.value); setTtsRateLocal(v); setTtsRate(v); }}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setTtsRateLocal(v);
+                  setTtsRate(v);
+                }}
                 className="mt-2 w-full accent-primary"
               />
               <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
-                <span>0.25×</span><span>1× normal</span><span>4×</span>
+                <span>0.25×</span>
+                <span>1× normal</span>
+                <span>4×</span>
               </div>
             </label>
             <label className="block">
@@ -455,13 +615,22 @@ function VoicePage() {
                 pitch · <span className="text-primary">{ttsPitch.toFixed(2)}</span>
               </span>
               <input
-                type="range" min={0} max={2} step={0.05}
+                type="range"
+                min={0}
+                max={2}
+                step={0.05}
                 value={ttsPitch}
-                onChange={(e) => { const v = parseFloat(e.target.value); setTtsPitchLocal(v); setTtsPitch(v); }}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setTtsPitchLocal(v);
+                  setTtsPitch(v);
+                }}
                 className="mt-2 w-full accent-primary"
               />
               <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
-                <span>0 low</span><span>1 normal</span><span>2 high</span>
+                <span>0 low</span>
+                <span>1 normal</span>
+                <span>2 high</span>
               </div>
             </label>
           </div>
@@ -473,7 +642,9 @@ function VoicePage() {
             <button
               onClick={() => setFilter("matching")}
               className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest transition-colors ${
-                filter === "matching" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                filter === "matching"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               matching ({matchingCount})
@@ -481,7 +652,9 @@ function VoicePage() {
             <button
               onClick={() => setFilter("all")}
               className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest transition-colors ${
-                filter === "all" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                filter === "all"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               all voices ({voices.length})
@@ -556,7 +729,9 @@ function VoicePage() {
                     onClick={() => handleStar(v.name)}
                     aria-label={isFav ? "Unfavorite" : "Favorite"}
                     className={`flex-shrink-0 text-lg leading-none transition-colors ${
-                      isFav ? "text-yellow-400 hover:text-yellow-500" : "text-muted-foreground/40 hover:text-foreground"
+                      isFav
+                        ? "text-yellow-400 hover:text-yellow-500"
+                        : "text-muted-foreground/40 hover:text-foreground"
                     }`}
                   >
                     {isFav ? "★" : "☆"}
@@ -580,8 +755,8 @@ function VoicePage() {
         </ul>
 
         <p className="mt-4 font-mono text-[11px] text-muted-foreground">
-          Selection is saved per language. Tap ▶ test to preview without changing your choice.
-          Voice availability depends on your browser and operating system.
+          Selection is saved per language. Tap ▶ test to preview without changing your choice. Voice
+          availability depends on your browser and operating system.
         </p>
       </div>
 
@@ -589,7 +764,10 @@ function VoicePage() {
       {showLangPicker && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => { setShowLangPicker(false); setLangSearch(""); }}
+          onClick={() => {
+            setShowLangPicker(false);
+            setLangSearch("");
+          }}
         >
           <div
             className="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl border border-border bg-surface shadow-2xl"
@@ -600,7 +778,10 @@ function VoicePage() {
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Specify language</h3>
                 <button
-                  onClick={() => { setShowLangPicker(false); setLangSearch(""); }}
+                  onClick={() => {
+                    setShowLangPicker(false);
+                    setLangSearch("");
+                  }}
                   className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   ✕
@@ -630,9 +811,7 @@ function VoicePage() {
                       }`}
                     >
                       <span className="text-[15px] font-medium">{l}</span>
-                      {isActive && (
-                        <span className="text-sm text-primary">✓</span>
-                      )}
+                      {isActive && <span className="text-sm text-primary">✓</span>}
                     </button>
                   </li>
                 );
@@ -660,7 +839,12 @@ function VoicePage() {
             <div className="border-b border-border px-5 py-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Piper neural voices</h3>
-                <button onClick={() => setShowPiperCatalog(false)} className="rounded-md p-1 text-muted-foreground hover:text-foreground">✕</button>
+                <button
+                  onClick={() => setShowPiperCatalog(false)}
+                  className="rounded-md p-1 text-muted-foreground hover:text-foreground"
+                >
+                  ✕
+                </button>
               </div>
               <input
                 value={piperSearch}
@@ -671,46 +855,54 @@ function VoicePage() {
             </div>
             <ul className="flex-1 divide-y divide-border overflow-auto">
               {piperVoices === null && (
-                <li className="px-5 py-10 text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">loading catalog…</li>
-              )}
-              {piperVoices?.filter((v) => {
-                const q = piperSearch.trim().toLowerCase();
-                if (!q) return true;
-                return (
-                  v.key.toLowerCase().includes(q) ||
-                  v.name.toLowerCase().includes(q) ||
-                  v.language.name_english.toLowerCase().includes(q) ||
-                  v.language.name_native.toLowerCase().includes(q) ||
-                  v.language.country_english.toLowerCase().includes(q)
-                );
-              }).map((v) => (
-                <li key={v.key} className="flex items-center gap-3 px-5 py-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-mono text-[12px] text-foreground">{v.name} [{v.quality}]</div>
-                    <div className="font-mono text-[10px] text-muted-foreground">
-                      {v.language.name_native} ({v.language.country_english}) · {v.quality} · {((v.sizeBytes || 0) / 1e6).toFixed(1)} MB
-                    </div>
-                  </div>
-                  {v.installed || installed.includes(v.key) ? (
-                    <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-primary">installed</span>
-                  ) : downloading === v.key ? (
-                    <span className="font-mono text-[10px] text-primary">{dlProgress}%</span>
-                  ) : (
-                    <button
-                      onClick={() => handleInstallPiper(v)}
-                      disabled={!!downloading}
-                      className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-40"
-                    >
-                      install
-                    </button>
-                  )}
+                <li className="px-5 py-10 text-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                  loading catalog…
                 </li>
-              ))}
+              )}
+              {piperVoices
+                ?.filter((v) => {
+                  const q = piperSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    v.key.toLowerCase().includes(q) ||
+                    v.name.toLowerCase().includes(q) ||
+                    v.language.name_english.toLowerCase().includes(q) ||
+                    v.language.name_native.toLowerCase().includes(q) ||
+                    v.language.country_english.toLowerCase().includes(q)
+                  );
+                })
+                .map((v) => (
+                  <li key={v.key} className="flex items-center gap-3 px-5 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate font-mono text-[12px] text-foreground">
+                        {v.name} [{v.quality}]
+                      </div>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {v.language.name_native} ({v.language.country_english}) · {v.quality} ·{" "}
+                        {((v.sizeBytes || 0) / 1e6).toFixed(1)} MB
+                      </div>
+                    </div>
+                    {v.installed || installed.includes(v.key) ? (
+                      <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-primary">
+                        installed
+                      </span>
+                    ) : downloading === v.key ? (
+                      <span className="font-mono text-[10px] text-primary">{dlProgress}%</span>
+                    ) : (
+                      <button
+                        onClick={() => handleInstallPiper(v)}
+                        disabled={!!downloading}
+                        className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-40"
+                      >
+                        install
+                      </button>
+                    )}
+                  </li>
+                ))}
             </ul>
           </div>
         </div>
       )}
-
     </SidebarLayout>
   );
 }
@@ -732,21 +924,66 @@ function getRegionName(langCode: string): string {
   if (parts.length < 2) return "";
   const region = parts[1].toUpperCase();
   const regionNames: Record<string, string> = {
-    US: "United States", GB: "United Kingdom", AU: "Australia", CA: "Canada",
-    IN: "India", NZ: "New Zealand", ZA: "South Africa", IE: "Ireland",
-    SG: "Singapore", HK: "Hong Kong", PH: "Philippines", NG: "Nigeria",
-    DE: "Germany", AT: "Austria", CH: "Switzerland", FR: "France",
-    BE: "Belgium", ES: "Spain", MX: "Mexico", AR: "Argentina",
-    CO: "Colombia", CL: "Chile", PE: "Peru", VE: "Venezuela",
-    IT: "Italy", PT: "Portugal", BR: "Brazil", RU: "Russia",
-    JP: "Japan", KR: "South Korea", CN: "China", TW: "Taiwan",
-    SA: "Saudi Arabia", AE: "UAE", EG: "Egypt", IL: "Israel",
-    TR: "Turkey", PL: "Poland", NL: "Netherlands", SE: "Sweden",
-    NO: "Norway", DK: "Denmark", FI: "Finland", CZ: "Czech Republic",
-    GR: "Greece", HU: "Hungary", RO: "Romania", BG: "Bulgaria",
-    HR: "Croatia", SK: "Slovakia", UA: "Ukraine", TH: "Thailand",
-    VN: "Vietnam", ID: "Indonesia", MY: "Malaysia", PK: "Pakistan",
-    BD: "Bangladesh", LK: "Sri Lanka", NP: "Nepal", MM: "Myanmar",
+    US: "United States",
+    GB: "United Kingdom",
+    AU: "Australia",
+    CA: "Canada",
+    IN: "India",
+    NZ: "New Zealand",
+    ZA: "South Africa",
+    IE: "Ireland",
+    SG: "Singapore",
+    HK: "Hong Kong",
+    PH: "Philippines",
+    NG: "Nigeria",
+    DE: "Germany",
+    AT: "Austria",
+    CH: "Switzerland",
+    FR: "France",
+    BE: "Belgium",
+    ES: "Spain",
+    MX: "Mexico",
+    AR: "Argentina",
+    CO: "Colombia",
+    CL: "Chile",
+    PE: "Peru",
+    VE: "Venezuela",
+    IT: "Italy",
+    PT: "Portugal",
+    BR: "Brazil",
+    RU: "Russia",
+    JP: "Japan",
+    KR: "South Korea",
+    CN: "China",
+    TW: "Taiwan",
+    SA: "Saudi Arabia",
+    AE: "UAE",
+    EG: "Egypt",
+    IL: "Israel",
+    TR: "Turkey",
+    PL: "Poland",
+    NL: "Netherlands",
+    SE: "Sweden",
+    NO: "Norway",
+    DK: "Denmark",
+    FI: "Finland",
+    CZ: "Czech Republic",
+    GR: "Greece",
+    HU: "Hungary",
+    RO: "Romania",
+    BG: "Bulgaria",
+    HR: "Croatia",
+    SK: "Slovakia",
+    UA: "Ukraine",
+    TH: "Thailand",
+    VN: "Vietnam",
+    ID: "Indonesia",
+    MY: "Malaysia",
+    PK: "Pakistan",
+    BD: "Bangladesh",
+    LK: "Sri Lanka",
+    NP: "Nepal",
+    MM: "Myanmar",
   };
   return regionNames[region] ?? region;
 }

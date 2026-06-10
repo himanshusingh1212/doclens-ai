@@ -16,6 +16,7 @@
 ## Storage Architecture
 
 All document files are stored locally in the browser using [[IndexedDB Storage]]. The database schema maps:
+
 - `document_blobs` → Raw PDF binary data.
 - `document_metadata` → File metadata and details.
 - `document_thumbnails` → Base64 image data for document cards.
@@ -30,4 +31,4 @@ All document files are stored locally in the browser using [[IndexedDB Storage]]
 
 ---
 
-*Part of [[MOC — Features]]*
+_Part of [[MOC — Features]]_

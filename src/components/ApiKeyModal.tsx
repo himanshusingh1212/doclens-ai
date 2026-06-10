@@ -61,7 +61,7 @@ export function ApiKeyModal() {
       toast.success(
         customKey.trim()
           ? "Custom OpenRouter key saved and validated."
-          : "Server OpenRouter key is configured."
+          : "Server OpenRouter key is configured.",
       );
       setOpen(false);
     } else {
@@ -81,7 +81,8 @@ export function ApiKeyModal() {
         <DialogHeader>
           <DialogTitle>OpenRouter API Key Setup</DialogTitle>
           <DialogDescription>
-            DocLens can use the server-wide environment key or you can supply your own custom key (saved locally in your browser).
+            DocLens can use the server-wide environment key or you can supply your own custom key
+            (saved locally in your browser).
           </DialogDescription>
         </DialogHeader>
 
@@ -103,7 +104,8 @@ export function ApiKeyModal() {
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
           />
           <p className="text-[10px] text-muted-foreground">
-            If provided, this key overrides the server environment variable. Leave blank to fallback to the server-managed key.
+            If provided, this key overrides the server environment variable. Leave blank to fallback
+            to the server-managed key.
           </p>
         </div>
 
@@ -143,7 +145,9 @@ export function ApiKeyModal() {
 
 function StatusLine({ status, isCustom }: { status: Status; isCustom: boolean }) {
   if (status === "checking")
-    return <p className="font-mono text-[11px] text-muted-foreground">checking connection status…</p>;
+    return (
+      <p className="font-mono text-[11px] text-muted-foreground">checking connection status…</p>
+    );
   if (status === "valid")
     return (
       <p className="font-mono text-[11px] text-primary font-bold">
@@ -162,5 +166,7 @@ function StatusLine({ status, isCustom }: { status: Status; isCustom: boolean })
         {isCustom ? "custom key" : "server key"} is invalid or expired
       </p>
     );
-  return <p className="font-mono text-[11px] text-muted-foreground">key connection not checked yet</p>;
+  return (
+    <p className="font-mono text-[11px] text-muted-foreground">key connection not checked yet</p>
+  );
 }

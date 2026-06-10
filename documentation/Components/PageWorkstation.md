@@ -41,4 +41,4 @@ The workstation component acts as the main controller for the translation worksp
 
 ---
 
-*Part of [[MOC — Components]]*
+_Part of [[MOC — Components]]_

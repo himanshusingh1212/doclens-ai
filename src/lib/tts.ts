@@ -3,7 +3,7 @@
 
 const VOICE_LEGACY_LS = "doclens.tts.voice"; // legacy single-voice setting
 const VOICE_MAP_LS = "doclens.tts.voiceMap"; // per-language voice map
-const FAVS_LS = "doclens.tts.favorites";     // favorited voice names
+const FAVS_LS = "doclens.tts.favorites"; // favorited voice names
 const RATE_LS = "doclens.tts.rate";
 const PITCH_LS = "doclens.tts.pitch";
 
@@ -33,7 +33,9 @@ function readMap(): Record<string, string> {
   try {
     const raw = localStorage.getItem(VOICE_MAP_LS);
     if (raw) return JSON.parse(raw) as Record<string, string>;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   // migrate legacy single-voice
   const legacy = localStorage.getItem(VOICE_LEGACY_LS);
   if (legacy) return { __default: legacy };
@@ -48,11 +50,24 @@ export function langKey(language?: string | null): string {
   if (!language) return "__default";
   const l = language.trim().toLowerCase();
   const map: Record<string, string> = {
-    english: "en", arabic: "ar", french: "fr", hindi: "hi",
-    spanish: "es", japanese: "ja", german: "de", italian: "it",
-    portuguese: "pt", russian: "ru", chinese: "zh", korean: "ko",
-    turkish: "tr", dutch: "nl",
-    "हिंदी": "hi", "বাংলা": "bn", "తెలుగు": "te", "മലയാളം": "ml",
+    english: "en",
+    arabic: "ar",
+    french: "fr",
+    hindi: "hi",
+    spanish: "es",
+    japanese: "ja",
+    german: "de",
+    italian: "it",
+    portuguese: "pt",
+    russian: "ru",
+    chinese: "zh",
+    korean: "ko",
+    turkish: "tr",
+    dutch: "nl",
+    हिंदी: "hi",
+    বাংলা: "bn",
+    తెలుగు: "te",
+    മലയാളം: "ml",
   };
   if (map[l]) return map[l];
   // already a code like "en" or "en-US"
@@ -88,7 +103,9 @@ function readFavs(): Set<string> {
   try {
     const raw = localStorage.getItem(FAVS_LS);
     if (raw) return new Set(JSON.parse(raw) as string[]);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return new Set();
 }
 function writeFavs(s: Set<string>) {
@@ -138,7 +155,10 @@ function chunkText(text: string, max = 220): string[] {
   let buf = "";
   for (const s of sentences) {
     if (s.length > max) {
-      if (buf) { chunks.push(buf); buf = ""; }
+      if (buf) {
+        chunks.push(buf);
+        buf = "";
+      }
       for (let i = 0; i < s.length; i += max) chunks.push(s.slice(i, i + max));
       continue;
     }
@@ -188,12 +208,15 @@ export function stopAll() {
   notify();
 }
 
-export function createTtsController(text: string, opts: {
-  onState: (s: "idle" | "playing" | "paused" | "ended") => void;
-  onError?: (err: string) => void;
-  /** Language for voice selection (UI label or BCP-47). */
-  language?: string | null;
-}): TtsController {
+export function createTtsController(
+  text: string,
+  opts: {
+    onState: (s: "idle" | "playing" | "paused" | "ended") => void;
+    onError?: (err: string) => void;
+    /** Language for voice selection (UI label or BCP-47). */
+    language?: string | null;
+  },
+): TtsController {
   const owner = Symbol("tts");
   const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
   let currentUtter: SpeechSynthesisUtterance | null = null;
@@ -362,11 +385,14 @@ export type { PiperVoiceMeta } from "./neural-tts/piper-engine";
  * engine pref ≠ "browser" and a voice is installed) then falls back
  * to speechSynthesis.
  */
-export function createSmartTtsController(text: string, opts: {
-  onState: (s: "idle" | "playing" | "paused" | "ended") => void;
-  onError?: (err: string) => void;
-  language?: string | null;
-}): TtsController {
+export function createSmartTtsController(
+  text: string,
+  opts: {
+    onState: (s: "idle" | "playing" | "paused" | "ended") => void;
+    onError?: (err: string) => void;
+    language?: string | null;
+  },
+): TtsController {
   let mode: "neural" | "browser" = "browser";
   let abort: AbortController | null = null;
   let browserCtrl: TtsController | null = null;
@@ -383,22 +409,21 @@ export function createSmartTtsController(text: string, opts: {
     play: () => {
       if (destroyed) return;
       // If user explicitly wants browser engine, skip neural entirely
-      if (enginePref === "browser") { startBrowser(); return; }
+      if (enginePref === "browser") {
+        startBrowser();
+        return;
+      }
 
       // Try neural via Piper WASM engine
       (async () => {
         try {
           const engine = await loadPiperEngine();
           // Find an installed voice that matches the language
-          const voiceId = await engine.pickVoiceForLanguage(
-            opts.language || "English",
-          );
+          const voiceId = await engine.pickVoiceForLanguage(opts.language || "English");
           if (!voiceId) {
             // No installed voice — fall back or error
             if (enginePref === "neural") {
-              opts.onError?.(
-                "No Piper voice installed. Go to Settings → Voice to install one.",
-              );
+              opts.onError?.("No Piper voice installed. Go to Settings → Voice to install one.");
               opts.onState("idle");
               return;
             }
@@ -428,7 +453,10 @@ export function createSmartTtsController(text: string, opts: {
     pause: () => {
       if (mode === "browser") browserCtrl?.pause();
       // neural pause not supported — treat as stop
-      else { abort?.abort(); opts.onState("paused"); }
+      else {
+        abort?.abort();
+        opts.onState("paused");
+      }
     },
     resume: () => {
       if (mode === "browser") browserCtrl?.resume();
@@ -437,7 +465,9 @@ export function createSmartTtsController(text: string, opts: {
       if (mode === "browser") browserCtrl?.stop();
       else {
         abort?.abort();
-        loadPiperEngine().then((p) => p.stop()).catch(() => {});
+        loadPiperEngine()
+          .then((p) => p.stop())
+          .catch(() => {});
         opts.onState("idle");
       }
     },
@@ -445,7 +475,9 @@ export function createSmartTtsController(text: string, opts: {
       destroyed = true;
       browserCtrl?.destroy();
       abort?.abort();
-      loadPiperEngine().then((p) => p.stop()).catch(() => {});
+      loadPiperEngine()
+        .then((p) => p.stop())
+        .catch(() => {});
     },
   };
 }
@@ -456,4 +488,3 @@ export async function destroyPiperEngine() {
     engine?.destroyEngine();
   }
 }
-

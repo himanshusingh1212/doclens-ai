@@ -14,6 +14,7 @@
 ## Database Schemas
 
 ### 1. Documents Database (`doclens-store`)
+
 - `document_blobs`: Stores raw PDF file binary data as Blob assets.
 - `document_metadata`: Stores metadata details (filename, page count, file size, extraction status).
 - `document_thumbnails`: Stores generated first-page thumbnails as base64 images.
@@ -21,6 +22,7 @@
 - `document_ai`: Stores cached AI results (translations, summaries, explanations) mapped to settings hashes.
 
 ### 2. Neural Voices Database (`piper-voices`)
+
 - `voice_models`: Caches downloaded Piper voice ONNX files to enable offline TTS.
 
 ---
@@ -39,4 +41,4 @@
 
 ---
 
-*Part of [[MOC — APIs]]*
+_Part of [[MOC — APIs]]_

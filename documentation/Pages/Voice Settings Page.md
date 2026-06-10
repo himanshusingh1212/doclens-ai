@@ -65,4 +65,4 @@ Organized in a single column (`max-w-4xl`) for linear settings configuration (La
 
 ---
 
-*Part of [[MOC — Pages]]*
+_Part of [[MOC — Pages]]_

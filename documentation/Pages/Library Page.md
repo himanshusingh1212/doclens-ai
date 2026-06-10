@@ -67,4 +67,4 @@ The layout utilizes a two-column setup where the left column is the fixed-width 
 
 ---
 
-*Part of [[MOC — Pages]]*
+_Part of [[MOC — Pages]]_

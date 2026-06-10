@@ -6,12 +6,12 @@
 
 ## Notes
 
-| Note | Description |
-|------|-------------|
+| Note                   | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
 | [[What is DocLens AI]] | Product definition, value proposition, core capabilities |
-| [[Why DocLens Exists]] | Problem space, vision, target audience |
-| [[Design System]] | Deep Ocean palette, glassmorphism, typography tokens |
-| [[Tech Stack]] | React, TanStack Router, Tailwind, pdf.js, Piper WASM |
+| [[Why DocLens Exists]] | Problem space, vision, target audience                   |
+| [[Design System]]      | Deep Ocean palette, glassmorphism, typography tokens     |
+| [[Tech Stack]]         | React, TanStack Router, Tailwind, pdf.js, Piper WASM     |
 
 ---
 
@@ -24,4 +24,4 @@
 
 ---
 
-*Part of [[00 — MOC — Project]]*
+_Part of [[00 — MOC — Project]]_

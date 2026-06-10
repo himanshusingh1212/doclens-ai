@@ -16,6 +16,7 @@
 ## Dual-Engine Orchestration
 
 The system routes requests based on the selected engine preference:
+
 1. **Neural (Piper):** WebAssembly-based local TTS engine. Used for high-quality, offline speech synthesis.
 2. **Browser (Web Speech API):** Standard browser synthesis engine. Used as a fallback or for unsupported languages.
 
@@ -36,4 +37,4 @@ The system routes requests based on the selected engine preference:
 
 ---
 
-*Part of [[MOC — Features]]*
+_Part of [[MOC — Features]]_

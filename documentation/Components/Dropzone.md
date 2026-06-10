@@ -36,4 +36,4 @@ Provides a drag-and-drop file ingestion area. It validates file uploads, checks 
 
 ---
 
-*Part of [[MOC — Components]]*
+_Part of [[MOC — Components]]_

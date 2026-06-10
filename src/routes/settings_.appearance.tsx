@@ -31,7 +31,9 @@ function AppearanceSettingsPage() {
     setCurrentThemeId(themeId);
     setTheme(themeId);
     applyTheme(themeId);
-    toast.success(`Theme updated to ${themeId === "system" ? "System Default" : themeId.charAt(0).toUpperCase() + themeId.slice(1)}`);
+    toast.success(
+      `Theme updated to ${themeId === "system" ? "System Default" : themeId.charAt(0).toUpperCase() + themeId.slice(1)}`,
+    );
   };
 
   const handleNewDocument = async (f: File) => {
@@ -71,9 +73,7 @@ function AppearanceSettingsPage() {
       <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
         {/* Page Header */}
         <header>
-          <h3 className="text-4xl font-bold tracking-tight text-foreground">
-            Appearance Settings
-          </h3>
+          <h3 className="text-4xl font-bold tracking-tight text-foreground">Appearance Settings</h3>
           <p className="mt-2 text-base text-muted-foreground">
             Customize the look and feel of your DocLens workspace.
           </p>
@@ -83,7 +83,9 @@ function AppearanceSettingsPage() {
         <section className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border/40 pb-2">
             <span className="text-lg">🖥️</span>
-            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">System preference</h4>
+            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              System preference
+            </h4>
           </div>
           <button
             onClick={() => handleSelectTheme("system")}
@@ -94,14 +96,20 @@ function AppearanceSettingsPage() {
             }`}
           >
             <div className="flex items-center gap-4">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
-                currentThemeId === "system" ? "border-primary bg-primary/20" : "border-border bg-surface-2"
-              }`}>
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                  currentThemeId === "system"
+                    ? "border-primary bg-primary/20"
+                    : "border-border bg-surface-2"
+                }`}
+              >
                 <span className="text-lg">🌓</span>
               </div>
               <div>
                 <span className="text-base font-bold text-foreground">System Default</span>
-                <p className="text-xs text-muted-foreground mt-0.5">Automatically match your operating system theme</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Automatically match your operating system theme
+                </p>
               </div>
             </div>
 
@@ -125,7 +133,9 @@ function AppearanceSettingsPage() {
         <section className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border/40 pb-2">
             <span className="text-lg">☀️</span>
-            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Light Themes</h4>
+            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              Light Themes
+            </h4>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {LIGHT_THEMES.map((theme) => {
@@ -141,9 +151,11 @@ function AppearanceSettingsPage() {
                   }`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
-                      active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
-                    }`}>
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                        active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
+                      }`}
+                    >
                       <span className="text-lg">🎨</span>
                     </div>
                     <span className="text-base font-bold text-foreground">{theme.label}</span>
@@ -167,7 +179,9 @@ function AppearanceSettingsPage() {
         <section className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border/40 pb-2">
             <span className="text-lg">🌙</span>
-            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Dark Themes</h4>
+            <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              Dark Themes
+            </h4>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {DARK_THEMES.map((theme) => {
@@ -183,9 +197,11 @@ function AppearanceSettingsPage() {
                   }`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
-                      active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
-                    }`}>
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                        active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
+                      }`}
+                    >
                       <span className="text-lg">🎨</span>
                     </div>
                     <span className="text-base font-bold text-foreground">{theme.label}</span>

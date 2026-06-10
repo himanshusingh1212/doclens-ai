@@ -15,6 +15,7 @@
 ## Core Architecture & Memory Optimization
 
 To process massive documents without running out of browser memory, the PDF viewer uses an active **lazy rendering system**:
+
 1. **Dimension Virtualization:** Loads PDF layout parameters on mount, creating virtual page placeholders.
 2. **IntersectionObserver Rendering:** Only draws canvas elements when a page enters the viewport bounds (+200px margin).
 3. **GPU Eviction Queue:** Limits concurrently rendered canvas layers to a maximum of 5. When a 6th page is rendered, the oldest canvas is cleared to free system memory.
@@ -36,4 +37,4 @@ To process massive documents without running out of browser memory, the PDF view
 
 ---
 
-*Part of [[MOC — Features]]*
+_Part of [[MOC — Features]]_

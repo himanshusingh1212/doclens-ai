@@ -35,4 +35,4 @@ The **Project Management** team coordinates sprint schedules, tracks task delive
 
 ---
 
-*Part of [[MOC — Teams]]*
+_Part of [[MOC — Teams]]_

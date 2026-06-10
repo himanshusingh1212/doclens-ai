@@ -65,12 +65,12 @@ node --inspect app.js
 
 Detailed implementations in the `references/` directory:
 
-| Guide | Contents |
-|---|---|
-| [Memory Profiling](references/memory-profiling.md) | Memory Profiling |
-| [Memory Leak Detection](references/memory-leak-detection.md) | Memory Leak Detection |
+| Guide                                                            | Contents                |
+| ---------------------------------------------------------------- | ----------------------- |
+| [Memory Profiling](references/memory-profiling.md)               | Memory Profiling        |
+| [Memory Leak Detection](references/memory-leak-detection.md)     | Memory Leak Detection   |
 | [Optimization Techniques](references/optimization-techniques.md) | Optimization Techniques |
-| [Monitoring & Targets](references/monitoring-targets.md) | Monitoring & Targets |
+| [Monitoring & Targets](references/monitoring-targets.md)         | Monitoring & Targets    |
 
 ## Best Practices
 

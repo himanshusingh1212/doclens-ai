@@ -32,8 +32,12 @@
   font-size: calc(var(--scale-factor, 1) * var(--font-height));
   transform: rotate(var(--rotate)) scaleX(var(--scale-x));
 }
-.textLayer .markedContent { display: contents; }
-.textLayer ::selection { background: rgba(64, 128, 255, 0.35); }
+.textLayer .markedContent {
+  display: contents;
+}
+.textLayer ::selection {
+  background: rgba(64, 128, 255, 0.35);
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -128,8 +132,21 @@
     border-color: var(--color-border);
   }
 
-  body, header, aside, main, section, .glass-panel, .reader-card, button, input, select {
-    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+  body,
+  header,
+  aside,
+  main,
+  section,
+  .glass-panel,
+  .reader-card,
+  button,
+  input,
+  select {
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      color 0.25s ease,
+      box-shadow 0.25s ease;
   }
 
   html,
@@ -370,7 +387,9 @@
     animation: spin 1.2s linear infinite;
   }
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   /* ─── Collapsible section ─── */

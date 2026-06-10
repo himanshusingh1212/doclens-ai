@@ -23,13 +23,13 @@
 
 ## Team Roles
 
-| Role | Count | Primary Focus |
-|------|-------|---------------|
-| **Shared Lead** | 1 | Team lead, coordinates support services |
-| **DevOps Engineers** | 2 | CI/CD, local environments, and hosting (Depth 1) |
-| **API Integration Engineers** | 2 | Proxy endpoints and key validation (Depth 1) |
-| **Security Engineers** | 2 | Key security and data privacy (Depth 1) |
-| **QA Test Engineers** | 2 | End-to-end and automated testing (Depth 2) |
+| Role                          | Count | Primary Focus                                    |
+| ----------------------------- | ----- | ------------------------------------------------ |
+| **Shared Lead**               | 1     | Team lead, coordinates support services          |
+| **DevOps Engineers**          | 2     | CI/CD, local environments, and hosting (Depth 1) |
+| **API Integration Engineers** | 2     | Proxy endpoints and key validation (Depth 1)     |
+| **Security Engineers**        | 2     | Key security and data privacy (Depth 1)          |
+| **QA Test Engineers**         | 2     | End-to-end and automated testing (Depth 2)       |
 
 ---
 
@@ -41,4 +41,4 @@
 
 ---
 
-*Part of [[MOC — Teams]]*
+_Part of [[MOC — Teams]]_

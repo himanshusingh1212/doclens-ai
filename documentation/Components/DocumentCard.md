@@ -38,4 +38,4 @@ Displays document metadata, thumbnails, and action items in the library collecti
 
 ---
 
-*Part of [[MOC — Components]]*
+_Part of [[MOC — Components]]_

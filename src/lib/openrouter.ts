@@ -92,7 +92,6 @@ export function openApiKeyModal(reason?: string): void {
   window.dispatchEvent(new CustomEvent(OPEN_API_KEY_MODAL_EVT, { detail: { reason } }));
 }
 
-
 export function getSelectedModel(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(MODEL_LS) ?? "";
@@ -165,9 +164,7 @@ export function hasCompletedAiPreferenceSetup(): boolean {
   const mode = normalizeMode(rawMode);
   const hasMode = rawMode === "translate" || rawMode === "explain";
   const hasLanguage = hasStoredValue(LANG_LS);
-  const hasValidStyle =
-    mode === "translate" ||
-    EXPLANATION_STYLES.some((s) => s.id === getStyle());
+  const hasValidStyle = mode === "translate" || EXPLANATION_STYLES.some((s) => s.id === getStyle());
 
   return hasMode && hasLanguage && hasValidStyle;
 }
@@ -321,11 +318,7 @@ export class OpenRouterError extends Error {
 
 function friendlyOpenRouterError(status: number, body: string): OpenRouterError {
   if (status === 401 && body.includes("OPENROUTER_API_KEY"))
-    return new OpenRouterError(
-      "OPENROUTER_API_KEY is not configured on the server.",
-      401,
-      "auth",
-    );
+    return new OpenRouterError("OPENROUTER_API_KEY is not configured on the server.", 401, "auth");
   if (status === 401)
     return new OpenRouterError(
       "Your OpenRouter API key is invalid or expired. Add a valid key to continue.",
@@ -363,7 +356,6 @@ function friendlyOpenRouterError(status: number, body: string): OpenRouterError 
     "unknown",
   );
 }
-
 
 /** Default timeout for a single streaming request (ms). */
 const STREAM_TIMEOUT_MS = 60_000;
@@ -521,19 +513,84 @@ export type ExplanationStyle =
   | "Critical Thinking";
 
 export const EXPLANATION_STYLES: ExplanationStyleSpec[] = [
-  { id: "Standard", label: "Standard", instruction: "Use balanced, neutral, clear, and easy-to-understand explanations. Maintain readability and structured flow." },
-  { id: "ELI5", label: "ELI5", instruction: "Explain as if teaching a complete beginner or young learner. Avoid jargon when possible; if technical terms are necessary, define them immediately in simple language. Use intuitive examples and simplified reasoning." },
-  { id: "Storytelling", label: "Storytelling", instruction: "Teach concepts using narratives, scenarios, characters, or story-like progression. Make the explanation emotionally engaging and memorable." },
-  { id: "Socratic", label: "Socratic", instruction: "Teach primarily through guided questions and progressive reasoning. Encourage critical thinking and self-discovery. Avoid instantly revealing conclusions unless necessary." },
-  { id: "Step-by-Step", label: "Step-by-Step", instruction: "Break the explanation into sequential logical stages. Ensure each step builds naturally on the previous one. Maintain clarity throughout the progression." },
-  { id: "Visual Thinking", label: "Visual Thinking", instruction: "Explain using mental imagery, hierarchy, structure, spatial relationships, and diagram-like descriptions. Help the learner mentally visualize systems and relationships." },
-  { id: "Analogical", label: "Analogical", instruction: "Use analogies and comparisons with familiar real-world systems or experiences. Simplify abstract concepts through relatable examples." },
-  { id: "Practical", label: "Practical", instruction: "Focus on real-world applications, implementation methods, use cases, and practical outcomes. Emphasize how concepts are actually used in reality." },
-  { id: "Expert Deep-Dive", label: "Expert Deep-Dive", instruction: "Provide advanced technical depth, nuance, complexity, edge cases, and detailed reasoning. Assume the learner already understands foundational concepts." },
-  { id: "Debate", label: "Debate", instruction: "Present multiple viewpoints, interpretations, arguments, strengths, weaknesses, and counterarguments. Avoid oversimplifying nuanced topics." },
-  { id: "Historical Context", label: "Historical Context", instruction: "Explain the historical background, evolution, discoveries, timeline, and major contributors behind the concepts. Include important historical developments where relevant." },
-  { id: "Motivational", label: "Motivational", instruction: "Use encouraging, confidence-building, supportive language. Reduce intimidation around difficult concepts while remaining informative." },
-  { id: "Critical Thinking", label: "Critical Thinking", instruction: "Analyze assumptions, evaluate evidence, identify limitations, and encourage deeper reasoning. Promote analytical understanding rather than passive acceptance." },
+  {
+    id: "Standard",
+    label: "Standard",
+    instruction:
+      "Use balanced, neutral, clear, and easy-to-understand explanations. Maintain readability and structured flow.",
+  },
+  {
+    id: "ELI5",
+    label: "ELI5",
+    instruction:
+      "Explain as if teaching a complete beginner or young learner. Avoid jargon when possible; if technical terms are necessary, define them immediately in simple language. Use intuitive examples and simplified reasoning.",
+  },
+  {
+    id: "Storytelling",
+    label: "Storytelling",
+    instruction:
+      "Teach concepts using narratives, scenarios, characters, or story-like progression. Make the explanation emotionally engaging and memorable.",
+  },
+  {
+    id: "Socratic",
+    label: "Socratic",
+    instruction:
+      "Teach primarily through guided questions and progressive reasoning. Encourage critical thinking and self-discovery. Avoid instantly revealing conclusions unless necessary.",
+  },
+  {
+    id: "Step-by-Step",
+    label: "Step-by-Step",
+    instruction:
+      "Break the explanation into sequential logical stages. Ensure each step builds naturally on the previous one. Maintain clarity throughout the progression.",
+  },
+  {
+    id: "Visual Thinking",
+    label: "Visual Thinking",
+    instruction:
+      "Explain using mental imagery, hierarchy, structure, spatial relationships, and diagram-like descriptions. Help the learner mentally visualize systems and relationships.",
+  },
+  {
+    id: "Analogical",
+    label: "Analogical",
+    instruction:
+      "Use analogies and comparisons with familiar real-world systems or experiences. Simplify abstract concepts through relatable examples.",
+  },
+  {
+    id: "Practical",
+    label: "Practical",
+    instruction:
+      "Focus on real-world applications, implementation methods, use cases, and practical outcomes. Emphasize how concepts are actually used in reality.",
+  },
+  {
+    id: "Expert Deep-Dive",
+    label: "Expert Deep-Dive",
+    instruction:
+      "Provide advanced technical depth, nuance, complexity, edge cases, and detailed reasoning. Assume the learner already understands foundational concepts.",
+  },
+  {
+    id: "Debate",
+    label: "Debate",
+    instruction:
+      "Present multiple viewpoints, interpretations, arguments, strengths, weaknesses, and counterarguments. Avoid oversimplifying nuanced topics.",
+  },
+  {
+    id: "Historical Context",
+    label: "Historical Context",
+    instruction:
+      "Explain the historical background, evolution, discoveries, timeline, and major contributors behind the concepts. Include important historical developments where relevant.",
+  },
+  {
+    id: "Motivational",
+    label: "Motivational",
+    instruction:
+      "Use encouraging, confidence-building, supportive language. Reduce intimidation around difficult concepts while remaining informative.",
+  },
+  {
+    id: "Critical Thinking",
+    label: "Critical Thinking",
+    instruction:
+      "Analyze assumptions, evaluate evidence, identify limitations, and encourage deeper reasoning. Promote analytical understanding rather than passive acceptance.",
+  },
 ];
 
 export const MODE_INSTRUCTIONS: Record<GlobalMode, { label: string; instruction: string }> = {
@@ -544,8 +601,7 @@ export const MODE_INSTRUCTIONS: Record<GlobalMode, { label: string; instruction:
   },
   explain: {
     label: "Explain",
-    instruction:
-      "Process the provided content according to the selected Explanation Style.",
+    instruction: "Process the provided content according to the selected Explanation Style.",
   },
 };
 
@@ -564,8 +620,7 @@ export interface BuildPagePayloadInput {
 
 export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
   const isTranslate = i.mode === "translate";
-  const styleSpec =
-    EXPLANATION_STYLES.find((s) => s.id === i.style) ?? EXPLANATION_STYLES[0];
+  const styleSpec = EXPLANATION_STYLES.find((s) => s.id === i.style) ?? EXPLANATION_STYLES[0];
 
   const taskBlock = isTranslate
     ? `TRANSLATION MODE\nTarget language: ${i.language}.\n${MODE_INSTRUCTIONS.translate.instruction}`
@@ -597,7 +652,11 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
   };
 }
 
-export function chunkForContext(text: string, contextTokens: number, reserveOutput = 1500): string[] {
+export function chunkForContext(
+  text: string,
+  contextTokens: number,
+  reserveOutput = 1500,
+): string[] {
   // ~4 chars per token. Leave room for system + user instruction overhead + output.
   const usableTokens = Math.max(1000, contextTokens - reserveOutput - 500);
   const charsPerChunk = usableTokens * 4;
@@ -628,7 +687,7 @@ export function chunkForContext(text: string, contextTokens: number, reserveOutp
 export async function mapLimit<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T) => Promise<R>
+  fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
   const results: R[] = [];
   const promises: Promise<void>[] = [];

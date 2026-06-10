@@ -1,6 +1,7 @@
 # Read Aloud Extension — Complete Architecture Analysis & DocLens Integration Strategy
 
 ## Table of Contents
+
 1. [High-Level Overview](#1-high-level-overview)
 2. [How Every Piece Works (Beginner-Friendly)](#2-how-every-piece-works)
 3. [The TTS Engine System — The Heart You Want](#3-the-tts-engine-system)
@@ -26,18 +27,18 @@ graph TD
 
 ### File Map (What Each File Does)
 
-| File | Role | Analogy |
-|------|------|---------|
-| `background.js` | Entry point, loads everything | The "power button" |
-| `events.js` | Handles keyboard shortcuts, context menus, orchestrates everything | The "traffic controller" |
-| `document.js` | Gets text from the page, manages reading session | The "librarian" |
-| `content.js` | Injected into web pages to extract text | The "reader" |
-| `speech.js` | Takes text, picks engine, manages playlist | The "DJ" |
-| `tts-engines.js` | All 12 TTS engine implementations | The "voice actors" |
-| `player.js` | Manages audio playback, UI, iframes | The "music player" |
-| `defaults.js` | Settings, helpers, audio playback utilities | The "toolbox" |
-| `messaging.js` | Communication between components | The "telephone system" |
-| `google-translate.js` | Special engine: hacks Google Translate for free TTS | The "clever hack" |
+| File                  | Role                                                               | Analogy                  |
+| --------------------- | ------------------------------------------------------------------ | ------------------------ |
+| `background.js`       | Entry point, loads everything                                      | The "power button"       |
+| `events.js`           | Handles keyboard shortcuts, context menus, orchestrates everything | The "traffic controller" |
+| `document.js`         | Gets text from the page, manages reading session                   | The "librarian"          |
+| `content.js`          | Injected into web pages to extract text                            | The "reader"             |
+| `speech.js`           | Takes text, picks engine, manages playlist                         | The "DJ"                 |
+| `tts-engines.js`      | All 12 TTS engine implementations                                  | The "voice actors"       |
+| `player.js`           | Manages audio playback, UI, iframes                                | The "music player"       |
+| `defaults.js`         | Settings, helpers, audio playback utilities                        | The "toolbox"            |
+| `messaging.js`        | Communication between components                                   | The "telephone system"   |
+| `google-translate.js` | Special engine: hacks Google Translate for free TTS                | The "clever hack"        |
 
 ---
 
@@ -116,18 +117,18 @@ interface TtsEngine {
 
 ```javascript
 function pickEngine() {
-  if (isPiperVoice(options.voice))         return piperTtsEngine;       // ✅ FREE, Local
-  if (isSupertonicVoice(options.voice))    return supertonicTtsEngine;  // ✅ FREE, Local  
-  if (isAzure(options.voice))              return azureTtsEngine;       // 💰 Paid
-  if (isOpenai(options.voice))             return openaiTtsEngine;      // 💰 Paid
-  if (isUseMyPhone(options.voice))         return phoneTtsEngine;       // ✅ FREE (uses phone)
-  if (isGoogleTranslate(options.voice))    return googleTranslateTtsEngine; // ✅ FREE!
-  if (isAmazonPolly(options.voice))        return amazonPollyTtsEngine;    // 💰 Paid
-  if (isGoogleWavenet(options.voice))      return googleWavenetTtsEngine;  // 💰 Paid (free tier)
-  if (isIbmWatson(options.voice))          return ibmWatsonTtsEngine;      // 💰 Paid
-  if (isPremiumVoice(options.voice))       return premiumTtsEngine;        // 💰 Paid
-  if (isGoogleNative(options.voice))       return browserTtsEngine;        // ✅ FREE
-  return browserTtsEngine;                                                 // ✅ FREE (fallback)
+  if (isPiperVoice(options.voice)) return piperTtsEngine; // ✅ FREE, Local
+  if (isSupertonicVoice(options.voice)) return supertonicTtsEngine; // ✅ FREE, Local
+  if (isAzure(options.voice)) return azureTtsEngine; // 💰 Paid
+  if (isOpenai(options.voice)) return openaiTtsEngine; // 💰 Paid
+  if (isUseMyPhone(options.voice)) return phoneTtsEngine; // ✅ FREE (uses phone)
+  if (isGoogleTranslate(options.voice)) return googleTranslateTtsEngine; // ✅ FREE!
+  if (isAmazonPolly(options.voice)) return amazonPollyTtsEngine; // 💰 Paid
+  if (isGoogleWavenet(options.voice)) return googleWavenetTtsEngine; // 💰 Paid (free tier)
+  if (isIbmWatson(options.voice)) return ibmWatsonTtsEngine; // 💰 Paid
+  if (isPremiumVoice(options.voice)) return premiumTtsEngine; // 💰 Paid
+  if (isGoogleNative(options.voice)) return browserTtsEngine; // ✅ FREE
+  return browserTtsEngine; // ✅ FREE (fallback)
 }
 ```
 
@@ -145,17 +146,17 @@ function speak(text) {
   const utterance = new SpeechSynthesisUtterance();
   utterance.text = text;
   utterance.lang = "en-US";
-  utterance.rate = 1.0;      // 0.1 to 10
-  utterance.pitch = 1.0;     // 0 to 2
-  utterance.volume = 1.0;    // 0 to 1
-  
+  utterance.rate = 1.0; // 0.1 to 10
+  utterance.pitch = 1.0; // 0 to 2
+  utterance.volume = 1.0; // 0 to 1
+
   // Pick a voice
   const voices = speechSynthesis.getVoices();
-  utterance.voice = voices.find(v => v.name.includes("Google"));
-  
+  utterance.voice = voices.find((v) => v.name.includes("Google"));
+
   utterance.onstart = () => console.log("Started speaking");
   utterance.onend = () => console.log("Finished speaking");
-  
+
   speechSynthesis.speak(utterance);
 }
 ```
@@ -170,6 +171,7 @@ function speak(text) {
 ### 4.2 🌟 Google Translate TTS (`GoogleTranslateTtsEngine`) — FREE & GOOD QUALITY
 
 **How it works**: The extension reverse-engineers Google Translate's internal TTS API. It:
+
 1. Fetches the Google Translate page to get authentication tokens (`WIZ_global_data`)
 2. Uses those tokens to call an internal `batchExecute` RPC endpoint
 3. Gets back base64-encoded MP3 audio
@@ -179,9 +181,9 @@ function speak(text) {
 ```javascript
 // 1. Scrape auth tokens from translate.google.com
 async function fetchWizGlobalData(url) {
-  const html = await fetch(url).then(r => r.text());
+  const html = await fetch(url).then((r) => r.text());
   // Extract: f.sid, bl, at tokens from WIZ_global_data
-  return { "f.sid": "...", "bl": "...", "at": "..." };
+  return { "f.sid": "...", bl: "...", at: "..." };
 }
 
 // 2. Call the internal TTS endpoint
@@ -237,14 +239,14 @@ Same architecture as Piper — runs in an iframe via `supertonic.ttstool.com`. A
 
 ## 5. The PAID Engines (Need API Keys)
 
-| Engine | Provider | Quality | Free Tier? |
-|--------|----------|---------|------------|
-| Amazon Polly | AWS | ⭐⭐⭐⭐⭐ | 5M chars/month free for 12 months |
-| Google Wavenet/Neural2 | Google Cloud | ⭐⭐⭐⭐⭐ | 1M chars/month free (Standard) |
-| Azure TTS | Microsoft | ⭐⭐⭐⭐⭐ | 500K chars/month free |
-| OpenAI TTS | OpenAI | ⭐⭐⭐⭐⭐ | No free tier |
-| IBM Watson | IBM | ⭐⭐⭐⭐ | 10K chars/month free |
-| Premium (ReadAloud hosted) | readaloud.app | ⭐⭐⭐⭐ | Limited free |
+| Engine                     | Provider      | Quality    | Free Tier?                        |
+| -------------------------- | ------------- | ---------- | --------------------------------- |
+| Amazon Polly               | AWS           | ⭐⭐⭐⭐⭐ | 5M chars/month free for 12 months |
+| Google Wavenet/Neural2     | Google Cloud  | ⭐⭐⭐⭐⭐ | 1M chars/month free (Standard)    |
+| Azure TTS                  | Microsoft     | ⭐⭐⭐⭐⭐ | 500K chars/month free             |
+| OpenAI TTS                 | OpenAI        | ⭐⭐⭐⭐⭐ | No free tier                      |
+| IBM Watson                 | IBM           | ⭐⭐⭐⭐   | 10K chars/month free              |
+| Premium (ReadAloud hosted) | readaloud.app | ⭐⭐⭐⭐   | Limited free                      |
 
 All paid engines follow the same pattern:
 
@@ -253,7 +255,7 @@ All paid engines follow the same pattern:
 async function speak(text, options) {
   // 1. Build the API request
   const audioUrl = await getAudioUrl(text, options);
-  
+
   // 2. Play the audio
   return playAudio(audioUrl, options, playbackState$);
 }
@@ -284,7 +286,7 @@ Full page text
   │
   ▼ getParagraphs() — split on double newlines
   │
-  ▼ getSentences() — split on . ! ? 
+  ▼ getSentences() — split on . ! ?
   │
   ▼ getPhrases() — split on , ; : —
   │
@@ -295,16 +297,17 @@ Full page text
 
 ### Chunk sizes by engine:
 
-| Engine | Max Chunk Size | Strategy |
-|--------|---------------|----------|
-| Google Translate | 200 chars | `CharBreaker(200)` |
-| Browser TTS (Google Native) | ~36 words | `WordBreaker(36)` |
-| Piper / Supertonic | Entire text | No breaking (handles internally) |
-| All other cloud engines | 750 chars | `CharBreaker(750)` |
+| Engine                      | Max Chunk Size | Strategy                         |
+| --------------------------- | -------------- | -------------------------------- |
+| Google Translate            | 200 chars      | `CharBreaker(200)`               |
+| Browser TTS (Google Native) | ~36 words      | `WordBreaker(36)`                |
+| Piper / Supertonic          | Entire text    | No breaking (handles internally) |
+| All other cloud engines     | 750 chars      | `CharBreaker(750)`               |
 
 ### The Punctuator System
 
 Two punctuators handle different languages:
+
 - **LatinPunctuator**: For English, French, Spanish, etc. Splits on periods, commas, handles abbreviations (Dr., Mr., etc.)
 - **EastAsianPunctuator**: For Chinese, Japanese, Korean. Splits on 。！ and other CJK punctuation.
 
@@ -320,7 +323,7 @@ graph LR
     B --> C["Audio URL<br/>(blob: or data:)"]
     C --> D["HTML5 Audio<br/>element"]
     D --> E["🔈 Sound"]
-    
+
     F["playbackState$<br/>resumed | paused"] --> D
 ```
 
@@ -331,20 +334,20 @@ This is the actual audio player. Simplified:
 ```javascript
 function playAudioHere(urlPromise, options, playbackState$) {
   const audio = new Audio();
-  
+
   // 1. Set playback rate and volume
   audio.defaultPlaybackRate = options.rate;
   audio.volume = options.volume;
-  
+
   // 2. Load the audio
   audio.src = await urlPromise;
-  
+
   // 3. React to play/pause commands
   playbackState$.subscribe(state => {
     if (state === "resumed") audio.play();
     else audio.pause();
   });
-  
+
   // 4. Emit events
   audio.onended = () => emit({ type: "end" });
 }
@@ -360,17 +363,17 @@ const cache = {
   maxEntries: 5,
   async fetchCached(key, fetchFn, destroyFn) {
     const entry = this.entries.get(key);
-    if (entry) return entry.value;       // Cache hit!
-    const value = await fetchFn();       // Cache miss, fetch
+    if (entry) return entry.value; // Cache hit!
+    const value = await fetchFn(); // Cache miss, fetch
     this.entries.set(key, { value, destroyFn });
     // Evict oldest if over limit
     while (this.entries.size > this.maxEntries) {
       const [oldKey, oldest] = this.entries.entries().next().value;
-      oldest.destroyFn?.(oldest.value);  // Clean up blob URL
+      oldest.destroyFn?.(oldest.value); // Clean up blob URL
       this.entries.delete(oldKey);
     }
     return value;
-  }
+  },
 };
 ```
 
@@ -391,12 +394,12 @@ class TTSManager {
     this.currentUtterance = null;
     this.isPlaying = false;
     this.isPaused = false;
-    this.onStateChange = null;  // callback
+    this.onStateChange = null; // callback
   }
 
   // Get available voices
   getVoices() {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       let voices = speechSynthesis.getVoices();
       if (voices.length) return resolve(voices);
       speechSynthesis.onvoiceschanged = () => {
@@ -408,17 +411,17 @@ class TTSManager {
   // Main speak method
   async speak(text, options = {}) {
     this.stop(); // Stop any current playback
-    
+
     const chunks = this.breakTextIntoChunks(text, 750);
     this.isPlaying = true;
     this.isPaused = false;
     this.notifyState("PLAYING");
-    
+
     for (let i = 0; i < chunks.length; i++) {
       if (!this.isPlaying) break;
       await this.speakChunk(chunks[i], options);
     }
-    
+
     this.isPlaying = false;
     this.notifyState("STOPPED");
   }
@@ -431,7 +434,7 @@ class TTSManager {
       utterance.volume = options.volume || 1.0;
       if (options.voice) utterance.voice = options.voice;
       if (options.lang) utterance.lang = options.lang;
-      
+
       utterance.onend = resolve;
       utterance.onerror = (e) => {
         if (e.error !== "canceled" && e.error !== "interrupted") {
@@ -440,7 +443,7 @@ class TTSManager {
           resolve();
         }
       };
-      
+
       this.currentUtterance = utterance;
       speechSynthesis.speak(utterance);
     });
@@ -469,7 +472,7 @@ class TTSManager {
   breakTextIntoChunks(text, maxChars = 750) {
     const paragraphs = text.split(/(?:\r?\n\s*){2,}/);
     const chunks = [];
-    
+
     for (const para of paragraphs) {
       if (para.length <= maxChars) {
         chunks.push(para);
@@ -489,8 +492,8 @@ class TTSManager {
         if (current.trim()) chunks.push(current.trim());
       }
     }
-    
-    return chunks.filter(c => c.length > 0);
+
+    return chunks.filter((c) => c.length > 0);
   }
 
   notifyState(state) {
@@ -513,18 +516,18 @@ class PiperTTS {
 
   async init() {
     // Load Piper WASM (you host these files yourself)
-    this.worker = new Worker('/js/piper-worker.js');
+    this.worker = new Worker("/js/piper-worker.js");
     // Load a voice model (typically 15-60 MB, cached by browser)
-    await this.loadModel('en_US-amy-medium');
+    await this.loadModel("en_US-amy-medium");
     this.modelLoaded = true;
   }
 
   async synthesize(text) {
     return new Promise((resolve, reject) => {
-      this.worker.postMessage({ type: 'synthesize', text });
+      this.worker.postMessage({ type: "synthesize", text });
       this.worker.onmessage = (e) => {
-        if (e.data.type === 'audio') {
-          const blob = new Blob([e.data.audio], { type: 'audio/wav' });
+        if (e.data.type === "audio") {
+          const blob = new Blob([e.data.audio], { type: "audio/wav" });
           resolve(URL.createObjectURL(blob));
         }
       };
@@ -536,7 +539,7 @@ class PiperTTS {
     const audio = new Audio(audioUrl);
     audio.playbackRate = options.rate || 1.0;
     audio.volume = options.volume || 1.0;
-    
+
     return new Promise((resolve) => {
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
@@ -555,32 +558,31 @@ class PiperTTS {
 const tts = new TTSManager();
 
 // "Listen" button click handler
-document.getElementById('listen-btn').addEventListener('click', async () => {
-  const resultText = document.getElementById('ai-result').textContent;
-  
+document.getElementById("listen-btn").addEventListener("click", async () => {
+  const resultText = document.getElementById("ai-result").textContent;
+
   // Get the best available voice
   const voices = await tts.getVoices();
-  const preferredVoice = voices.find(v => 
-    v.name.includes('Google') && v.lang.startsWith('en')
-  ) || voices[0];
-  
+  const preferredVoice =
+    voices.find((v) => v.name.includes("Google") && v.lang.startsWith("en")) || voices[0];
+
   await tts.speak(resultText, {
     voice: preferredVoice,
     rate: 1.0,
     pitch: 1.0,
     volume: 1.0,
-    lang: 'en-US'
+    lang: "en-US",
   });
 });
 
 // Pause/Resume
-document.getElementById('pause-btn').addEventListener('click', () => {
+document.getElementById("pause-btn").addEventListener("click", () => {
   if (tts.isPaused) tts.resume();
   else tts.pause();
 });
 
 // Stop
-document.getElementById('stop-btn').addEventListener('click', () => {
+document.getElementById("stop-btn").addEventListener("click", () => {
   tts.stop();
 });
 ```
@@ -592,11 +594,12 @@ document.getElementById('stop-btn').addEventListener('click', () => {
   <button id="listen-btn" title="Listen">🔊 Listen</button>
   <button id="pause-btn" title="Pause/Resume">⏸️</button>
   <button id="stop-btn" title="Stop">⏹️</button>
-  
-  <label>Speed:
-    <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+
+  <label
+    >Speed:
+    <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1" />
   </label>
-  
+
   <select id="voice-select">
     <!-- Populated dynamically -->
   </select>
@@ -610,6 +613,7 @@ document.getElementById('stop-btn').addEventListener('click', () => {
 Here's my recommended **tiered approach** for DocLens:
 
 ### Tier 1: Web Speech API (Simplest, works immediately)
+
 - **What**: Browser's built-in `speechSynthesis` API
 - **Quality**: Good (Chrome has Google voices built-in)
 - **Effort**: 1-2 hours to implement
@@ -617,6 +621,7 @@ Here's my recommended **tiered approach** for DocLens:
 - **Code**: Just the `TTSManager` class from Step 1 above
 
 ### Tier 2: Piper WASM (Best free neural quality)
+
 - **What**: Open-source neural TTS running in browser via WebAssembly
 - **Quality**: Excellent (comparable to paid services)
 - **Effort**: 1-2 days to set up
@@ -625,6 +630,7 @@ Here's my recommended **tiered approach** for DocLens:
 - **Web demo**: [piper.ttstool.com](https://piper.ttstool.com)
 
 ### Tier 3: Cloud APIs with free tiers (Optional, highest quality)
+
 - **Google Cloud TTS**: 1M chars/month free (Standard voices)
 - **Azure TTS**: 500K chars/month free
 - **Amazon Polly**: 5M chars/month free (first 12 months)
@@ -633,12 +639,14 @@ Here's my recommended **tiered approach** for DocLens:
 > **My recommendation**: Start with **Tier 1 (Web Speech API)** for a working prototype in under 2 hours. Then upgrade to **Tier 2 (Piper WASM)** for production-quality voices. You don't need Tier 3 unless you need specific premium voices.
 
 ### What NOT to copy from Read Aloud:
+
 1. ❌ The Google Translate hack — fragile and against TOS
 2. ❌ The extension messaging system — not needed in a web app
 3. ❌ The RxJS reactive pipeline — overkill for your use case
 4. ❌ The Chrome `tts` API — only works in extensions
 
 ### What TO copy from Read Aloud:
+
 1. ✅ The text chunking algorithm (paragraph → sentence → phrase splitting)
 2. ✅ The audio caching pattern (cache last N chunks)
 3. ✅ The playlist pattern (track current chunk index, forward/rewind)
@@ -649,15 +657,15 @@ Here's my recommended **tiered approach** for DocLens:
 
 ## Summary
 
-| Aspect | Read Aloud Approach | Your DocLens Approach |
-|--------|--------------------|-----------------------|
-| **Architecture** | Extension (multi-context, messaging) | Web app (single context, simple) |
-| **TTS Engine** | 12 engines, complex routing | Start with Web Speech API, upgrade to Piper |
-| **Text Breaking** | Sophisticated CharBreaker/WordBreaker | Copy the CharBreaker algorithm |
-| **Audio Playback** | RxJS Observables, offscreen documents | Simple HTML5 Audio + Promises |
-| **Voice Selection** | Auto-detect language + voice matching | Let user pick or auto-detect |
-| **Caching** | In-memory Map, 5 entries | Same pattern, simple Map cache |
-| **Cost** | Free (with hacks) or paid | Free (Web Speech API + Piper) |
+| Aspect              | Read Aloud Approach                   | Your DocLens Approach                       |
+| ------------------- | ------------------------------------- | ------------------------------------------- |
+| **Architecture**    | Extension (multi-context, messaging)  | Web app (single context, simple)            |
+| **TTS Engine**      | 12 engines, complex routing           | Start with Web Speech API, upgrade to Piper |
+| **Text Breaking**   | Sophisticated CharBreaker/WordBreaker | Copy the CharBreaker algorithm              |
+| **Audio Playback**  | RxJS Observables, offscreen documents | Simple HTML5 Audio + Promises               |
+| **Voice Selection** | Auto-detect language + voice matching | Let user pick or auto-detect                |
+| **Caching**         | In-memory Map, 5 entries              | Same pattern, simple Map cache              |
+| **Cost**            | Free (with hacks) or paid             | Free (Web Speech API + Piper)               |
 
 > [!IMPORTANT]
 > **Bottom line**: You don't need to fork the entire extension. Extract just 3 things: **(1)** the text chunking logic, **(2)** the playlist/playback management pattern, and **(3)** either use the Web Speech API directly or integrate Piper WASM. This gives you the same quality with 10% of the complexity.

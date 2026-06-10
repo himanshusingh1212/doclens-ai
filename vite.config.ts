@@ -17,24 +17,13 @@ export default defineConfig({
     },
   },
   vite: {
-
     ssr: {
-      external: [
-        "piper-tts-web",
-        "@huggingface/transformers",
-        "onnxruntime-web",
-        "pdfjs-dist",
-      ],
+      external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
     },
     environments: {
       nitro: {
         resolve: {
-          external: [
-            "piper-tts-web",
-            "@huggingface/transformers",
-            "onnxruntime-web",
-            "pdfjs-dist",
-          ],
+          external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
         },
       },
     },

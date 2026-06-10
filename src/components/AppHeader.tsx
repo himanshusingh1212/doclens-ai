@@ -15,7 +15,10 @@ function useQuotaIndicator(): string | null {
     };
     tick();
     const id = window.setInterval(tick, 30_000);
-    return () => { cancelled = true; window.clearInterval(id); };
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, []);
   return label;
 }
@@ -39,7 +42,10 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
       </Link>
       <div className="flex items-center gap-2">
         {quota && (
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline" title="IndexedDB usage">
+          <span
+            className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline"
+            title="IndexedDB usage"
+          >
             {quota}
           </span>
         )}

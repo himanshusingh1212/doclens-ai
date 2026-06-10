@@ -19,6 +19,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** For 50 documents ≈ 2-4 MB of IDB wasted on Base64 overhead alone. Each string also lives in the JS heap while the library page is mounted.
 
 **Optimization:**
+
 - Store as a `Blob` (PNG or preferably JPEG) in IDB instead of a data-URL string — eliminates the 33% Base64 overhead.
 - Use `URL.createObjectURL(blob)` to display thumbnails, and revoke on unmount.
 - Switch to `canvas.toDataURL("image/jpeg", 0.7)` or `canvas.toBlob("image/jpeg", 0.7)` — JPEG at 70% quality is ~5× smaller for photo-like PDF pages.
@@ -34,6 +35,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** Each loaded voice holds 20-60 MB of browser memory. If 2 voices are used across sessions without page navigation, that's 40-120 MB pinned.
 
 **Optimization:**
+
 - Add LRU eviction to `LocalVoiceProvider.cache` (max 1 voice at a time, since only 1 is ever actively generating).
 - Revoke and clear Blob URLs for voices that aren't currently generating, re-loading from IDB on the next request (IDB read is ~100ms for 60MB, negligible vs. inference time).
 
@@ -48,6 +50,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** A 200 MB PDF fills 200 MB of IDB quota. No user feedback until `QuotaExceededError`.
 
 **Optimization:**
+
 - Add a soft size-limit check (~100 MB) with a user confirmation dialog before storing very large PDFs.
 - Consider offering an option to "discard binary after extraction" for users who only need translations (PDF viewer would show a "re-upload to view" message).
 - Display per-document storage breakdown in the library view so users can identify space hogs.
@@ -65,6 +68,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** Temporary spike of ~5-25 MB during export. For very large documents, this could cause jank or OOM on low-memory devices.
 
 **Optimization:**
+
 - Stream the export using an IDB cursor: iterate page-by-page, appending to a `ReadableStream` or `Blob[]`, then combine at the end. This keeps peak memory to one page at a time.
 - The function already has a "Heavy — use only for export" comment acknowledging this.
 
@@ -79,6 +83,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** For a 300-page doc with 2 KB text per page, this unnecessarily loads ~600 KB of text data that's immediately discarded. Called on every document open.
 
 **Optimization:**
+
 - Use an IDB cursor with a projection pattern: iterate with `openCursor()` and extract only `pageAi.status`/`pageAi.result` existence without holding all records simultaneously.
 - Alternatively, maintain a separate lightweight `aiSummary` record in the `meta` store, updated by `upsertPageAi()`. This avoids the full scan entirely.
 - Or use the existing `aiDoneCount` on `DocRecord` more aggressively instead of reading individual page states.
@@ -94,6 +99,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** Double-allocation of all page data in memory during extraction (~2-10 MB for large docs).
 
 **Optimization:**
+
 - The `items` array is never used after extraction (only `text`, `columns`, and `garbageRatio` are stored). Set `items: []` in the return value or make it optional.
 - Actually, `toPageExtraction()` in `storage.ts` already sets `items: []` — but the extraction still creates and holds the full arrays in memory during the loop. Consider clearing `items` after building the text.
 
@@ -122,6 +128,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** ~200-500 KB of JS heap. Never freed unless `invalidateCatalog()` is called.
 
 **Optimization:**
+
 - After initial processing, strip the `files` field from cached entries (only needed during install). Store a minimal `{ key, name, language, quality, installed, sizeBytes }` shape.
 - Adds `invalidateCatalog()` on route change away from voice settings.
 
@@ -148,6 +155,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** Minor — native `<select>` handles large option lists efficiently. Only matters for 1000+ page documents.
 
 **Optimization (optional):**
+
 - Replace with a number input (`<input type="number">`) for documents with >100 pages.
 
 ---
@@ -161,6 +169,7 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 **Impact:** Minimal storage impact (< 10 KB total), but dirty.
 
 **Optimization:**
+
 - In `deleteDoc()`, also remove related localStorage keys:
   ```ts
   localStorage.removeItem(`doclens.autoTranslate.${id}`);
@@ -172,38 +181,43 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 ## 🟢 Already Optimized ✅
 
 ### PDF Viewer canvas management
+
 - `MAX_RENDERED = 5` limits active canvases.
 - `releasePage()` zeros canvas dimensions to free bitmap memory.
 - `PDFDocumentProxy.destroy()` is called on unmount and route change.
 - Text layer innerHTML is cleared on release.
 
 ### Per-page IDB storage (v6 migration)
+
 - Pages are stored individually in the `pageData` store, not as a giant array on the document record.
 - `getPageData()` loads a single page on demand.
 
 ### Piper engine lifecycle
+
 - `destroyEngine()` revokes all Blob URLs, disposes the WASM engine, and closes AudioContext.
 - Called on unmount from `PageWorkstation`.
 
 ### PDF.js worker
+
 - Using a dedicated web worker via `?worker` import.
 - `URL.revokeObjectURL()` called after document loading.
 
 ### Write mutex
+
 - `writeLocks` Map prevents concurrent IDB write corruption.
 
 ---
 
 ## Priority Ranking
 
-| # | Finding | Severity | Effort | Impact |
-|---|---------|----------|--------|--------|
-| 1 | Thumbnails as data URLs | 🔴 Critical | Low | ~33% IDB savings + heap reduction |
-| 2 | ONNX Blob URLs unbounded | 🔴 Critical | Low | 20-120 MB memory savings |
-| 5 | `getPageAiSummary` full scan | 🟠 High | Medium | Faster doc open, less transient memory |
-| 6 | Extraction holds all items | 🟠 High | Low | 2-10 MB peak reduction |
-| 3 | No PDF size warning | 🟠 High | Low | Better UX for large files |
-| 4 | Export materializes all pages | 🟠 High | Medium | Prevents OOM on large exports |
-| 8 | Voice catalog retains `files` | 🟡 Medium | Low | ~200 KB savings |
-| 11 | localStorage key cleanup | 🟡 Medium | Low | Cleanliness |
-| 10 | Page select DOM bloat | 🟢 Minor | Low | Minor DOM savings |
+| #   | Finding                       | Severity    | Effort | Impact                                 |
+| --- | ----------------------------- | ----------- | ------ | -------------------------------------- |
+| 1   | Thumbnails as data URLs       | 🔴 Critical | Low    | ~33% IDB savings + heap reduction      |
+| 2   | ONNX Blob URLs unbounded      | 🔴 Critical | Low    | 20-120 MB memory savings               |
+| 5   | `getPageAiSummary` full scan  | 🟠 High     | Medium | Faster doc open, less transient memory |
+| 6   | Extraction holds all items    | 🟠 High     | Low    | 2-10 MB peak reduction                 |
+| 3   | No PDF size warning           | 🟠 High     | Low    | Better UX for large files              |
+| 4   | Export materializes all pages | 🟠 High     | Medium | Prevents OOM on large exports          |
+| 8   | Voice catalog retains `files` | 🟡 Medium   | Low    | ~200 KB savings                        |
+| 11  | localStorage key cleanup      | 🟡 Medium   | Low    | Cleanliness                            |
+| 10  | Page select DOM bloat         | 🟢 Minor    | Low    | Minor DOM savings                      |

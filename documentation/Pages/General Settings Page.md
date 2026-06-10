@@ -52,6 +52,7 @@ Uses a `max-w-7xl` layout divided into three sections: configuration, diagnostic
 ## Diagnostics Detail
 
 The **Memory Diagnostics Widget** refreshes every 3 seconds, visualizing memory allocations to identify memory leaks. It highlights:
+
 - **JS Heap:** Dynamic JavaScript memory footprint.
 - **Canvas Buffers:** Raw pixel memory allocated to active PDF canvases.
 - **Data URL Images:** Decoded base64 thumbnail images in memory.
@@ -65,4 +66,4 @@ The **Memory Diagnostics Widget** refreshes every 3 seconds, visualizing memory 
 
 ---
 
-*Part of [[MOC — Pages]]*
+_Part of [[MOC — Pages]]_

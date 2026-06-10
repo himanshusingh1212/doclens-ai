@@ -22,11 +22,13 @@ flowchart LR
 ## Detailed Steps
 
 ### 1. SSML Preparation
+
 - Formats translation segments into SSML blocks to configure pronunciation parameters.
 - Inserts pauses for punctuation, emphasizes headings, and formats abbreviations.
 - Team responsible: [[TTS Engine Engineers]].
 
 ### 2. Voice Generation
+
 - Selects the target voice profile.
 - Processes text using the preferred engine:
   - **Local WASM (Piper):** WebAssembly-based offline synthesis.
@@ -34,6 +36,7 @@ flowchart LR
 - Team responsible: [[TTS Engine Engineers]].
 
 ### 3. Sound Quality Review
+
 - Monitors synthesized audio for issues like volume clipping or unexpected silence gaps.
 - Verifies pronunciation accuracy for key terms and checks text-to-audio sync times.
 - Team responsible: [[Audio QA]].
@@ -43,6 +46,7 @@ flowchart LR
 ## Output Contract
 
 Outputs clean audio streams:
+
 - Renders audio files (MP3/WAV/OGG) mapped to corresponding text chunks.
 - Coordinates sentence highlighting with speech playback in the browser.
 
@@ -55,4 +59,4 @@ Outputs clean audio streams:
 
 ---
 
-*Part of [[MOC — Pipelines]]*
+_Part of [[MOC — Pipelines]]_

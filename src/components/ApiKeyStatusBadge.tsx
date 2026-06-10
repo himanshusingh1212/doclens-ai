@@ -15,14 +15,10 @@ const LABELS: Record<KeyStatus, string> = {
 };
 
 const CLASSES: Record<KeyStatus, string> = {
-  valid:
-    "border-primary/40 bg-primary/10 text-primary hover:border-primary",
-  invalid:
-    "border-destructive/50 bg-destructive/10 text-destructive hover:border-destructive",
-  missing:
-    "border-destructive/50 bg-destructive/10 text-destructive hover:border-destructive",
-  unknown:
-    "border-border bg-background text-muted-foreground hover:text-foreground",
+  valid: "border-primary/40 bg-primary/10 text-primary hover:border-primary",
+  invalid: "border-destructive/50 bg-destructive/10 text-destructive hover:border-destructive",
+  missing: "border-destructive/50 bg-destructive/10 text-destructive hover:border-destructive",
+  unknown: "border-border bg-background text-muted-foreground hover:text-foreground",
 };
 
 /** Header chip showing OpenRouter key status. Clicking opens the modal. */
@@ -39,7 +35,9 @@ export function ApiKeyStatusBadge() {
     <button
       onClick={() =>
         openApiKeyModal(
-          status === "valid" ? undefined : "A valid server OPENROUTER_API_KEY is required to run translations.",
+          status === "valid"
+            ? undefined
+            : "A valid server OPENROUTER_API_KEY is required to run translations.",
         )
       }
       className={`rounded-md border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-widest transition-colors ${CLASSES[status]}`}

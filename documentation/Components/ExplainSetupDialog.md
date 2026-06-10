@@ -37,4 +37,4 @@ Provides a configuration dialog for first-time AI Assistant setups. Configures p
 
 ---
 
-*Part of [[MOC — Components]]*
+_Part of [[MOC — Components]]_

@@ -40,12 +40,16 @@ async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
         await page.render({ canvasContext: ctx, viewport: vp, canvas } as any).promise;
 
         return new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob((b) => {
-            canvas.width = 0;
-            canvas.height = 0;
-            if (b) resolve(b);
-            else reject(new Error("Canvas to blob conversion failed"));
-          }, "image/jpeg", 0.8);
+          canvas.toBlob(
+            (b) => {
+              canvas.width = 0;
+              canvas.height = 0;
+              if (b) resolve(b);
+              else reject(new Error("Canvas to blob conversion failed"));
+            },
+            "image/jpeg",
+            0.8,
+          );
         });
       } finally {
         page.cleanup();

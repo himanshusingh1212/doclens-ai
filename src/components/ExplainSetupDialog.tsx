@@ -16,7 +16,16 @@ interface Props {
   onConfirm: (settings: { language: string; style: ExplanationStyle }) => void;
 }
 
-const QUICK_LANGS = ["हिंदी", "বাংলা", "తెలుగు", "മലയാളം", "English", "Spanish", "French", "Japanese"];
+const QUICK_LANGS = [
+  "हिंदी",
+  "বাংলা",
+  "తెలుగు",
+  "മലയാളം",
+  "English",
+  "Spanish",
+  "French",
+  "Japanese",
+];
 
 export function ExplainSetupDialog({ open, language, style, onOpenChange, onConfirm }: Props) {
   const [selectedLanguage, setSelectedLanguage] = useState(language || "English");

@@ -138,7 +138,6 @@ function detectColumns(items: TextItem[], pageWidth: number): number {
     return 2;
   })();
 
-
   return result;
 }
 
@@ -306,7 +305,6 @@ function sortByColumns(items: TextItem[], pageWidth: number, columns: number): T
       return xs[mid];
     }
   };
-
 
   const bands: TextSegment[][] = Array.from({ length: columns }, () => []);
 

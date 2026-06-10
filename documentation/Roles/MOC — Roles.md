@@ -43,4 +43,4 @@
 
 ---
 
-*Part of [[00 — MOC — Project]]*
+_Part of [[00 — MOC — Project]]_

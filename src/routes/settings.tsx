@@ -38,7 +38,17 @@ export const Route = createFileRoute("/settings")({
   }),
 });
 
-const LANGS = ["हिंदी", "বাংলা", "తెలుగు", "മലയാളം", "English", "Spanish", "Mandarin", "French", "German"];
+const LANGS = [
+  "हिंदी",
+  "বাংলা",
+  "తెలుగు",
+  "മലയാളം",
+  "English",
+  "Spanish",
+  "Mandarin",
+  "French",
+  "German",
+];
 const STYLES: ExplanationStyle[] = EXPLANATION_STYLES.map((s) => s.id);
 
 type FilterTab = "free" | "popular" | "all";
@@ -58,14 +68,17 @@ function isTextToText(m: ORModel): boolean {
   }
   // Fallback: exclude obvious non-text models by id pattern
   const id = (m.id ?? "").toLowerCase();
-  if (/(image|vision|tts|audio|whisper|dall-e|sora|video|embed|moderation|rerank)/.test(id)) return false;
+  if (/(image|vision|tts|audio|whisper|dall-e|sora|video|embed|moderation|rerank)/.test(id))
+    return false;
   return true;
 }
 
 function SettingsPage() {
   const navigate = useNavigate();
 
-  const [keyStatus, setKeyStatus] = useState<"unknown" | "missing" | "valid" | "invalid" | "checking">("unknown");
+  const [keyStatus, setKeyStatus] = useState<
+    "unknown" | "missing" | "valid" | "invalid" | "checking"
+  >("unknown");
   const [customKey, setCustomKeyInput] = useState("");
   const [models, setModels] = useState<ORModel[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -80,7 +93,12 @@ function SettingsPage() {
   const [temperature, setTemp] = useState(0.3);
   const [memory, setMemoryState] = useState(true);
   const [sequential, setSequentialState] = useState(true);
-  const [storageStats, setStorageStats] = useState<{ usage: string; quota: string; percent: string; pctNum: number } | null>(null);
+  const [storageStats, setStorageStats] = useState<{
+    usage: string;
+    quota: string;
+    percent: string;
+    pctNum: number;
+  } | null>(null);
   const [clearing, setClearing] = useState(false);
 
   const updateStorageStats = async () => {
@@ -100,7 +118,12 @@ function SettingsPage() {
   };
 
   const handleClearCache = async () => {
-    if (!confirm("Are you sure you want to clear all AI translation/explanation cached results? Extracted document text will be preserved.")) return;
+    if (
+      !confirm(
+        "Are you sure you want to clear all AI translation/explanation cached results? Extracted document text will be preserved.",
+      )
+    )
+      return;
     setClearing(true);
     try {
       await clearAllAiResults();
@@ -179,10 +202,15 @@ function SettingsPage() {
     const q = search.trim().toLowerCase();
     // 1) text→text only across all tabs
     let list = models.filter(isTextToText);
-    if (q) list = list.filter((m) => m.id.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q));
+    if (q)
+      list = list.filter(
+        (m) => m.id.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q),
+      );
     if (tab === "free") {
       list = list.filter(
-        (m) => parseFloat(m.pricing?.prompt ?? "0") === 0 && parseFloat(m.pricing?.completion ?? "0") === 0,
+        (m) =>
+          parseFloat(m.pricing?.prompt ?? "0") === 0 &&
+          parseFloat(m.pricing?.completion ?? "0") === 0,
       );
     } else if (tab === "popular") {
       list = list.filter((m) => POPULAR_RX.test(m.id));
@@ -217,9 +245,7 @@ function SettingsPage() {
       <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
         {/* Page Header */}
         <header>
-          <h3 className="text-4xl font-bold tracking-tight text-foreground">
-            General Settings
-          </h3>
+          <h3 className="text-4xl font-bold tracking-tight text-foreground">General Settings</h3>
           <p className="mt-2 text-base text-muted-foreground">
             Configure your AI intelligence core and global defaults.
           </p>
@@ -244,7 +270,9 @@ function SettingsPage() {
                 placeholder="Search languages..."
                 className="w-full rounded-lg border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
               />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">🔍</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                🔍
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
               {LANGS.map((l) => (
@@ -267,7 +295,9 @@ function SettingsPage() {
           <section className="glass-panel flex flex-col rounded-xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-xl text-yellow-500">💾</span>
-              <h3 className="text-lg font-semibold text-foreground">Storage & Memory Diagnostics</h3>
+              <h3 className="text-lg font-semibold text-foreground">
+                Storage & Memory Diagnostics
+              </h3>
             </div>
 
             {/* IDB Storage Bar */}
@@ -275,7 +305,9 @@ function SettingsPage() {
               <div className="mb-5">
                 <div className="mb-2 flex justify-between text-xs font-bold text-muted-foreground">
                   <span>IndexedDB Usage</span>
-                  <span className="text-foreground">{storageStats.usage} / {storageStats.quota}</span>
+                  <span className="text-foreground">
+                    {storageStats.usage} / {storageStats.quota}
+                  </span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-background">
                   <div
@@ -310,7 +342,9 @@ function SettingsPage() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {/* Default Mode */}
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Default Mode</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Default Mode
+              </label>
               <select
                 value={mode}
                 onChange={(e) => {
@@ -321,7 +355,9 @@ function SettingsPage() {
                 className="w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
               >
                 {Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
+                  <option key={k} value={k}>
+                    {v.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -342,7 +378,9 @@ function SettingsPage() {
                 className="w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary disabled:opacity-50"
               >
                 {EXPLANATION_STYLES.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -350,7 +388,9 @@ function SettingsPage() {
             {/* Temperature */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Temperature</label>
+                <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Temperature
+                </label>
                 <span className="text-sm font-semibold text-accent">{temperature.toFixed(1)}</span>
               </div>
               <input
@@ -377,26 +417,40 @@ function SettingsPage() {
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
               <span>
-                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Memory</span>
-                <span className="text-sm text-foreground/80">Pass trailing excerpt of previous page into next request</span>
+                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Memory
+                </span>
+                <span className="text-sm text-foreground/80">
+                  Pass trailing excerpt of previous page into next request
+                </span>
               </span>
               <input
                 type="checkbox"
                 checked={memory}
-                onChange={(e) => { setMemoryState(e.target.checked); setMemory(e.target.checked); }}
+                onChange={(e) => {
+                  setMemoryState(e.target.checked);
+                  setMemory(e.target.checked);
+                }}
                 className="h-4 w-4 accent-primary"
               />
             </label>
 
             <label className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
               <span>
-                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Sequential Execution</span>
-                <span className="text-sm text-foreground/80">Run All Pages processes one at a time, in order</span>
+                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Sequential Execution
+                </span>
+                <span className="text-sm text-foreground/80">
+                  Run All Pages processes one at a time, in order
+                </span>
               </span>
               <input
                 type="checkbox"
                 checked={sequential}
-                onChange={(e) => { setSequentialState(e.target.checked); setSequential(e.target.checked); }}
+                onChange={(e) => {
+                  setSequentialState(e.target.checked);
+                  setSequential(e.target.checked);
+                }}
                 className="h-4 w-4 accent-primary"
               />
             </label>
@@ -412,12 +466,15 @@ function SettingsPage() {
               <h3 className="text-lg font-semibold text-foreground">API Management</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              DocLens uses the server-managed key by default, but you can enter your own key here to override it.
+              DocLens uses the server-managed key by default, but you can enter your own key here to
+              override it.
             </p>
-            
+
             <div className="flex flex-col gap-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-semibold text-foreground">Custom API Key (Optional)</label>
+                <label className="text-xs font-semibold text-foreground">
+                  Custom API Key (Optional)
+                </label>
                 <a
                   href="https://openrouter.ai/keys"
                   target="_blank"
@@ -435,7 +492,8 @@ function SettingsPage() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
               />
               <p className="text-[10px] text-muted-foreground">
-                Leave blank to fallback to the server environment key. Saved locally in your browser.
+                Leave blank to fallback to the server environment key. Saved locally in your
+                browser.
               </p>
             </div>
 
@@ -453,14 +511,18 @@ function SettingsPage() {
                 </span>
               )}
               {keyStatus === "missing" && (
-                <span className="text-destructive">No API key configured (neither server nor custom key)</span>
+                <span className="text-destructive">
+                  No API key configured (neither server nor custom key)
+                </span>
               )}
               {keyStatus === "invalid" && (
                 <span className="text-destructive">
                   {customKey.trim() ? "Invalid custom key" : "Invalid server key"}
                 </span>
               )}
-              {keyStatus === "unknown" && <span className="text-muted-foreground">Not checked</span>}
+              {keyStatus === "unknown" && (
+                <span className="text-muted-foreground">Not checked</span>
+              )}
             </div>
           </section>
 
@@ -480,7 +542,9 @@ function SettingsPage() {
             </div>
 
             {keyStatus !== "valid" ? (
-              <p className="text-sm text-muted-foreground">Configure OPENROUTER_API_KEY to load models.</p>
+              <p className="text-sm text-muted-foreground">
+                Configure OPENROUTER_API_KEY to load models.
+              </p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -521,15 +585,21 @@ function SettingsPage() {
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border ${
-                            active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
-                          }`}>
-                            <span className={`text-sm ${active ? "text-primary" : "text-muted-foreground"}`}>
+                          <div
+                            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border ${
+                              active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
+                            }`}
+                          >
+                            <span
+                              className={`text-sm ${active ? "text-primary" : "text-muted-foreground"}`}
+                            >
                               {active ? "⭐" : "🔮"}
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-bold text-foreground">{m.name || m.id}</div>
+                            <div className="truncate text-sm font-bold text-foreground">
+                              {m.name || m.id}
+                            </div>
                             <div className="truncate text-[11px] text-muted-foreground">{m.id}</div>
                           </div>
                         </div>
@@ -545,7 +615,9 @@ function SettingsPage() {
                     );
                   })}
                   {!loadingModels && filtered.length === 0 && (
-                    <div className="py-4 text-center text-xs text-muted-foreground">No models match</div>
+                    <div className="py-4 text-center text-xs text-muted-foreground">
+                      No models match
+                    </div>
                   )}
                 </div>
               </>
@@ -629,7 +701,11 @@ function collectMemorySnapshot(): MemorySnapshot {
 
   // CSS rules
   for (let i = 0; i < document.styleSheets.length; i++) {
-    try { snap.cssRules += document.styleSheets[i].cssRules.length; } catch { /* cross-origin */ }
+    try {
+      snap.cssRules += document.styleSheets[i].cssRules.length;
+    } catch {
+      /* cross-origin */
+    }
   }
 
   return snap;
@@ -646,7 +722,7 @@ const DIAG_COLORS: Record<string, string> = {
   "Canvas Buffers": "#f59e0b",
   "Data URL Images": "#818cf8",
   "DOM Overhead": "#38bdf8",
-  "LocalStorage": "#a78bfa",
+  LocalStorage: "#a78bfa",
 };
 
 function MemoryDiagnostics() {
@@ -664,11 +740,31 @@ function MemoryDiagnostics() {
 
   // Build breakdown rows: each contributes to the stacked bar
   const rows = [
-    { label: "JS Heap", bytes: snap.jsHeapUsed, detail: `${fmtMB(snap.jsHeapUsed)} / ${fmtMB(snap.jsHeapTotal)} (limit ${fmtMB(snap.jsHeapLimit)})` },
-    { label: "Canvas Buffers", bytes: snap.canvasMemory, detail: `${snap.canvasActiveCount} active / ${snap.canvasCount} total` },
-    { label: "Data URL Images", bytes: snap.dataUrlImgBytes, detail: `${snap.dataUrlImgCount} image${snap.dataUrlImgCount === 1 ? "" : "s"}` },
-    { label: "DOM Overhead", bytes: snap.domNodes * 256, detail: `${snap.domNodes.toLocaleString()} nodes · ${snap.textLayerSpans} text spans` },
-    { label: "LocalStorage", bytes: snap.localStorageBytes * 2, detail: `${localStorage.length} keys` },
+    {
+      label: "JS Heap",
+      bytes: snap.jsHeapUsed,
+      detail: `${fmtMB(snap.jsHeapUsed)} / ${fmtMB(snap.jsHeapTotal)} (limit ${fmtMB(snap.jsHeapLimit)})`,
+    },
+    {
+      label: "Canvas Buffers",
+      bytes: snap.canvasMemory,
+      detail: `${snap.canvasActiveCount} active / ${snap.canvasCount} total`,
+    },
+    {
+      label: "Data URL Images",
+      bytes: snap.dataUrlImgBytes,
+      detail: `${snap.dataUrlImgCount} image${snap.dataUrlImgCount === 1 ? "" : "s"}`,
+    },
+    {
+      label: "DOM Overhead",
+      bytes: snap.domNodes * 256,
+      detail: `${snap.domNodes.toLocaleString()} nodes · ${snap.textLayerSpans} text spans`,
+    },
+    {
+      label: "LocalStorage",
+      bytes: snap.localStorageBytes * 2,
+      detail: `${localStorage.length} keys`,
+    },
   ];
 
   const totalTracked = rows.reduce((s, r) => s + r.bytes, 0);
@@ -677,8 +773,12 @@ function MemoryDiagnostics() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Runtime Memory</span>
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">LIVE</span>
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Runtime Memory
+          </span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+            LIVE
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-foreground">{fmtMB(totalTracked)} tracked</span>
@@ -720,7 +820,10 @@ function MemoryDiagnostics() {
       {/* Legend + breakdown rows */}
       <div className="grid grid-cols-1 gap-1.5">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 px-3 py-1.5">
+          <div
+            key={row.label}
+            className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 px-3 py-1.5"
+          >
             <div className="flex items-center gap-2.5">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-sm"

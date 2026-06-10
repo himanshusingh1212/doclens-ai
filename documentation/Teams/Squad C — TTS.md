@@ -23,11 +23,11 @@
 
 ## Team Roles
 
-| Role | Count | Primary Focus |
-|------|-------|---------------|
-| **Squad Lead** | 1 | Team lead, coordinates speech pipelines |
-| **TTS Engine Engineers** | 4 | WASM and browser-native speech synthesis (Depth 1) |
-| **Audio QA** | 5 | Audio quality, pronunciation, and sync checks (Depth 1/2) |
+| Role                     | Count | Primary Focus                                             |
+| ------------------------ | ----- | --------------------------------------------------------- |
+| **Squad Lead**           | 1     | Team lead, coordinates speech pipelines                   |
+| **TTS Engine Engineers** | 4     | WASM and browser-native speech synthesis (Depth 1)        |
+| **Audio QA**             | 5     | Audio quality, pronunciation, and sync checks (Depth 1/2) |
 
 ---
 
@@ -39,4 +39,4 @@
 
 ---
 
-*Part of [[MOC — Teams]]*
+_Part of [[MOC — Teams]]_

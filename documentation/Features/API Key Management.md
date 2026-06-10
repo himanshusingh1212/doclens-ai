@@ -34,4 +34,4 @@ The OpenRouter API key is configured as an environment variable (`OPENROUTER_API
 
 ---
 
-*Part of [[MOC — Features]]*
+_Part of [[MOC — Features]]_

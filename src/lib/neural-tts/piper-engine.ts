@@ -12,17 +12,17 @@
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface PiperVoiceMeta {
-  key: string;          // e.g. "hi_IN-pratham-medium"
-  name: string;         // e.g. "pratham"
+  key: string; // e.g. "hi_IN-pratham-medium"
+  name: string; // e.g. "pratham"
   language: {
-    code: string;       // e.g. "hi_IN"
-    family: string;     // e.g. "hi"
-    region: string;     // e.g. "IN"
+    code: string; // e.g. "hi_IN"
+    family: string; // e.g. "hi"
+    region: string; // e.g. "IN"
     name_native: string;
     name_english: string;
     country_english: string;
   };
-  quality: string;      // "x_low" | "low" | "medium" | "high"
+  quality: string; // "x_low" | "low" | "medium" | "high"
   num_speakers: number;
   files: Record<string, { size_bytes: number; md5_digest: string }>;
   installed?: boolean;
@@ -33,10 +33,8 @@ export type EngineStatus = "idle" | "loading" | "ready" | "error";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const VOICES_JSON_URL =
-  "https://huggingface.co/rhasspy/piper-voices/raw/main/voices.json";
-const HF_RESOLVE_BASE =
-  "https://huggingface.co/rhasspy/piper-voices/resolve/main/";
+const VOICES_JSON_URL = "https://huggingface.co/rhasspy/piper-voices/raw/main/voices.json";
+const HF_RESOLVE_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/";
 
 const IDB_NAME = "doclens-piper";
 const IDB_VERSION = 1;
@@ -87,8 +85,14 @@ async function idbGet<T>(key: string): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readonly");
     const req = tx.objectStore(IDB_STORE).get(key);
-    req.onsuccess = () => { db.close(); resolve(req.result as T | undefined); };
-    req.onerror = () => { db.close(); reject(req.error); };
+    req.onsuccess = () => {
+      db.close();
+      resolve(req.result as T | undefined);
+    };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
   });
 }
 
@@ -97,8 +101,14 @@ async function idbPut(key: string, value: unknown): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readwrite");
     tx.objectStore(IDB_STORE).put(value, key);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
   });
 }
 
@@ -107,8 +117,14 @@ async function idbDelete(key: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readwrite");
     tx.objectStore(IDB_STORE).delete(key);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
   });
 }
 
@@ -117,8 +133,14 @@ async function idbAllKeys(): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, "readonly");
     const req = tx.objectStore(IDB_STORE).getAllKeys();
-    req.onsuccess = () => { db.close(); resolve(req.result as string[]); };
-    req.onerror = () => { db.close(); reject(req.error); };
+    req.onsuccess = () => {
+      db.close();
+      resolve(req.result as string[]);
+    };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
   });
 }
 
@@ -286,16 +308,15 @@ class LocalVoiceProvider {
     }>(voiceId);
 
     if (!record) {
-      throw new Error(
-        `Voice "${voiceId}" is not installed. Install it from Settings → Voice.`,
-      );
+      throw new Error(`Voice "${voiceId}" is not installed. Install it from Settings → Voice.`);
     }
 
     // v1 stored ArrayBuffer; v2 stores Blob directly (zero-copy from IDB).
     // The Blob path avoids materializing the model bytes on the JS heap.
-    const blob = record.onnx instanceof Blob
-      ? record.onnx
-      : new Blob([record.onnx], { type: "application/octet-stream" });
+    const blob =
+      record.onnx instanceof Blob
+        ? record.onnx
+        : new Blob([record.onnx], { type: "application/octet-stream" });
     const blobUrl = URL.createObjectURL(blob);
 
     const config = record.config || {};
@@ -376,11 +397,7 @@ export async function synthesizeAudio(
  * Low-level: synthesize a chunk and return the raw WAV Blob.
  * Caller is responsible for playback and memory.
  */
-export async function synthesizeBlob(
-  text: string,
-  voiceId: string,
-  speakerId = 0,
-): Promise<Blob> {
+export async function synthesizeBlob(text: string, voiceId: string, speakerId = 0): Promise<Blob> {
   const audioData = await synthesizeAudio(text, voiceId, speakerId);
   if (audioData.blob) return audioData.blob;
   if (audioData.pcm) {
@@ -462,7 +479,12 @@ export function stop() {
   if (currentAudio) {
     currentAudio.audio.pause();
     URL.revokeObjectURL(currentAudio.url);
-    try { currentAudio.audio.removeAttribute("src"); currentAudio.audio.load(); } catch { /* ignore */ }
+    try {
+      currentAudio.audio.removeAttribute("src");
+      currentAudio.audio.load();
+    } catch {
+      /* ignore */
+    }
     currentAudio = null;
   }
   stopAudioContextPlayback();
@@ -490,11 +512,21 @@ export async function testVoice(voiceId: string): Promise<void> {
   return new Promise<void>((resolve) => {
     // Safety timeout: never hang forever (30s max for a test sentence)
     const timeout = setTimeout(() => {
-      try { audio.pause(); } catch { /* ignore */ }
+      try {
+        audio.pause();
+      } catch {
+        /* ignore */
+      }
       resolve();
     }, 30_000);
-    audio.onended = () => { clearTimeout(timeout); resolve(); };
-    audio.onerror = () => { clearTimeout(timeout); resolve(); };
+    audio.onended = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+    audio.onerror = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
   });
 }
 
@@ -505,8 +537,7 @@ let activePipeline: { stop: () => void } | null = null;
 
 function getAudioCtx(): AudioContext {
   if (!audioCtx || audioCtx.state === "closed") {
-    const Ctor =
-      (window as any).AudioContext || (window as any).webkitAudioContext;
+    const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
     audioCtx = new Ctor({ sampleRate: 22050 });
   }
   return audioCtx!;
@@ -558,14 +589,20 @@ export async function speakChunked(
       try {
         await ctx.resume();
         if ((ctx.state as string) === "running") break;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       await new Promise((r) => setTimeout(r, 100));
     }
     if ((ctx.state as string) !== "running") {
       console.warn("[piper-engine] AudioContext stuck in", ctx.state, "— creating fresh context");
       closeAudioContext();
       const freshCtx = getAudioCtx();
-      try { await freshCtx.resume(); } catch { /* ignore */ }
+      try {
+        await freshCtx.resume();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -579,17 +616,28 @@ export async function speakChunked(
 
   const waitForSlot = () =>
     new Promise<void>((res) => {
-      if (decoded.length < MAX_BUFFERED || aborted) { res(); return; }
+      if (decoded.length < MAX_BUFFERED || aborted) {
+        res();
+        return;
+      }
       resolveSlot = res;
     });
 
   const notifySlot = () => {
-    if (resolveSlot) { const r = resolveSlot; resolveSlot = null; r(); }
+    if (resolveSlot) {
+      const r = resolveSlot;
+      resolveSlot = null;
+      r();
+    }
   };
 
   let resolveBuffer: (() => void) | null = null;
   const notifyConsumer = () => {
-    if (resolveBuffer) { const r = resolveBuffer; resolveBuffer = null; r(); }
+    if (resolveBuffer) {
+      const r = resolveBuffer;
+      resolveBuffer = null;
+      r();
+    }
   };
   const waitForBuffer = () =>
     new Promise<void>((res) => {
@@ -620,7 +668,11 @@ export async function speakChunked(
           // Fallback: try extracting PCM from WAV manually first
           const pcmFallback = await extractPcmFromWav(audioData.blob);
           if (pcmFallback?.pcm) {
-            buffer = activeCtx.createBuffer(1, pcmFallback.pcm.length, pcmFallback.sampleRate ?? 22050);
+            buffer = activeCtx.createBuffer(
+              1,
+              pcmFallback.pcm.length,
+              pcmFallback.sampleRate ?? 22050,
+            );
             buffer.getChannelData(0).set(pcmFallback.pcm);
           } else {
             // Last resort: use decodeAudioData with timeout
@@ -659,9 +711,21 @@ export async function speakChunked(
     stop: () => {
       aborted = true;
       for (const s of sources) {
-        try { s.stop(); } catch { /* ignore */ }
-        try { (s as any).buffer = null; } catch { /* ignore */ }
-        try { s.disconnect(); } catch { /* ignore */ }
+        try {
+          s.stop();
+        } catch {
+          /* ignore */
+        }
+        try {
+          (s as any).buffer = null;
+        } catch {
+          /* ignore */
+        }
+        try {
+          s.disconnect();
+        } catch {
+          /* ignore */
+        }
       }
       sources.clear();
       decoded.length = 0;
@@ -696,8 +760,16 @@ export async function speakChunked(
 
       src.onended = () => {
         sources.delete(src);
-        try { (src as any).buffer = null; } catch { /* ignore */ }
-        try { src.disconnect(); } catch { /* ignore */ }
+        try {
+          (src as any).buffer = null;
+        } catch {
+          /* ignore */
+        }
+        try {
+          src.disconnect();
+        } catch {
+          /* ignore */
+        }
       };
 
       playedCount++;
@@ -705,10 +777,7 @@ export async function speakChunked(
       // Wait until the previous chunk is *almost* done before scheduling next.
       // 50ms headroom keeps the scheduler ahead of the playhead without
       // building up an unbounded set of live nodes.
-      const waitMs = Math.max(
-        0,
-        (nextStartTime - activeCtx.currentTime) * 1000 - 50,
-      );
+      const waitMs = Math.max(0, (nextStartTime - activeCtx.currentTime) * 1000 - 50);
       if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
     }
 
@@ -744,10 +813,26 @@ export function destroyEngine() {
     // Try every known teardown path — piper-tts-web may expose any of these,
     // and without a hard worker terminate the WASM heap (50-100MB) leaks for
     // the lifetime of the page.
-    try { engineInstance.dispose?.(); } catch { /* ignore */ }
-    try { engineInstance.destroy?.(); } catch { /* ignore */ }
-    try { engineInstance.terminate?.(); } catch { /* ignore */ }
-    try { engineInstance.worker?.terminate?.(); } catch { /* ignore */ }
+    try {
+      engineInstance.dispose?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      engineInstance.destroy?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      engineInstance.terminate?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      engineInstance.worker?.terminate?.();
+    } catch {
+      /* ignore */
+    }
     engineInstance = null;
   }
   engineInitPromise = null;
@@ -761,9 +846,7 @@ export function destroyEngine() {
 /**
  * Pick the best installed voice for a language name.
  */
-export async function pickVoiceForLanguage(
-  lang: string,
-): Promise<string | null> {
+export async function pickVoiceForLanguage(lang: string): Promise<string | null> {
   const preferred = localStorage.getItem("doclens.piper.preferredVoice");
   if (preferred) {
     if (await isInstalled(preferred)) return preferred;
@@ -777,10 +860,10 @@ export async function pickVoiceForLanguage(
 
   const langLower = lang.toLowerCase();
   const langCodeMap: Record<string, string> = {
-    "हिंदी": "hi",
-    "বাংলা": "bn",
-    "తెలుగు": "te",
-    "മലയാളം": "ml",
+    हिंदी: "hi",
+    বাংলা: "bn",
+    తెలుగు: "te",
+    മലയാളം: "ml",
     hindi: "hi",
     bangla: "bn",
     bengali: "bn",
@@ -819,8 +902,18 @@ async function extractPcmFromWav(blob: Blob): Promise<SynthesizedAudio | null> {
 
     // Validate RIFF/WAVE header
     if (buffer.byteLength < 44) return null;
-    const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-    const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
+    const riff = String.fromCharCode(
+      view.getUint8(0),
+      view.getUint8(1),
+      view.getUint8(2),
+      view.getUint8(3),
+    );
+    const wave = String.fromCharCode(
+      view.getUint8(8),
+      view.getUint8(9),
+      view.getUint8(10),
+      view.getUint8(11),
+    );
     if (riff !== "RIFF" || wave !== "WAVE") return null;
 
     // Find fmt chunk
@@ -833,8 +926,10 @@ async function extractPcmFromWav(blob: Blob): Promise<SynthesizedAudio | null> {
 
     while (offset < buffer.byteLength - 8) {
       const chunkId = String.fromCharCode(
-        view.getUint8(offset), view.getUint8(offset + 1),
-        view.getUint8(offset + 2), view.getUint8(offset + 3),
+        view.getUint8(offset),
+        view.getUint8(offset + 1),
+        view.getUint8(offset + 2),
+        view.getUint8(offset + 3),
       );
       const chunkSize = view.getUint32(offset + 4, true);
 
@@ -862,7 +957,7 @@ async function extractPcmFromWav(blob: Blob): Promise<SynthesizedAudio | null> {
     const pcm = new Float32Array(sampleCount);
     for (let i = 0; i < sampleCount; i++) {
       const sample = view.getInt16(dataOffset + i * 2, true);
-      pcm[i] = sample < 0 ? sample / 0x8000 : sample / 0x7FFF;
+      pcm[i] = sample < 0 ? sample / 0x8000 : sample / 0x7fff;
     }
 
     return { pcm, sampleRate };
@@ -903,7 +998,7 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   let off = 44;
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
     off += 2;
   }
 
@@ -926,4 +1021,3 @@ if (import.meta.hot) {
     }
   });
 }
-

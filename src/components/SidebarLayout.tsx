@@ -69,9 +69,7 @@ export function SidebarLayout({
             <h1 className="text-lg font-black tracking-tight text-primary transition-colors group-hover:text-foreground">
               DocLens
             </h1>
-            <p className="text-[11px] tracking-wide text-muted-foreground">
-              AI Intelligence
-            </p>
+            <p className="text-[11px] tracking-wide text-muted-foreground">AI Intelligence</p>
           </div>
         </Link>
       </div>
@@ -79,9 +77,10 @@ export function SidebarLayout({
       {/* Navigation */}
       <nav className="flex flex-col gap-1 px-4">
         {NAV_ITEMS.map((item) => {
-          const isActive = item.to === "/"
-            ? !!matchRoute({ to: "/", fuzzy: false })
-            : !!matchRoute({ to: item.to, fuzzy: true });
+          const isActive =
+            item.to === "/"
+              ? !!matchRoute({ to: "/", fuzzy: false })
+              : !!matchRoute({ to: item.to, fuzzy: true });
 
           return (
             <Link
@@ -114,7 +113,10 @@ export function SidebarLayout({
           onChange={handleFileChange}
         />
         <button
-          onClick={() => { fileInputRef.current?.click(); setMobileOpen(false); }}
+          onClick={() => {
+            fileInputRef.current?.click();
+            setMobileOpen(false);
+          }}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 font-bold text-primary-foreground transition-all hover:opacity-90 active:scale-[0.97]"
         >
           <span className="text-lg leading-none">+</span>
@@ -137,7 +139,6 @@ export function SidebarLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
-
       {/* ──── Desktop Sidebar (hidden on mobile) ──── */}
       <aside className="hidden md:flex w-64 flex-shrink-0 flex-col border-r border-border bg-background">
         {sidebarContent}
@@ -145,27 +146,28 @@ export function SidebarLayout({
 
       {/* ──── Mobile Sidebar Overlay ──── */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-50 md:hidden"
-          aria-modal="true"
-          role="dialog"
-        >
+        <div className="fixed inset-0 z-50 md:hidden" aria-modal="true" role="dialog">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
           {/* Drawer */}
-          <aside
-            className="absolute inset-y-0 left-0 flex w-72 flex-col bg-background shadow-2xl animate-in slide-in-from-left duration-200"
-          >
+          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-background shadow-2xl animate-in slide-in-from-left duration-200">
             {/* Close button */}
             <button
               onClick={() => setMobileOpen(false)}
               className="absolute right-3 top-4 z-10 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
               aria-label="Close menu"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -185,7 +187,14 @@ export function SidebarLayout({
               className="md:hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
               aria-label="Open menu"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
@@ -200,9 +209,7 @@ export function SidebarLayout({
         </header>
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

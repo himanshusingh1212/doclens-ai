@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { useEffect } from "react";
 import { initTheme } from "@/lib/theme";
 
-
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -49,7 +48,10 @@ export const Route = createRootRoute({
       },
       { name: "author", content: "Anuwad" },
       { property: "og:site_name", content: "Anuwad" },
-      { property: "og:title", content: "Anuwad — Private PDF Reader, Translator & AI Voice Reader" },
+      {
+        property: "og:title",
+        content: "Anuwad — Private PDF Reader, Translator & AI Voice Reader",
+      },
       {
         property: "og:description",
         content:
@@ -58,7 +60,10 @@ export const Route = createRootRoute({
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://www.anuwad.com/" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Anuwad — Private PDF Reader, Translator & AI Voice Reader" },
+      {
+        name: "twitter:title",
+        content: "Anuwad — Private PDF Reader, Translator & AI Voice Reader",
+      },
       {
         name: "twitter:description",
         content:

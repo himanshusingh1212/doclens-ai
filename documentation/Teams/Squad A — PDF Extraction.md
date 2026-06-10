@@ -23,12 +23,12 @@
 
 ## Team Roles
 
-| Role | Count | Primary Focus |
-|------|-------|---------------|
-| **Squad Lead** | 1 | Team lead, coordinates extraction pipelines |
-| **PDF Parsing Engineers** | 4 | Text and coordinate extraction (Depth 1) |
-| **OCR Specialists** | 4 | Scan extraction and pre-processing (Depth 1) |
-| **Text Cleaning Engineers** | 4 | Text cleaning and structural normalization (Depth 2) |
+| Role                        | Count | Primary Focus                                        |
+| --------------------------- | ----- | ---------------------------------------------------- |
+| **Squad Lead**              | 1     | Team lead, coordinates extraction pipelines          |
+| **PDF Parsing Engineers**   | 4     | Text and coordinate extraction (Depth 1)             |
+| **OCR Specialists**         | 4     | Scan extraction and pre-processing (Depth 1)         |
+| **Text Cleaning Engineers** | 4     | Text cleaning and structural normalization (Depth 2) |
 
 ---
 
@@ -40,4 +40,4 @@
 
 ---
 
-*Part of [[MOC — Teams]]*
+_Part of [[MOC — Teams]]_

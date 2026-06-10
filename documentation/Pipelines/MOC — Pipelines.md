@@ -6,11 +6,11 @@
 
 ## Processing Pipelines
 
-| Pipeline | Source Role | Hand-off Format | Target Role |
-|----------|-------------|-----------------|-------------|
-| [[PDF Extraction Pipeline]] | [[Squad A — PDF Extraction]] | `extraction_output.json` | [[Squad B — Translation]] |
-| [[Translation Pipeline]] | [[Squad B — Translation]] | `translation_output.json` | [[Squad C — TTS]] |
-| [[TTS Pipeline]] | [[Squad C — TTS]] | Clean audio output chunks | Browser Player |
+| Pipeline                    | Source Role                  | Hand-off Format           | Target Role               |
+| --------------------------- | ---------------------------- | ------------------------- | ------------------------- |
+| [[PDF Extraction Pipeline]] | [[Squad A — PDF Extraction]] | `extraction_output.json`  | [[Squad B — Translation]] |
+| [[Translation Pipeline]]    | [[Squad B — Translation]]    | `translation_output.json` | [[Squad C — TTS]]         |
+| [[TTS Pipeline]]            | [[Squad C — TTS]]            | Clean audio output chunks | Browser Player            |
 
 ---
 
@@ -34,4 +34,4 @@ flowchart TD
 
 ---
 
-*Part of [[00 — MOC — Project]]*
+_Part of [[00 — MOC — Project]]_

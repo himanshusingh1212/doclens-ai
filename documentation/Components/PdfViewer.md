@@ -39,4 +39,4 @@ Handles parsing, visual canvas generation, transparent text overlay layering, pa
 
 ---
 
-*Part of [[MOC — Components]]*
+_Part of [[MOC — Components]]_
