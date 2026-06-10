@@ -81,6 +81,7 @@ export interface PageAiSummaryEntry {
   hasResult: boolean;
   isCustom?: boolean;
   settingsHash?: string;
+  updatedAt?: number;
 }
 
 export function computeSettingsHash(input: {
@@ -118,6 +119,7 @@ export interface DocRecord {
   pageAi?: Record<number, PageAi>;
   /** Cached count of pages with status === "done". */
   aiDoneCount?: number;
+  lastReadPage?: number;
 }
 
 export interface DocSummary {
@@ -129,6 +131,7 @@ export interface DocSummary {
   lastOpenedAt: number;
   hasExtraction: boolean;
   aiResultCount: number;
+  lastReadPage?: number;
 }
 
 /* ---------- Storage Error ---------- */
@@ -174,10 +177,7 @@ async function safePut(d: IDBPDatabase, store: string, value: unknown, key?: IDB
       await d.put(store, value);
     }
   } catch (e: unknown) {
-    if (
-      e instanceof DOMException &&
-      (e.name === "QuotaExceededError" || e.code === 22)
-    ) {
+    if (e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22)) {
       throw new StorageError(
         "Storage quota exceeded. Delete some documents to free space.",
         "QUOTA_EXCEEDED",
@@ -224,6 +224,7 @@ function normalizeDoc(raw: any): DocRecord | undefined {
     lastOpenedAt: raw.lastOpenedAt ?? 0,
     aiResults: Array.isArray(raw.aiResults) ? raw.aiResults : [],
     aiDoneCount: typeof raw.aiDoneCount === "number" ? raw.aiDoneCount : 0,
+    lastReadPage: typeof raw.lastReadPage === "number" ? raw.lastReadPage : undefined,
   };
 }
 
@@ -276,9 +277,9 @@ function db() {
                   garbageRatio: p.garbageRatio ?? 0,
                   pageAi: ai
                     ? (() => {
-                      const { lastSentRequest: _, ...rest } = ai;
-                      return { ...rest, pageNumber: p.pageNumber } as PageAi;
-                    })()
+                        const { lastSentRequest: _, ...rest } = ai;
+                        return { ...rest, pageNumber: p.pageNumber } as PageAi;
+                      })()
                     : undefined,
                 };
                 pagesStore.put(rec);
@@ -336,6 +337,7 @@ export async function listDocs(): Promise<DocSummary[]> {
       lastOpenedAt: r.lastOpenedAt ?? 0,
       hasExtraction: (r.pageCount ?? 0) > 0,
       aiResultCount: (r.aiResults?.length ?? 0) + (r.aiDoneCount ?? 0),
+      lastReadPage: r.lastReadPage,
     }))
     .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 }
@@ -373,7 +375,8 @@ export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<D
   const id = uuid();
   const now = Date.now();
   // Prefer storing as Blob so we don't pin a separate ArrayBuffer in memory later.
-  const blob = data instanceof Blob ? data : new Blob([data], { type: file.type || "application/pdf" });
+  const blob =
+    data instanceof Blob ? data : new Blob([data], { type: file.type || "application/pdf" });
   await safePut(d, BLOBS, blob, id);
   const rec: DocRecord = {
     id,
@@ -432,7 +435,10 @@ export async function writePages(id: string, pages: PageExtraction[] | StoredPag
       await tx.done;
     } catch (e) {
       if (e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22)) {
-        throw new StorageError("Storage quota exceeded. Delete some documents to free space.", "QUOTA_EXCEEDED");
+        throw new StorageError(
+          "Storage quota exceeded. Delete some documents to free space.",
+          "QUOTA_EXCEEDED",
+        );
       }
       throw new StorageError(
         `Failed to write pages: ${e instanceof Error ? e.message : "Unknown"}`,
@@ -444,7 +450,10 @@ export async function writePages(id: string, pages: PageExtraction[] | StoredPag
 }
 
 /** Read a single page's text and AI state. */
-export async function getPageData(docId: string, pageNumber: number): Promise<PageDataRecord | undefined> {
+export async function getPageData(
+  docId: string,
+  pageNumber: number,
+): Promise<PageDataRecord | undefined> {
   const d = await db();
   const v = await d.get(PAGES, pageKey(docId, pageNumber));
   return v as PageDataRecord | undefined;
@@ -469,6 +478,7 @@ export async function getPageAiSummary(docId: string): Promise<Record<number, Pa
         hasResult: !!p.pageAi.result,
         isCustom: p.pageAi.isCustom,
         settingsHash: p.pageAi.settingsHash,
+        updatedAt: p.pageAi.updatedAt,
       };
     }
   }
@@ -495,15 +505,28 @@ export async function touchDoc(id: string) {
 export async function deleteDoc(id: string) {
   const d = await db();
   await d.delete(STORE, id);
-  try { await d.delete(BLOBS, id); } catch { /* ignore */ }
-  try { await d.delete(THUMBNAILS, id); } catch { /* ignore */ }
+  try {
+    await d.delete(BLOBS, id);
+  } catch {
+    /* ignore */
+  }
+  try {
+    await d.delete(THUMBNAILS, id);
+  } catch {
+    /* ignore */
+  }
   // Remove all per-page records.
   try {
     const tx = d.transaction(PAGES, "readwrite");
     let cur = await tx.store.openCursor(pageRange(id));
-    while (cur) { await cur.delete(); cur = await cur.continue(); }
+    while (cur) {
+      await cur.delete();
+      cur = await cur.continue();
+    }
     await tx.done;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   const last = await getLastOpened();
   if (last === id) await setLastOpened(null);
 }
@@ -584,8 +607,8 @@ export interface VoicePackRecord {
 
 export async function listVoicePacks(): Promise<VoicePackRecord[]> {
   const d = await db();
-  return ((await d.getAll(VOICE_PACKS)) as VoicePackRecord[]).sort(
-    (a, b) => a.voiceId.localeCompare(b.voiceId),
+  return ((await d.getAll(VOICE_PACKS)) as VoicePackRecord[]).sort((a, b) =>
+    a.voiceId.localeCompare(b.voiceId),
   );
 }
 export async function recordVoicePack(rec: VoicePackRecord) {

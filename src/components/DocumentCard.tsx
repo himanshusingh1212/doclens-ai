@@ -14,6 +14,7 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
     <Link
       to="/doc/$id"
       params={{ id: doc.id }}
+      search={doc.lastReadPage ? { page: doc.lastReadPage } : undefined}
       className="group glass-panel flex flex-col gap-3 rounded-xl p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
     >
       {/* Thumbnail Area */}
@@ -87,8 +88,19 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
           className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
           aria-label="Delete document"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"
+            />
           </svg>
         </button>
       </div>

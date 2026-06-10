@@ -129,6 +129,7 @@ function summarize(ai: PageAi): PageAiSummaryEntry {
     hasResult: !!ai.result,
     isCustom: ai.isCustom,
     settingsHash: ai.settingsHash,
+    updatedAt: ai.updatedAt,
   };
 }
 
@@ -166,75 +167,78 @@ export function PageWorkstation({
   const ttsRef = useRef<PiperReaderController | null>(null);
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
-  const startTtsForPage = useCallback(async (pageNumber: number) => {
-    const rec = await getPageData(docId, pageNumber);
-    if (!rec?.pageAi?.result) {
-      toast.error(`Page ${pageNumber} translation text is not available.`);
-      return;
-    }
-    const ready = await hasTtsSelection(globals.language);
-    if (!ready) {
-      setVoiceSetupOpen(true);
-      return;
-    }
+  const startTtsForPage = useCallback(
+    async (pageNumber: number) => {
+      const rec = await getPageData(docId, pageNumber);
+      if (!rec?.pageAi?.result) {
+        toast.error(`Page ${pageNumber} translation text is not available.`);
+        return;
+      }
+      const ready = await hasTtsSelection(globals.language);
+      if (!ready) {
+        setVoiceSetupOpen(true);
+        return;
+      }
 
-    ttsRef.current?.destroy();
-    setTtsPlayingPage(pageNumber);
+      ttsRef.current?.destroy();
+      setTtsPlayingPage(pageNumber);
 
-    toast.info(`Initializing TTS voice model for Page ${pageNumber}...`, {
-      id: `tts-init-${pageNumber}`,
-      duration: 10000,
-    });
+      toast.info(`Initializing TTS voice model for Page ${pageNumber}...`, {
+        id: `tts-init-${pageNumber}`,
+        duration: 10000,
+      });
 
-    const ctrl = createPiperReaderController(rec.pageAi.result, {
-      language: globals.language,
-      onSnapshot: (snapshot) => {
-        if (snapshot.status === "playing" || snapshot.status === "paused") {
-          toast.dismiss(`tts-init-${pageNumber}`);
-        }
-        setTtsReader(snapshot);
+      const ctrl = createPiperReaderController(rec.pageAi.result, {
+        language: globals.language,
+        onSnapshot: (snapshot) => {
+          if (snapshot.status === "playing" || snapshot.status === "paused") {
+            toast.dismiss(`tts-init-${pageNumber}`);
+          }
+          setTtsReader(snapshot);
 
-        if (snapshot.status === "ended") {
-          const nextP = pageNumber + 1;
-          if (nextP <= pageCount) {
-            setActivePage(nextP);
-            if (aiSummary[nextP]?.status === "done") {
-              void startTtsForPage(nextP);
+          if (snapshot.status === "ended") {
+            const nextP = pageNumber + 1;
+            if (nextP <= pageCount) {
+              setActivePage(nextP);
+              if (aiSummary[nextP]?.status === "done") {
+                void startTtsForPage(nextP);
+              } else {
+                setTtsWaitingForTranslation(nextP);
+                if (aiSummary[nextP]?.status !== "running") {
+                  void runPageWithSetup(nextP);
+                }
+              }
             } else {
-              setTtsWaitingForTranslation(nextP);
-              if (aiSummary[nextP]?.status !== "running") {
-                void runPageWithSetup(nextP);
-              }
+              setTtsPlayingPage(null);
+              setTtsReader(null);
+              setTtsWaitingForTranslation(null);
             }
-          } else {
-            setTtsPlayingPage(null);
-            setTtsReader(null);
-            setTtsWaitingForTranslation(null);
           }
-        }
 
-        if (snapshot.status === "playing") {
-          const nextP = pageNumber + 1;
-          if (nextP <= pageCount && aiSummary[nextP]?.status === "done") {
-            void getPageData(docId, nextP).then((nextRec) => {
-              if (nextRec?.pageAi?.result) {
-                void prefetchTts(nextRec.pageAi.result, globals.language);
-              }
-            });
+          if (snapshot.status === "playing") {
+            const nextP = pageNumber + 1;
+            if (nextP <= pageCount && aiSummary[nextP]?.status === "done") {
+              void getPageData(docId, nextP).then((nextRec) => {
+                if (nextRec?.pageAi?.result) {
+                  void prefetchTts(nextRec.pageAi.result, globals.language);
+                }
+              });
+            }
           }
-        }
-      },
-      onError: (message) => {
-        toast.dismiss(`tts-init-${pageNumber}`);
-        toast.error(message);
-        setTtsPlayingPage(null);
-        setTtsReader(null);
-        setTtsWaitingForTranslation(null);
-      },
-    });
-    ttsRef.current = ctrl;
-    ctrl.play();
-  }, [docId, globals.language, pageCount, aiSummary]);
+        },
+        onError: (message) => {
+          toast.dismiss(`tts-init-${pageNumber}`);
+          toast.error(message);
+          setTtsPlayingPage(null);
+          setTtsReader(null);
+          setTtsWaitingForTranslation(null);
+        },
+      });
+      ttsRef.current = ctrl;
+      ctrl.play();
+    },
+    [docId, globals.language, pageCount, aiSummary],
+  );
 
   const handleTtsPlay = useCallback(() => {
     if (ttsReader?.status === "paused" && ttsRef.current) {
@@ -947,7 +951,7 @@ export function PageWorkstation({
               Translating Page {ttsWaitingForTranslation}…
             </span>
           )}
-          
+
           {/* Rewind */}
           {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
             <button
@@ -1278,7 +1282,6 @@ function PageCard({
     onUpdate({ customRequest: null, isCustom: false });
     setEditingJson(false);
   };
-
 
   /* Determine button label from mode */
   const modeLabel = MODE_INSTRUCTIONS[eff.mode]?.label || "Translate";

@@ -64,9 +64,39 @@ function DocPage() {
         search: { page: p },
         replace: true,
       });
+      void updateDoc(id, { lastReadPage: p });
     },
     [id, navigate],
   );
+
+  const goToLastTranslatedPage = useCallback(() => {
+    const entries = Object.entries(aiSummary).filter(([_, entry]) => entry.status === "done");
+    if (entries.length === 0) {
+      toast.info("No pages have been translated yet.");
+      return;
+    }
+
+    let bestPage = -1;
+    let maxTime = -1;
+    let maxPageNum = -1;
+
+    for (const [pageStr, entry] of entries) {
+      const pageNum = Number(pageStr);
+      if (pageNum > maxPageNum) {
+        maxPageNum = pageNum;
+      }
+      if (entry.updatedAt && entry.updatedAt > maxTime) {
+        maxTime = entry.updatedAt;
+        bestPage = pageNum;
+      }
+    }
+
+    const targetPage = bestPage !== -1 ? bestPage : maxPageNum;
+    if (targetPage !== -1) {
+      setActivePage(targetPage);
+      toast.success(`Jumped to last translated page: ${targetPage}`);
+    }
+  }, [aiSummary, setActivePage]);
 
   // Stop active playback when leaving the document reader, but keep the workers warm in the JS heap
   useEffect(() => {
@@ -98,10 +128,17 @@ function DocPage() {
       setAiSummary(sum);
       await touchDoc(id);
       await setLastOpened(id);
+
+      // If no page was passed in the URL search params, and there's a saved last read page:
+      if (!urlPage && rec.lastReadPage) {
+        const targetPage = Math.min(pc > 0 ? pc : Infinity, rec.lastReadPage);
+        setActivePage(targetPage);
+      }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const refreshSummary = async () => {
@@ -263,9 +300,13 @@ function DocPage() {
               ›
             </button>
             {doneCount > 0 && (
-              <span className="ml-1 text-[10px] text-primary font-medium">
+              <button
+                onClick={goToLastTranslatedPage}
+                className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20 hover:underline"
+                title="Go to last translated page"
+              >
                 {doneCount} translated
-              </span>
+              </button>
             )}
           </div>
         )}
