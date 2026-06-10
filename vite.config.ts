@@ -10,6 +10,7 @@ import { nitro } from "nitro/vite";
 const isVercel = process.env.VERCEL === "1";
 
 export default defineConfig({
+  cloudflare: false,
   tanstackStart: {
     spa: {},
     prerender: {
@@ -17,6 +18,18 @@ export default defineConfig({
     },
   },
   vite: {
+    server: {
+      headers: {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
+      },
+    },
+    preview: {
+      headers: {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
+      },
+    },
     ssr: {
       external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
     },

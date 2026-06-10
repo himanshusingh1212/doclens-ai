@@ -509,7 +509,7 @@ export async function testVoice(voiceId: string): Promise<void> {
   const text = sampleTexts[lang] || sampleTexts.en;
 
   const audio = await synthesize(text, voiceId);
-  return new Promise<void>((resolve) => {
+  await new Promise<void>((resolve) => {
     // Safety timeout: never hang forever (30s max for a test sentence)
     const timeout = setTimeout(() => {
       try {
@@ -528,6 +528,7 @@ export async function testVoice(voiceId: string): Promise<void> {
       resolve();
     };
   });
+  destroyEngine();
 }
 
 // ─── AudioContext gapless playback pipeline ────────────────────────────────

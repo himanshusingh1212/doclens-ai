@@ -41,3 +41,7 @@ anuwad_seo_geo_report.md
 # Agent temporary files
 .agents/cache/
 .agents/logs/
+
+# Cloned extensions
+read-aloud/
+piper-browser-extension/

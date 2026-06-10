@@ -201,9 +201,8 @@ export function stopAll() {
   if (typeof window === "undefined") return;
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   import("./piper-reader").then((p) => p.stopPiperReader()).catch(() => {});
-  if (piperEnginePromise) {
-    piperEnginePromise.then((p) => p.stop()).catch(() => {});
-  }
+  // Destroy the Piper engine to kill Web Workers immediately on stop
+  destroyPiperEngine().catch(() => {});
   activeOwner = null;
   notify();
 }
@@ -475,9 +474,7 @@ export function createSmartTtsController(
       destroyed = true;
       browserCtrl?.destroy();
       abort?.abort();
-      loadPiperEngine()
-        .then((p) => p.stop())
-        .catch(() => {});
+      destroyPiperEngine().catch(() => {});
     },
   };
 }

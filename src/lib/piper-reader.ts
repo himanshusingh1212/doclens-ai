@@ -44,9 +44,9 @@ interface Options {
   onError?: (error: string) => void;
 }
 
-const MAX_CACHE_ENTRIES = 5;
-const MAX_READY_BUFFERS = 2;
-const SCHEDULE_AHEAD_SECONDS = 0.18;
+const MAX_CACHE_ENTRIES = 12;
+const MAX_READY_BUFFERS = 5;
+const SCHEDULE_AHEAD_SECONDS = 0.03;
 /** Piper outputs 22050 Hz mono. Match the AudioContext rate so the browser
  *  doesn't resample every buffer on the audio thread. */
 const PIPER_SAMPLE_RATE = 22050;
