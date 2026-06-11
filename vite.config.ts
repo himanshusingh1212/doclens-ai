@@ -5,6 +5,7 @@
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { nitro } from "nitro/vite";
 
 const isVercel = process.env.VERCEL === "1";
 
@@ -17,18 +18,6 @@ export default defineConfig({
     },
   },
   vite: {
-    server: {
-      headers: {
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "require-corp",
-      },
-    },
-    preview: {
-      headers: {
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "require-corp",
-      },
-    },
     ssr: {
       external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
     },
@@ -43,4 +32,23 @@ export default defineConfig({
       minify: false,
     },
   },
+  plugins: isVercel
+    ? [
+        nitro({
+          vercel: {
+            functions: {
+              runtime: "nodejs22.x",
+            },
+          },
+          rollupConfig: {
+            external: [
+              "piper-tts-web",
+              "@huggingface/transformers",
+              "onnxruntime-web",
+              "pdfjs-dist",
+            ],
+          },
+        }),
+      ]
+    : [],
 });
