@@ -9,6 +9,11 @@ export default defineNitroConfig({
       },
     },
   },
+  vercel: {
+    functions: {
+      runtime: "nodejs22.x",
+    },
+  },
   rollupConfig: {
     external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
   },
