@@ -347,50 +347,79 @@ export interface SynthesizedAudio {
   blob?: Blob;
 }
 
+interface SynthesizedAudioCacheEntry {
+  value: SynthesizedAudio;
+  destroyFn?: (val: SynthesizedAudio) => void;
+}
+
+export const synthesizedAudioCache = {
+  entries: new Map<string, SynthesizedAudioCacheEntry>(),
+  maxEntries: 5,
+  async fetchCached(
+    key: string,
+    fetchFn: () => Promise<SynthesizedAudio>,
+    destroyFn?: (val: SynthesizedAudio) => void,
+  ): Promise<SynthesizedAudio> {
+    const entry = this.entries.get(key);
+    if (entry) return entry.value;
+    const value = await fetchFn();
+    this.entries.set(key, { value, destroyFn });
+    while (this.entries.size > this.maxEntries) {
+      const [oldestKey, oldest] = this.entries.entries().next().value!;
+      oldest.destroyFn?.(oldest.value);
+      this.entries.delete(oldestKey);
+    }
+    return value;
+  },
+};
+
 export async function synthesizeAudio(
   text: string,
   voiceId: string,
   speakerId = 0,
 ): Promise<SynthesizedAudio> {
-  const engine = await getEngine();
+  const cacheKey = JSON.stringify({ text, voiceId, speakerId });
+  return synthesizedAudioCache.fetchCached(cacheKey, async () => {
+    const engine = await getEngine();
 
-  // Queue synthesis calls sequentially to prevent overlapping messages in the worker
-  const currentPromise = synthesisQueuePromise.then(async () => {
-    return Promise.race([
-      engine.generate(text, voiceId, speakerId),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
-      ),
-    ]);
-  });
+    // Queue synthesis calls sequentially to prevent overlapping messages in the worker
+    const currentPromise = synthesisQueuePromise.then(async () => {
+      return Promise.race([
+        engine.generate(text, voiceId, speakerId),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
+        ),
+      ]);
+    });
 
-  // Update the global queue promise (catch errors so the chain doesn't break)
-  synthesisQueuePromise = currentPromise.catch(() => {});
+    // Update the global queue promise (catch errors so the chain doesn't break)
+    synthesisQueuePromise = currentPromise.catch(() => {});
 
-  const result = await currentPromise;
+    const result = await currentPromise;
 
-  // Prefer PCM path — avoids Chrome's decodeAudioData which can hang.
-  if (result?.audio instanceof Float32Array) {
-    return {
-      pcm: result.audio,
-      sampleRate: result.sampleRate ?? 22050,
-    };
-  }
-
-  // Blob fallback: extract PCM from WAV to avoid decodeAudioData entirely.
-  const blob = result?.file instanceof Blob ? result.file : result instanceof Blob ? result : null;
-  if (blob) {
-    try {
-      const pcmResult = await extractPcmFromWav(blob);
-      if (pcmResult) return pcmResult;
-    } catch (e) {
-      console.warn("[piper-engine] PCM extraction failed, using blob:", e);
+    // Prefer PCM path — avoids Chrome's decodeAudioData which can hang.
+    if (result?.audio instanceof Float32Array) {
+      return {
+        pcm: result.audio,
+        sampleRate: result.sampleRate ?? 22050,
+      };
     }
-    return { blob };
-  }
 
-  console.error("[piper-engine] Unexpected generate() result:", result);
-  throw new Error("Unexpected generate() result format");
+    // Blob fallback: extract PCM from WAV to avoid decodeAudioData entirely.
+    const blob = result?.file instanceof Blob ? result.file : result instanceof Blob ? result : null;
+    if (blob) {
+      try {
+        const pcmResult = await extractPcmFromWav(blob);
+        if (pcmResult) return pcmResult;
+      } catch (e) {
+        console.warn("[piper-engine] PCM extraction failed, using blob:", e);
+      }
+      return { blob };
+    }
+
+    console.error("[piper-engine] Unexpected generate() result:", result);
+    throw new Error("Unexpected generate() result format");
+  });
 }
 
 /**
@@ -806,6 +835,7 @@ export async function speakChunked(
 export function destroyEngine() {
   stop();
   closeAudioContext();
+  synthesizedAudioCache.entries.clear();
   if (localProviderInstance) {
     localProviderInstance.destroy();
     localProviderInstance = null;
