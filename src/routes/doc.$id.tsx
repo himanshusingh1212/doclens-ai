@@ -118,14 +118,14 @@ function DocPage() {
         setMissing(true);
         return;
       }
+      const sum = await getPageAiSummary(id);
+      if (cancelled) return;
+      setAiSummary(sum);
       setDoc(rec);
       const pc = rec.pageCount ?? 0;
       setPageCount(pc);
       // Clamp activePage if the URL had a page beyond the document's range
       if (pc > 0 && activePage > pc) setActivePageRaw(pc);
-      const sum = await getPageAiSummary(id);
-      if (cancelled) return;
-      setAiSummary(sum);
       await touchDoc(id);
       await setLastOpened(id);
 
@@ -260,13 +260,17 @@ function DocPage() {
       <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
         {/* Left: Back + Title */}
         <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => navigate({ to: "/" })}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          <Link
+            to="/"
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-2"
             title="Back to Library"
           >
-            ←
-          </button>
+            <img
+              src="/light_13746323.png"
+              alt="DocLens Logo"
+              className="h-7 w-7 object-contain rounded-md"
+            />
+          </Link>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-foreground">{docName}</h1>
           </div>

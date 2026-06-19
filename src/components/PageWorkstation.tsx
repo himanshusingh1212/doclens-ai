@@ -787,7 +787,7 @@ export function PageWorkstation({
     if (shouldShowExplainSetup()) return;
 
     const page1State = aiSummary[1];
-    const isIdle = !page1State || page1State.status === "idle";
+    const isIdle = !page1State || (page1State.status !== "done" && page1State.status !== "running" && page1State.status !== "error");
     const alreadyTried = autoTranslatedPage1Ref.current[docId];
 
     if (isIdle && !alreadyTried) {
