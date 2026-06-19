@@ -62,14 +62,14 @@ export function SidebarLayout({
       {/* Logo */}
       <div className="px-6 pt-8 pb-6">
         <Link to="/" className="flex items-center gap-3 group" onClick={handleNavClick}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary font-mono text-base font-black text-primary-foreground shadow-[0_0_18px_rgba(78,222,163,0.2)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary font-mono text-base font-black text-primary-foreground shadow-sm">
             ◐
           </div>
           <div>
-            <h1 className="text-lg font-black tracking-tight text-primary transition-colors group-hover:text-foreground">
+            <h1 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
               DocLens
             </h1>
-            <p className="text-[11px] tracking-wide text-muted-foreground">AI Intelligence</p>
+            <p className="text-[11px] font-medium tracking-wide text-muted-foreground">AI Intelligence</p>
           </div>
         </Link>
       </div>
@@ -87,10 +87,10 @@ export function SidebarLayout({
               key={item.to}
               to={item.to}
               onClick={handleNavClick}
-              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
                 isActive
-                  ? "border-r-2 border-primary bg-surface-2/60 text-primary font-bold"
-                  : "text-muted-foreground hover:bg-surface-2/40 hover:text-foreground"
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground"
               }`}
             >
               <span className="text-base">{item.icon}</span>
@@ -117,7 +117,7 @@ export function SidebarLayout({
             fileInputRef.current?.click();
             setMobileOpen(false);
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 font-bold text-primary-foreground transition-all hover:opacity-90 active:scale-[0.97]"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 px-4 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 shadow-sm"
         >
           <span className="text-lg leading-none">+</span>
           New Document
@@ -198,7 +198,7 @@ export function SidebarLayout({
                 <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight text-primary">
+            <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
               {pageTitle}
             </h2>
           </div>

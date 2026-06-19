@@ -15,10 +15,10 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
       to="/doc/$id"
       params={{ id: doc.id }}
       search={doc.lastReadPage ? { page: doc.lastReadPage } : undefined}
-      className="group glass-panel flex flex-col gap-3 rounded-xl p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
+      className="group glass-panel flex flex-col gap-3 rounded-[18px] p-3 transition-all duration-300 hover:bg-surface-2/40 border border-border"
     >
       {/* Thumbnail Area */}
-      <div className="relative h-40 overflow-hidden rounded-lg border border-border bg-background/80">
+      <div className="relative h-40 overflow-hidden rounded-xl border border-border bg-background/80 shadow-[3px_5px_30px_rgba(0,0,0,0.22)]">
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
@@ -41,7 +41,7 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
         {/* Status badges */}
         <div className="absolute right-2 top-2 flex flex-col gap-1 items-end">
           {doc.hasExtraction && (
-            <span className="rounded-md border border-primary/30 bg-primary/20 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            <span className="rounded-full border border-primary/30 bg-primary/25 px-2.5 py-0.5 text-[10px] font-bold text-primary">
               Extracted
             </span>
           )}
@@ -55,12 +55,12 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
         </h4>
         <div className="flex flex-wrap items-center gap-1.5">
           {doc.hasExtraction && (
-            <span className="rounded bg-accent/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+            <span className="rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-bold tracking-tight text-accent">
               AI Processed
             </span>
           )}
           {doc.aiResultCount > 0 && (
-            <span className="rounded bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
               {doc.aiResultCount} Results
             </span>
           )}

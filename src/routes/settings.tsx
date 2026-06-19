@@ -254,7 +254,7 @@ function SettingsPage() {
         {/* Row 1: Output Language + Storage & Database */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {/* Output Language */}
-          <section className="glass-panel flex flex-col gap-4 rounded-xl p-6">
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6">
             <div className="flex items-center gap-3">
               <span className="text-xl text-primary">🌐</span>
               <h3 className="text-lg font-semibold text-foreground">Output Language</h3>
@@ -268,7 +268,7 @@ function SettingsPage() {
                 onChange={(e) => setCustomLang(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCustomLang()}
                 placeholder="Search languages..."
-                className="w-full rounded-lg border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+                className="w-full rounded-[10px] border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 🔍
@@ -279,7 +279,7 @@ function SettingsPage() {
                 <button
                   key={l}
                   onClick={() => handleLangSelect(l)}
-                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all active:scale-95 ${
                     language === l
                       ? "bg-primary text-primary-foreground"
                       : "bg-surface-2 text-muted-foreground hover:bg-border hover:text-foreground"
@@ -292,7 +292,7 @@ function SettingsPage() {
           </section>
 
           {/* Storage & Memory Diagnostics */}
-          <section className="glass-panel flex flex-col rounded-xl p-6">
+          <section className="glass-panel flex flex-col rounded-[18px] p-6">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-xl text-yellow-500">💾</span>
               <h3 className="text-lg font-semibold text-foreground">
@@ -325,7 +325,7 @@ function SettingsPage() {
               <button
                 onClick={handleClearCache}
                 disabled={clearing}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50"
               >
                 🗑️ {clearing ? "Clearing…" : "Clear AI Cache"}
               </button>
@@ -334,7 +334,7 @@ function SettingsPage() {
         </div>
 
         {/* Row 2: AI Pipeline Defaults (full width) */}
-        <section className="glass-panel rounded-xl p-6">
+        <section className="glass-panel rounded-[18px] p-6">
           <div className="mb-6 flex items-center gap-3">
             <span className="text-xl text-accent">⚡</span>
             <h3 className="text-lg font-semibold text-foreground">AI Pipeline Defaults</h3>
@@ -352,7 +352,7 @@ function SettingsPage() {
                   setModeState(v);
                   saveMode(v);
                 }}
-                className="w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
+                className="w-full cursor-pointer rounded-[10px] border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
               >
                 {Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => (
                   <option key={k} value={k}>
@@ -375,7 +375,7 @@ function SettingsPage() {
                   setStyleState(v);
                   saveStyle(v);
                 }}
-                className="w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary disabled:opacity-50"
+                className="w-full cursor-pointer rounded-[10px] border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary disabled:opacity-50"
               >
                 {EXPLANATION_STYLES.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -415,7 +415,7 @@ function SettingsPage() {
 
           {/* Memory & Sequential toggles */}
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+            <label className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
               <span>
                 <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Memory
@@ -435,7 +435,7 @@ function SettingsPage() {
               />
             </label>
 
-            <label className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+            <label className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
               <span>
                 <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Sequential Execution
@@ -460,7 +460,7 @@ function SettingsPage() {
         {/* Row 3: API Management + Model Selection */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           {/* API Management */}
-          <section className="glass-panel flex flex-col gap-4 rounded-xl p-6 md:col-span-5">
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6 md:col-span-5">
             <div className="flex items-center gap-3">
               <span className="text-xl text-primary">🔑</span>
               <h3 className="text-lg font-semibold text-foreground">API Management</h3>
@@ -489,7 +489,7 @@ function SettingsPage() {
                 placeholder="sk-or-v1-..."
                 value={customKey}
                 onChange={(e) => setCustomKeyInput(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
               />
               <p className="text-[10px] text-muted-foreground">
                 Leave blank to fallback to the server environment key. Saved locally in your
@@ -500,7 +500,7 @@ function SettingsPage() {
             <button
               onClick={() => handleValidate()}
               disabled={keyStatus === "checking"}
-              className="w-full rounded-lg bg-accent py-2 font-bold text-accent-foreground transition-all hover:opacity-90 disabled:opacity-40"
+              className="w-full rounded-full bg-accent py-2 text-sm font-semibold text-accent-foreground transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 shadow-sm"
             >
               {keyStatus === "checking" ? "Checking..." : "Save and Verify Connection"}
             </button>
@@ -527,7 +527,7 @@ function SettingsPage() {
           </section>
 
           {/* Model Selection */}
-          <section className="glass-panel flex flex-col gap-4 rounded-xl p-6 md:col-span-7">
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6 md:col-span-7">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xl text-yellow-500">🧠</span>
@@ -552,7 +552,7 @@ function SettingsPage() {
                     <button
                       key={t}
                       onClick={() => setTab(t)}
-                      className={`rounded-md border px-3 py-1 text-xs font-bold uppercase tracking-wide transition-colors ${
+                      className={`rounded-full border px-3.5 py-1 text-xs font-semibold uppercase tracking-wide transition-all active:scale-95 ${
                         tab === t
                           ? "border-primary bg-primary/15 text-primary"
                           : "border-border bg-background text-muted-foreground hover:text-foreground"
@@ -578,7 +578,7 @@ function SettingsPage() {
                       <button
                         key={m.id}
                         onClick={() => handleSelectModel(m.id)}
-                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                        className={`flex w-full items-center justify-between rounded-[14px] border p-3 text-left transition-all active:scale-[0.99] ${
                           active
                             ? "border-primary/30 bg-primary/5 ring-1 ring-primary/50"
                             : "border-border bg-background hover:bg-surface-2"
@@ -586,7 +586,7 @@ function SettingsPage() {
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div
-                            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border ${
+                            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] border ${
                               active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
                             }`}
                           >

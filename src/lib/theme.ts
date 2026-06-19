@@ -28,6 +28,40 @@ const STORAGE_KEY = "doclens-theme";
 
 export const LIGHT_THEMES: ThemeDefinition[] = [
   {
+    id: "apple",
+    label: "Apple (Light)",
+    mode: "light",
+    swatches: ["#f5f5f7", "#0066cc", "#1d1d1f", "#fafafc"],
+    vars: {
+      "--background": "#f5f5f7",
+      "--foreground": "#1d1d1f",
+      "--surface": "#ffffff",
+      "--surface-2": "#fafafc",
+      "--card": "#ffffff",
+      "--card-foreground": "#1d1d1f",
+      "--popover": "#ffffff",
+      "--popover-foreground": "#1d1d1f",
+      "--primary": "#0066cc",
+      "--primary-foreground": "#ffffff",
+      "--secondary": "#fafafc",
+      "--secondary-foreground": "#1d1d1f",
+      "--muted": "#f5f5f7",
+      "--muted-foreground": "#7a7a7a",
+      "--accent": "#2997ff",
+      "--accent-foreground": "#ffffff",
+      "--destructive": "#e30000",
+      "--destructive-foreground": "#ffffff",
+      "--border": "#e0e0e0",
+      "--border-strong": "#d2d2d7",
+      "--input": "#ffffff",
+      "--ring": "#0071e3",
+      "--syntax-key": "#0066cc",
+      "--syntax-string": "#1d1d1f",
+      "--syntax-number": "#7a7a7a",
+      "--syntax-punct": "#7a7a7a",
+    },
+  },
+  {
     id: "light",
     label: "Light",
     mode: "light",
@@ -234,6 +268,40 @@ export const LIGHT_THEMES: ThemeDefinition[] = [
 ];
 
 export const DARK_THEMES: ThemeDefinition[] = [
+  {
+    id: "apple-dark",
+    label: "Apple (Dark)",
+    mode: "dark",
+    swatches: ["#1d1d1f", "#2997ff", "#ffffff", "#272729"],
+    vars: {
+      "--background": "#1d1d1f",
+      "--foreground": "#ffffff",
+      "--surface": "#272729",
+      "--surface-2": "#2a2a2c",
+      "--card": "#272729",
+      "--card-foreground": "#ffffff",
+      "--popover": "#272729",
+      "--popover-foreground": "#ffffff",
+      "--primary": "#2997ff",
+      "--primary-foreground": "#ffffff",
+      "--secondary": "#2a2a2c",
+      "--secondary-foreground": "#ffffff",
+      "--muted": "#2a2a2c",
+      "--muted-foreground": "#cccccc",
+      "--accent": "#0066cc",
+      "--accent-foreground": "#ffffff",
+      "--destructive": "#ff3b30",
+      "--destructive-foreground": "#ffffff",
+      "--border": "rgba(255, 255, 255, 0.08)",
+      "--border-strong": "rgba(255, 255, 255, 0.18)",
+      "--input": "#2a2a2c",
+      "--ring": "#0071e3",
+      "--syntax-key": "#2997ff",
+      "--syntax-string": "#ffffff",
+      "--syntax-number": "#cccccc",
+      "--syntax-punct": "#cccccc",
+    },
+  },
   {
     id: "dark",
     label: "Dark",
@@ -469,7 +537,7 @@ export function findTheme(id: string): ThemeDefinition | undefined {
 
 /**
  * Resolve which concrete theme should be used.
- * If "system", picks "dark" or "light" based on OS preference.
+ * If "system", picks "apple-dark" or "apple" based on OS preference.
  */
 export function resolveTheme(id: string): ThemeDefinition {
   if (id !== "system") {
@@ -479,8 +547,8 @@ export function resolveTheme(id: string): ThemeDefinition {
   // system / fallback
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   return prefersDark
-    ? (findTheme("dark") as ThemeDefinition)
-    : (findTheme("light") as ThemeDefinition);
+    ? (findTheme("apple-dark") as ThemeDefinition || findTheme("dark") as ThemeDefinition)
+    : (findTheme("apple") as ThemeDefinition || findTheme("light") as ThemeDefinition);
 }
 
 /**

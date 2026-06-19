@@ -66,14 +66,14 @@ export function Dropzone({ onFile }: { onFile: (file: File) => void }) {
         handle(e.dataTransfer.files?.[0]);
       }}
       onClick={() => inputRef.current?.click()}
-      className={`group relative flex h-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed bg-background transition-all ${
+      className={`group relative flex h-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[18px] border border-dashed bg-background transition-all ${
         hover
-          ? "border-primary bg-primary/10 shadow-[0_0_24px_rgba(78,222,163,0.12)]"
-          : "border-border hover:border-primary/70 hover:bg-primary/5"
+          ? "border-primary bg-primary/5"
+          : "border-border hover:border-primary/50 hover:bg-surface-2/30"
       }`}
     >
       <div className="pointer-events-none absolute inset-0 bg-grid opacity-60" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(78,222,163,0.10),transparent_55%)] opacity-0 transition-opacity group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,color-mix(in_srgb,var(--primary)_8%,transparent),transparent_55%)] opacity-0 transition-opacity group-hover:opacity-100" />
       <input
         ref={inputRef}
         type="file"
@@ -86,7 +86,7 @@ export function Dropzone({ onFile }: { onFile: (file: File) => void }) {
         }}
       />
       <div className="relative z-10 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-border bg-surface-2 font-mono text-xl text-primary transition-all group-hover:scale-105 group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface-2 font-mono text-base text-primary transition-all group-hover:scale-105 group-hover:border-primary/30 group-hover:bg-primary/10">
           ↑
         </div>
         <div className="text-base font-semibold text-foreground transition-colors group-hover:text-primary">
@@ -95,7 +95,7 @@ export function Dropzone({ onFile }: { onFile: (file: File) => void }) {
         <div className="mt-1 text-sm text-muted-foreground">
           PDF only · max {formatSize(MAX_FILE_SIZE)}
         </div>
-        <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
+        <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/60">
           processed entirely in your browser · nothing uploaded
         </div>
       </div>

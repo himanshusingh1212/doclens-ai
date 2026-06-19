@@ -89,7 +89,7 @@ function AppearanceSettingsPage() {
           </div>
           <button
             onClick={() => handleSelectTheme("system")}
-            className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all ${
+            className={`flex w-full items-center justify-between rounded-[14px] border p-4 text-left transition-all active:scale-[0.99] ${
               currentThemeId === "system"
                 ? "border-primary bg-primary/5 ring-1 ring-primary"
                 : "border-border bg-card hover:bg-surface-2"
@@ -97,7 +97,7 @@ function AppearanceSettingsPage() {
           >
             <div className="flex items-center gap-4">
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                className={`flex h-10 w-10 items-center justify-center rounded-[10px] border ${
                   currentThemeId === "system"
                     ? "border-primary bg-primary/20"
                     : "border-border bg-surface-2"
@@ -144,7 +144,7 @@ function AppearanceSettingsPage() {
                 <button
                   key={theme.id}
                   onClick={() => handleSelectTheme(theme.id)}
-                  className={`flex items-center justify-between rounded-xl border p-4 text-left transition-all ${
+                  className={`flex items-center justify-between rounded-[14px] border p-4 text-left transition-all active:scale-[0.99] ${
                     active
                       ? "border-primary bg-primary/5 ring-1 ring-primary"
                       : "border-border bg-card hover:bg-surface-2"
@@ -152,7 +152,7 @@ function AppearanceSettingsPage() {
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                      className={`flex h-10 w-10 items-center justify-center rounded-[10px] border ${
                         active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
                       }`}
                     >
@@ -190,7 +190,7 @@ function AppearanceSettingsPage() {
                 <button
                   key={theme.id}
                   onClick={() => handleSelectTheme(theme.id)}
-                  className={`flex items-center justify-between rounded-xl border p-4 text-left transition-all ${
+                  className={`flex items-center justify-between rounded-[14px] border p-4 text-left transition-all active:scale-[0.99] ${
                     active
                       ? "border-primary bg-primary/5 ring-1 ring-primary"
                       : "border-border bg-card hover:bg-surface-2"
@@ -198,7 +198,7 @@ function AppearanceSettingsPage() {
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                      className={`flex h-10 w-10 items-center justify-center rounded-[10px] border ${
                         active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
                       }`}
                     >

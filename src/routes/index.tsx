@@ -279,7 +279,7 @@ function DashboardPage() {
           {/* API Key Banner */}
           {keyStatus !== "valid" && (
             <div
-              className={`mb-6 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+              className={`mb-6 flex flex-col gap-3 rounded-[18px] border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
                 keyStatus === "invalid"
                   ? "border-destructive/40 bg-destructive/10"
                   : "border-primary/40 bg-primary/5"
@@ -301,7 +301,7 @@ function DashboardPage() {
               </div>
               <button
                 onClick={() => openApiKeyModal()}
-                className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+                className="rounded-full bg-primary px-4 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90 active:scale-95 transition-all shadow-sm"
               >
                 check key
               </button>

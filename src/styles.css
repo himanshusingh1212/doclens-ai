@@ -75,7 +75,8 @@
   --color-syntax-number: var(--syntax-number);
   --color-syntax-punct: var(--syntax-punct);
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "SF Pro Text", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "SF Pro Display", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -146,7 +147,8 @@
       background-color 0.25s ease,
       border-color 0.25s ease,
       color 0.25s ease,
-      box-shadow 0.25s ease;
+      box-shadow 0.25s ease,
+      transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   html,
@@ -161,6 +163,11 @@
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
   }
 
   .font-mono {
@@ -215,14 +222,14 @@
 
   .reader-chunk-buffered {
     text-decoration: underline;
-    text-decoration-color: rgba(78, 222, 163, 0.18);
+    text-decoration-color: color-mix(in srgb, var(--primary) 25%, transparent);
     text-underline-offset: 4px;
   }
 
   .reader-chunk-active {
-    background: rgba(78, 222, 163, 0.2);
-    box-shadow: 0 0 0 2px rgba(78, 222, 163, 0.08);
-    color: #effff8;
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--foreground);
   }
 
   /* ─── Glassmorphic panels ─── */
@@ -262,7 +269,7 @@
   .pdf-page-active {
     box-shadow:
       0 4px 24px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(78, 222, 163, 0.15),
+      0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent),
       -3px 0 0 0 var(--primary);
   }
 
