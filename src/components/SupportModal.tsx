@@ -113,10 +113,10 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
             </span>
             <div>
               <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-                Support & Feedback
+                Become a Premium Supporter
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Help us build and grow the DocLens AI document workspace.
+                Every language barrier broken is a mind set free. Join us in making knowledge accessible to all.
               </DialogDescription>
             </div>
           </div>
@@ -164,10 +164,10 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
             <div className="mt-5 border-t border-border pt-4">
               <h5 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <Heart className="h-3.5 w-3.5 text-destructive fill-destructive" />
-                Support Development
+                Fund the Mission
               </h5>
               <p className="mt-1 text-xs text-muted-foreground">
-                Contribute financially to help cover API and server hosting costs.
+                Millions of students struggle with textbooks they can't read in their own language. Your contribution keeps Anuwad free, fast, and private — so that no learner is left behind.
               </p>
 
               {/* Amount Preset Grid */}
@@ -206,7 +206,7 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
                 disabled={paying || amount <= 0}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-xs font-semibold text-primary-foreground transition-all hover:opacity-95 active:scale-95 disabled:opacity-40 shadow-sm"
               >
-                {paying ? "Opening checkout..." : `Contribute ₹${amount} with Razorpay`}
+                {paying ? "Opening checkout..." : `Support this Mission — ₹${amount}`}
               </button>
 
               <div className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
