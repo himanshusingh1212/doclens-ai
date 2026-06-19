@@ -132,7 +132,7 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
               Your feedback shapes the future of DocLens. Take our quick 2-minute Google Forms survey.
             </p>
             <a
-              href="https://forms.google.com" // Placeholder for their Google Form
+              href="https://docs.google.com/forms/d/e/1FAIpQLSde85yO0QiwAYb_fxbtD1inrGLn5Vry6pCjtEd_O_nUbx7pQQ/viewform?usp=publish-editor"
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-background border border-border hover:bg-border px-4 py-2.5 text-xs font-semibold text-foreground transition-all active:scale-95 shadow-sm"
