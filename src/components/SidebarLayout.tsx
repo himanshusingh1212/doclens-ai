@@ -1,6 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
+import { SupportModal } from "@/components/SupportModal";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
@@ -28,6 +29,7 @@ export function SidebarLayout({
   const matchRoute = useMatchRoute();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -62,9 +64,11 @@ export function SidebarLayout({
       {/* Logo */}
       <div className="px-6 pt-8 pb-6">
         <Link to="/" className="flex items-center gap-3 group" onClick={handleNavClick}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary font-mono text-base font-black text-primary-foreground shadow-sm">
-            ◐
-          </div>
+          <img
+            src="/light_13746323.png"
+            alt="DocLens Logo"
+            className="h-10 w-10 object-contain rounded-lg shadow-sm"
+          />
           <div>
             <h1 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
               DocLens
@@ -126,13 +130,16 @@ export function SidebarLayout({
 
       {/* Support Link */}
       <div className="border-t border-border px-4 py-4">
-        <a
-          href="#"
-          className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+        <button
+          onClick={() => {
+            setSupportOpen(true);
+            setMobileOpen(false);
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
         >
           <span className="text-base">❓</span>
-          <span>Support</span>
-        </a>
+          <span>Support & Feedback</span>
+        </button>
       </div>
     </>
   );
@@ -211,6 +218,8 @@ export function SidebarLayout({
         {/* Scrollable Content */}
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      <SupportModal open={supportOpen} onOpenChange={setSupportOpen} />
     </div>
   );
 }

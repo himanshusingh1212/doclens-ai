@@ -1,6 +1,6 @@
 import { ClientOnly, createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { createClientOnlyFn } from "@tanstack/react-start";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
@@ -200,6 +200,16 @@ function DocPage() {
       setAnalyzing(false);
     }
   };
+
+  const autoAnalyzedRef = useRef<Record<string, boolean>>({});
+
+  // Auto-trigger text analysis on document load if not yet extracted
+  useEffect(() => {
+    if (doc && pageCount === 0 && !analyzing && !autoAnalyzedRef.current[id]) {
+      autoAnalyzedRef.current[id] = true;
+      void handleAnalyze();
+    }
+  }, [doc, pageCount, analyzing, id]);
 
   /** Called by per-row workstation cards to keep the doc-level summary in sync. */
   const handlePageAiChange = (pageNumber: number, entry: PageAiSummaryEntry | null) => {

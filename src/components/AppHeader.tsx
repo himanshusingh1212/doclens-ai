@@ -28,9 +28,11 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 shadow-sm">
       <Link to="/" className="flex items-center gap-3 group">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-mono text-base font-black text-primary-foreground shadow-[0_0_18px_rgba(78,222,163,0.2)]">
-          ◐
-        </div>
+        <img
+          src="/light_13746323.png"
+          alt="DocLens Logo"
+          className="h-9 w-9 object-contain rounded-lg shadow-[0_0_18px_rgba(78,222,163,0.2)]"
+        />
         <div className="flex items-baseline gap-2 min-w-0">
           <h1 className="text-lg font-black tracking-tight text-primary transition-colors group-hover:text-foreground">
             DocLens

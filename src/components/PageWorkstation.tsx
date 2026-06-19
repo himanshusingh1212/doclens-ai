@@ -50,6 +50,12 @@ import {
   type ReaderSnapshot,
   type ReaderStatus,
 } from "@/lib/piper-reader";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Info } from "lucide-react";
 
 interface Props {
   docId: string;
@@ -772,6 +778,24 @@ export function PageWorkstation({
     }
   };
 
+  // ─── Auto-translate page 1 when doc is loaded and analyzed ───
+  const autoTranslatedPage1Ref = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    if (pageCount <= 0) return;
+    if (!keyReady || !globals.modelId) return;
+    if (shouldShowExplainSetup()) return;
+
+    const page1State = aiSummary[1];
+    const isIdle = !page1State || page1State.status === "idle";
+    const alreadyTried = autoTranslatedPage1Ref.current[docId];
+
+    if (isIdle && !alreadyTried) {
+      autoTranslatedPage1Ref.current[docId] = true;
+      void runPage(1);
+    }
+  }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPage]);
+
   // ─── Auto-trigger on page change ───
   const prevAutoPage = useRef(activePage);
   useEffect(() => {
@@ -1046,6 +1070,34 @@ export function PageWorkstation({
             </span>
             Auto-Translate
           </button>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
+                aria-label="Auto-Translate Information"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="max-w-[280px] p-3 text-xs leading-relaxed border border-border bg-popover text-popover-foreground shadow-md rounded-xl">
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[13px] text-primary flex items-center gap-1">
+                  ⚡ Auto-Translate Pipeline
+                </h4>
+                <p className="text-muted-foreground">
+                  Automatically translates the next 3 pages in the background as you read.
+                </p>
+                <p className="font-semibold text-foreground">
+                  Why it's useful:
+                </p>
+                <p className="text-muted-foreground text-[11px]">
+                  Pre-translating upcoming pages in the background ensures a zero-latency, fluid reading experience when you click Next.
+                </p>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 

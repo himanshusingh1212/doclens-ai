@@ -73,6 +73,11 @@ export const Route = createRootRoute({
     links: [
       { rel: "canonical", href: "https://www.anuwad.com/" },
       {
+        rel: "icon",
+        type: "image/png",
+        href: "/light_13746323.png",
+      },
+      {
         rel: "stylesheet",
         href: appCss,
       },
