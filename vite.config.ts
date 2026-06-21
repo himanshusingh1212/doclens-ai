@@ -10,7 +10,7 @@ import { nitro } from "nitro/vite";
 const isVercel = process.env.VERCEL === "1";
 
 export default defineConfig({
-  cloudflare: false,
+  nitro: false,
   tanstackStart: {
     spa: {},
     prerender: {
@@ -27,9 +27,6 @@ export default defineConfig({
           external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
         },
       },
-    },
-    build: {
-      minify: false,
     },
   },
   plugins: isVercel

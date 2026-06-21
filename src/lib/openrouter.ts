@@ -211,7 +211,7 @@ function getEffectiveKey(userKey?: string): string {
 }
 
 const validateServerOpenRouterKey = createServerFn({ method: "POST" })
-  .inputValidator((input: { userKey?: string } | undefined) => input)
+  .validator((input: { userKey?: string } | undefined) => input)
   .handler(async ({ data }) => {
     "use server";
     const key = getEffectiveKey(data?.userKey);
@@ -223,7 +223,7 @@ const validateServerOpenRouterKey = createServerFn({ method: "POST" })
   });
 
 const fetchServerOpenRouterModels = createServerFn({ method: "POST" })
-  .inputValidator((input: { userKey?: string } | undefined) => input)
+  .validator((input: { userKey?: string } | undefined) => input)
   .handler(async ({ data }) => {
     "use server";
     const key = getEffectiveKey(data?.userKey);
@@ -244,7 +244,7 @@ interface CompletionResult {
 }
 
 const completeWithServerOpenRouter = createServerFn({ method: "POST" })
-  .inputValidator((input: { payload: Record<string, unknown>; userKey?: string }) => input)
+  .validator((input: { payload: Record<string, unknown>; userKey?: string }) => input)
   .handler(async ({ data }): Promise<CompletionResult> => {
     "use server";
     const key = getEffectiveKey(data.userKey);
