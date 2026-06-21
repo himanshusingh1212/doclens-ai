@@ -21,6 +21,8 @@ const PDF_LOAD_OPTIONS = {
   cMapUrl: "/pdf/cmaps/",
   cMapPacked: true,
   standardFontDataUrl: "/pdf/standard_fonts/",
+  wasmUrl: "/pdf/wasm/",
+  canvasMaxAreaInBytes: 64 * 1024 * 1024,
   useSystemFonts: true,
 } as const;
 

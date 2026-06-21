@@ -14,7 +14,7 @@ interface Props {
   setActivePage: (p: number) => void;
 }
 
-const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 const TARGET_WIDTH = 800;
 /** Max bitmaps kept simultaneously (current page ±2). */
 const MAX_RENDERED = 5;
@@ -55,6 +55,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const textLayerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const visiblePages = useRef<Set<number>>(new Set());
   const renderedPages = useRef<Set<number>>(new Set());
   const renderingPages = useRef<Set<number>>(new Set());
   const recentlyVisibleOrder = useRef<number[]>([]);
@@ -104,6 +105,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
           page.cleanup();
         }
         if (cancelled) return;
+        await pdfDoc.cleanup();
+        if (cancelled) return;
         setPageMetas(metas);
         setLoading(false);
       } catch (err) {
@@ -127,10 +130,13 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
   /** Release bitmap memory + clear text layer for an off-screen page. */
   const releasePage = useCallback((pageNumber: number) => {
+    if (renderingPages.current.has(pageNumber)) return;
+
     const canvas = canvasRefs.current.get(pageNumber);
     if (canvas) {
       canvas.width = 0;
       canvas.height = 0;
+      canvas.style.display = "none";
     }
     const tl = textLayerRefs.current.get(pageNumber);
     if (tl) tl.innerHTML = "";
@@ -154,16 +160,18 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       if (!meta) return;
 
       renderingPages.current.add(pageNumber);
+      let page: PDFPageProxy | null = null;
       try {
-        const page: PDFPageProxy = await doc.getPage(pageNumber);
+        page = await doc.getPage(pageNumber);
         const renderScale = meta.scale * DPR;
         const viewport: PageViewport = page.getViewport({ scale: renderScale });
         const cssViewport = page.getViewport({ scale: meta.scale });
 
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = Math.max(1, Math.ceil(viewport.width));
+        canvas.height = Math.max(1, Math.ceil(viewport.height));
         canvas.style.width = `${meta.cssWidth}px`;
         canvas.style.height = `${meta.cssHeight}px`;
+        canvas.style.display = "block";
 
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
@@ -207,7 +215,20 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
         if (err instanceof Error && err.message.includes("cancelled")) return;
         console.error(`PdfViewer: render error page ${pageNumber}`, err);
       } finally {
+        if (page) {
+          try {
+            page.cleanup();
+          } catch (e) {
+            console.debug("Page cleanup failed", e);
+          }
+        }
         renderingPages.current.delete(pageNumber);
+        if (renderingPages.current.size === 0) {
+          doc.cleanup().catch(() => {});
+        }
+        if (!visiblePages.current.has(pageNumber)) {
+          releasePage(pageNumber);
+        }
       }
     },
     [doc, pageMetas, releasePage],
@@ -224,12 +245,14 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
           const pn = Number((entry.target as HTMLElement).dataset.pageNumber);
           if (!Number.isFinite(pn) || pn <= 0) continue;
           if (entry.isIntersecting) {
+            visiblePages.current.add(pn);
             const order = recentlyVisibleOrder.current;
             const idx = order.indexOf(pn);
             if (idx !== -1) order.splice(idx, 1);
             order.push(pn);
             renderPage(pn);
           } else {
+            visiblePages.current.delete(pn);
             releasePage(pn);
           }
         }
@@ -258,6 +281,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
         if (tl) tl.innerHTML = "";
       });
       renderedPages.current.clear();
+      visiblePages.current.clear();
       renderingPages.current.clear();
       recentlyVisibleOrder.current = [];
       ttsRef.current?.destroy();
@@ -267,6 +291,9 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       // The load effect cleanup also handles this, but this is a safety net
       // for cases where the doc was set in state before the effect re-ran.
       if (doc) {
+        try {
+          doc.cleanup();
+        } catch {}
         doc.destroy();
       }
     };

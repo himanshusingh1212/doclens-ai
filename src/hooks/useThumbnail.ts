@@ -1,64 +1,50 @@
 import { useEffect, useState } from "react";
+import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob, getThumbnail, saveThumbnailBlob } from "@/lib/storage";
 
 const THUMB_W = 200;
 const THUMB_H = 260;
 
 async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
-  const arrayBuffer = await pdfBlob.arrayBuffer();
+  const pdf = await loadPdfDocument(pdfBlob);
   try {
-    const pdfjsLib = await import("pdfjs-dist");
-
-    // Ensure worker is configured
-    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/build/pdf.worker.min.mjs",
-        import.meta.url,
-      ).toString();
-    }
-
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
     try {
-      const page = await pdf.getPage(1);
-      try {
-        const naturalVp = page.getViewport({ scale: 1 });
+      const naturalVp = page.getViewport({ scale: 1 });
 
-        // Scale to fit within THUMB_W × THUMB_H, preserving aspect ratio
-        const scaleX = THUMB_W / naturalVp.width;
-        const scaleY = THUMB_H / naturalVp.height;
-        const scale = Math.min(scaleX, scaleY);
+      // Scale to fit within THUMB_W × THUMB_H, preserving aspect ratio
+      const scaleX = THUMB_W / naturalVp.width;
+      const scaleY = THUMB_H / naturalVp.height;
+      const scale = Math.min(scaleX, scaleY);
 
-        const vp = page.getViewport({ scale });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(vp.width);
-        canvas.height = Math.round(vp.height);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          throw new Error("Could not get 2D context");
-        }
-
-        await page.render({ canvasContext: ctx, viewport: vp, canvas } as any).promise;
-
-        return new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob(
-            (b) => {
-              canvas.width = 0;
-              canvas.height = 0;
-              if (b) resolve(b);
-              else reject(new Error("Canvas to blob conversion failed"));
-            },
-            "image/jpeg",
-            0.8,
-          );
-        });
-      } finally {
-        page.cleanup();
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.ceil(vp.width));
+      canvas.height = Math.max(1, Math.ceil(vp.height));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("Could not get 2D context");
       }
+
+      await page.render({ canvasContext: ctx, viewport: vp, canvas } as any).promise;
+
+      return new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => {
+            canvas.width = 0;
+            canvas.height = 0;
+            if (b) resolve(b);
+            else reject(new Error("Canvas to blob conversion failed"));
+          },
+          "image/jpeg",
+          0.8,
+        );
+      });
     } finally {
-      pdf.destroy();
+      page.cleanup();
     }
   } finally {
-    // ArrayBuffer is released here
+    await pdf.destroy();
   }
 }
 
