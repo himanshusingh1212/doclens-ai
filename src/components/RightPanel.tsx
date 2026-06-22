@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 import { estimateTokens } from "@/lib/models";
-import { getAllPages, getPageData, type PageAiSummaryEntry } from "@/lib/storage";
+import {
+  getAllPages,
+  getPageData,
+  getDocBlob,
+  updatePageData,
+  type PageAiSummaryEntry,
+} from "@/lib/storage";
 import { PageWorkstation } from "./PageWorkstation";
+
 
 interface Props {
   docId: string;
@@ -222,6 +230,8 @@ function ExtractedPageRow({
   summary?: PageAiSummaryEntry;
 }) {
   const [data, setData] = useState<{ text: string; columns: number } | null>(null);
+  const [ocrRunning, setOcrRunning] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -234,6 +244,63 @@ function ExtractedPageRow({
     };
   }, [docId, pageNumber, summary]);
 
+  const checkTextQuality = (text: string) => {
+    if (!text || text.trim().length === 0) {
+      return { isGarbled: false, isScanned: true, symbolRatio: 0 };
+    }
+    const symbolRegex = /[\u2600-\u27BF]|[\uD83C-\uD83F][\uDC00-\uDFFF]/g;
+    const puaRegex = /[\uE000-\uF8FF]|\uDB80[\uDC00-\uDFFD]|\uDBC0[\uDC00-\uDFFD]/g;
+    const garbageRegex = /[\uFFFD\uFFFE\uFFFF]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+
+    const symbolMatches = text.match(symbolRegex);
+    const puaMatches = text.match(puaRegex);
+    const garbageMatches = text.match(garbageRegex);
+
+    const totalGarbage =
+      (symbolMatches?.length ?? 0) + (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0);
+    const nonSpaceChars = text.replace(/\s/g, "").length;
+    const symbolRatio = nonSpaceChars > 0 ? totalGarbage / nonSpaceChars : 0;
+
+    return {
+      isGarbled: symbolRatio > 0.05 || totalGarbage > 3,
+      isScanned: text.trim().length < 20,
+      symbolRatio,
+    };
+  };
+
+  const handleRunOcr = async () => {
+    setOcrRunning(true);
+    const tid = toast.loading("Loading document and running OCR...");
+    try {
+      const blob = await getDocBlob(docId);
+      if (!blob) {
+        toast.error("Document binary not found in storage.", { id: tid });
+        return;
+      }
+      const { ocrPageById } = await import("@/lib/pdf");
+      const ocrText = await ocrPageById(blob, pageNumber, data?.columns ?? 1);
+      if (!ocrText || ocrText.trim().length === 0) {
+        toast.error("OCR completed but extracted no text.", { id: tid });
+        return;
+      }
+
+      const quality = checkTextQuality(ocrText);
+      await updatePageData(docId, pageNumber, {
+        text: ocrText,
+        garbageRatio: quality.symbolRatio,
+        ocrRun: true,
+      });
+
+      setData({ text: ocrText, columns: data?.columns ?? 1 });
+      toast.success("Page text updated successfully using OCR!", { id: tid });
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "OCR failed.", { id: tid });
+    } finally {
+      setOcrRunning(false);
+    }
+  };
+
   if (data === null) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -243,16 +310,68 @@ function ExtractedPageRow({
     );
   }
 
+  const quality = checkTextQuality(data.text);
+  const showOcrSuggestion = quality.isGarbled || quality.isScanned;
+
   return (
     <article className="reader-card">
       <header className="mb-4 flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Page {pageNumber} — Original Text
         </h3>
-        <span className="text-[11px] text-muted-foreground/60">
-          {data.text ? `${estimateTokens(data.text).toLocaleString()} tokens` : ""}
-        </span>
+        <div className="flex items-center gap-3">
+          {data.text && (
+            <span className="text-[11px] text-muted-foreground/60">
+              {estimateTokens(data.text).toLocaleString()} tokens
+            </span>
+          )}
+          <button
+            disabled={ocrRunning}
+            onClick={handleRunOcr}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline disabled:opacity-50 cursor-pointer"
+          >
+            {ocrRunning ? "Running OCR…" : "Run OCR"}
+          </button>
+        </div>
       </header>
+
+      {showOcrSuggestion && (
+        <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-[13px] leading-relaxed text-foreground/95 backdrop-blur-md">
+          <div className="flex items-start gap-3">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
+              !
+            </span>
+            <div className="flex-1">
+              <p className="font-semibold text-primary">
+                {quality.isGarbled ? "Garbled character symbols detected" : "Minimal extractable text found"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {quality.isGarbled
+                  ? "This page seems to contain corrupted fonts or symbols instead of standard characters. Run OCR to convert the visual layout to clean, readable text."
+                  : "This page might be scanned or contain only images. Run OCR to extract text from the page."}
+              </p>
+              <button
+                disabled={ocrRunning}
+                onClick={handleRunOcr}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:opacity-50 cursor-pointer active:scale-95"
+              >
+                {ocrRunning ? (
+                  <>
+                    <span className="inline-block h-3 w-3 rounded-full border-2 border-primary-foreground border-t-transparent spin-slow" />
+                    Running OCR…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 mr-1 inline" />
+                    Fix page with OCR
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="reader-text">
         {data.text ? (
           <div className="whitespace-pre-wrap break-words">{data.text}</div>

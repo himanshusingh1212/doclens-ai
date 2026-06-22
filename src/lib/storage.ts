@@ -73,6 +73,7 @@ export interface PageDataRecord {
   columns: number;
   garbageRatio: number;
   pageAi?: PageAi;
+  ocrRun?: boolean;
 }
 
 /** Lightweight summary of AI state across pages — used for headers/badges only. */
@@ -458,6 +459,21 @@ export async function getPageData(
   const v = await d.get(PAGES, pageKey(docId, pageNumber));
   return v as PageDataRecord | undefined;
 }
+
+/** Update a single page record's properties in IndexedDB. */
+export async function updatePageData(
+  docId: string,
+  pageNumber: number,
+  patch: Partial<Omit<PageDataRecord, "key" | "docId" | "pageNumber">>
+): Promise<void> {
+  const d = await db();
+  const key = pageKey(docId, pageNumber);
+  const existing = await d.get(PAGES, key);
+  if (!existing) return;
+  const merged = { ...existing, ...patch };
+  await d.put(PAGES, merged);
+}
+
 
 /** Read every page's text+AI for a doc. Heavy — use only for export. */
 export async function getAllPages(docId: string): Promise<PageDataRecord[]> {

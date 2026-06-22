@@ -1,4 +1,5 @@
 import type * as PdfJs from "pdfjs-dist";
+import { createWorker, type Worker } from "tesseract.js";
 
 let pdfjsPromise: Promise<typeof PdfJs> | null = null;
 async function getPdfjs(): Promise<typeof PdfJs> {
@@ -40,6 +41,12 @@ const PUA_REGEX = /[\uE000-\uF8FF]|\uDB80[\uDC00-\uDFFD]|\uDBC0[\uDC00-\uDFFD]/g
 const GARBAGE_REGEX = /[\uFFFD\uFFFE\uFFFF]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
 
 /**
+ * Regex matching standard Unicode symbol and dingbat ranges (ZapfDingbats, Wingdings, Webdings).
+ * When normal English text extracts as these symbols, it indicates a bad font map.
+ */
+const SYMBOL_FONT_CHARS = /[\u2600-\u27BF]|[\uD83C-\uD83F][\uDC00-\uDFFF]/g;
+
+/**
  * Clean extracted text by stripping unmappable PUA glyphs and garbage characters.
  * Returns the cleaned string plus a ratio of how much was garbage (0–1).
  */
@@ -48,7 +55,9 @@ function cleanExtractedText(raw: string): { text: string; garbageRatio: number }
 
   const puaMatches = raw.match(PUA_REGEX);
   const garbageMatches = raw.match(GARBAGE_REGEX);
-  const totalGarbage = (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0);
+  const symbolMatches = raw.match(SYMBOL_FONT_CHARS);
+  const totalGarbage =
+    (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0) + (symbolMatches?.length ?? 0);
   const nonSpaceChars = raw.replace(/\s/g, "").length;
   const garbageRatio = nonSpaceChars > 0 ? totalGarbage / nonSpaceChars : 0;
 
@@ -63,6 +72,7 @@ function cleanExtractedText(raw: string): { text: string; garbageRatio: number }
 
   return { text: cleaned, garbageRatio };
 }
+
 
 export interface TextItem {
   str: string;
@@ -412,13 +422,10 @@ export async function extractPdfPages(
         sorted.length = 0;
 
         const { text, garbageRatio } = cleanExtractedText(rawText);
+        let finalText = text;
+        let finalGarbageRatio = garbageRatio;
 
-        if (garbageRatio > 0.3) {
-          console.warn(
-            `Page ${pageNumber}: ${Math.round(garbageRatio * 100)}% garbage chars detected — ` +
-              `PDF likely uses legacy/non-Unicode fonts. Text may be incomplete.`,
-          );
-        }
+
 
         // NOTE: We intentionally drop the per-item `items[]` from the returned
         // extraction — the caller stores only `{pageNumber, text, columns,
@@ -428,11 +435,12 @@ export async function extractPdfPages(
         // regex work on data that was thrown away.
         return {
           pageNumber,
-          text,
+          text: finalText,
           items: [],
           columns,
-          garbageRatio,
+          garbageRatio: finalGarbageRatio,
         };
+
       } finally {
         // Release the operator list / decoded fonts pdf.js caches per page so
         // a 500-page document doesn't keep all pages hot at once.
@@ -521,6 +529,23 @@ export function sortTextContent(textContent: unknown, pageWidth: number): unknow
   };
 }
 
+let ocrWorkerPromise: Promise<Worker> | null = null;
+
+export async function getOcrWorker(): Promise<Worker> {
+  if (typeof window === "undefined") throw new Error("OCR can only run in the browser.");
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = createWorker("eng", 1, {
+      workerPath: "/tesseract/worker.min.js",
+      langPath: "/tesseract/lang-data",
+      corePath: "/tesseract",
+      gzip: false,
+      logger: (m) => console.log("[Tesseract Worker Log]:", m),
+      errorHandler: (e) => console.error("[Tesseract Worker Error]:", e),
+    });
+  }
+  return ocrWorkerPromise;
+}
+
 // Vite Hot Module Replacement (HMR) cleanup
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
@@ -536,8 +561,182 @@ if (import.meta.hot) {
           })
           .catch(() => {});
       }
+      if (ocrWorkerPromise) {
+        ocrWorkerPromise
+          .then((worker) => {
+            try {
+              worker.terminate();
+            } catch {
+              /* ignore */
+            }
+          })
+          .catch(() => {});
+      }
     } catch (e) {
-      console.warn("[HMR] Failed to dispose PDFJS worker:", e);
+      console.warn("[HMR] Failed to dispose workers:", e);
     }
   });
 }
+
+function cropCanvas(
+  sourceCanvas: HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): HTMLCanvasElement {
+  const croppedCanvas = document.createElement("canvas");
+  croppedCanvas.width = width;
+  croppedCanvas.height = height;
+  const ctx = croppedCanvas.getContext("2d");
+  if (ctx) {
+    ctx.drawImage(sourceCanvas, x, y, width, height, 0, 0, width, height);
+  }
+  return croppedCanvas;
+}
+
+function getColumnDividers(items: TextItem[], pageWidth: number, columnsCount: number): number[] {
+  if (columnsCount <= 1 || items.length === 0) return [];
+
+  const segments = groupIntoSegments(items);
+  const sortedSegments = [...segments].sort((a, b) => b.y - a.y);
+  const rows: TextSegment[][] = [];
+  const rowYTolerance = 8;
+
+  for (const seg of sortedSegments) {
+    let placed = false;
+    for (const row of rows) {
+      if (Math.abs(row[0].y - seg.y) <= rowYTolerance) {
+        row.push(seg);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      rows.push([seg]);
+    }
+  }
+
+  const div1Xs: number[] = [];
+  const div2Xs: number[] = [];
+
+  for (const row of rows) {
+    if (row.length >= 2) {
+      row.sort((a, b) => a.minX - b.minX);
+      div1Xs.push((row[0].maxX + row[1].minX) / 2);
+      if (row.length >= 3) {
+        div2Xs.push((row[1].maxX + row[2].minX) / 2);
+      }
+    }
+  }
+
+  const getMedian = (arr: number[], fallback: number) => {
+    if (arr.length === 0) return fallback;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  };
+
+  const dividers: number[] = [];
+  if (columnsCount >= 2) {
+    dividers.push(getMedian(div1Xs, pageWidth / 2));
+  }
+  if (columnsCount >= 3) {
+    dividers.push(getMedian(div2Xs, (2 * pageWidth) / 3));
+  }
+
+  return dividers;
+}
+
+export async function ocrPdfPage(page: any, columns = 1): Promise<string> {
+  const worker = await getOcrWorker();
+
+  // Render page to canvas at 2.0x scale for better OCR accuracy
+  const viewport = page.getViewport({ scale: 2.0 });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create 2D canvas context");
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  const cols = Math.max(1, columns);
+  if (cols === 1) {
+    const result = await worker.recognize(canvas);
+    return result.data?.text || "";
+  }
+
+  // Get custom dividers if possible, falling back to equal widths
+  let scaledDividers: number[] = [];
+  try {
+    const viewport1 = page.getViewport({ scale: 1.0 });
+    const content = await page.getTextContent();
+    const items: TextItem[] = [];
+    for (const it of content.items as Record<string, unknown>[]) {
+      if (!it || typeof it.str !== "string") continue;
+      const tx = it.transform;
+      if (!Array.isArray(tx)) continue;
+      items.push({
+        str: it.str,
+        x: tx[4] as number,
+        y: tx[5] as number,
+        width: it.width as number,
+        height: it.height as number,
+      });
+    }
+    const dividers = getColumnDividers(items, viewport1.width, cols);
+    scaledDividers = dividers.map((x) => x * 2.0);
+  } catch (e) {
+    console.warn("Failed to determine custom column dividers for OCR, falling back to equal split:", e);
+  }
+
+  // Slice canvas into vertical columns
+  const colBounds: { x: number; width: number }[] = [];
+  let currentX = 0;
+  for (let i = 0; i < cols; i++) {
+    let nextX = canvas.width;
+    if (i < cols - 1) {
+      if (scaledDividers[i] !== undefined) {
+        nextX = Math.round(scaledDividers[i]);
+      } else {
+        nextX = Math.round(((i + 1) * canvas.width) / cols);
+      }
+    }
+    colBounds.push({ x: currentX, width: Math.max(1, nextX - currentX) });
+    currentX = nextX;
+  }
+
+  const colTexts: string[] = [];
+  for (const bound of colBounds) {
+    const cropped = cropCanvas(canvas, bound.x, 0, bound.width, canvas.height);
+    const result = await worker.recognize(cropped);
+    const txt = result.data?.text || "";
+    if (txt.trim()) {
+      colTexts.push(txt.trim());
+    }
+  }
+
+  return colTexts.join("\n\n");
+}
+
+export async function ocrPageById(blob: Blob, pageNumber: number, columns = 1): Promise<string> {
+  const pdf = await loadDocFromSource(blob);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    try {
+      return await ocrPdfPage(page, columns);
+    } finally {
+      try {
+        page.cleanup();
+      } catch {}
+    }
+  } finally {
+    try {
+      await pdf.destroy();
+    } catch {}
+  }
+}
+
+
