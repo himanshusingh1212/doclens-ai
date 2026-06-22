@@ -559,7 +559,7 @@ if (import.meta.hot) {
               /* ignore */
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
       if (ocrWorkerPromise) {
         ocrWorkerPromise
@@ -570,7 +570,7 @@ if (import.meta.hot) {
               /* ignore */
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     } catch (e) {
       console.warn("[HMR] Failed to dispose workers:", e);
@@ -730,13 +730,82 @@ export async function ocrPageById(blob: Blob, pageNumber: number, columns = 1): 
     } finally {
       try {
         page.cleanup();
-      } catch {}
+      } catch { }
     }
+  } finally {
+    try {
+      await pdf.destroy();
+    } catch { }
+  }
+}
+
+export function checkTextQuality(text: string): { isGarbled: boolean; isScanned: boolean; symbolRatio: number } {
+  if (!text || text.trim().length === 0) {
+    return { isGarbled: false, isScanned: true, symbolRatio: 0 };
+  }
+  const symbolMatches = text.match(SYMBOL_FONT_CHARS);
+  const puaMatches = text.match(PUA_REGEX);
+  const garbageMatches = text.match(GARBAGE_REGEX);
+
+  const totalGarbage =
+    (symbolMatches?.length ?? 0) + (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0);
+  const nonSpaceChars = text.replace(/\s/g, "").length;
+  const symbolRatio = nonSpaceChars > 0 ? totalGarbage / nonSpaceChars : 0;
+
+  return {
+    isGarbled: symbolRatio > 0.05 || totalGarbage > 3,
+    isScanned: text.trim().length < 20,
+    symbolRatio,
+  };
+}
+
+export async function runOcrOnGarbledPages(
+  blob: Blob,
+  pages: { pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[],
+  onProgress: (pageNumber: number, total: number) => void,
+  onPageOcrComplete?: (pageNumber: number, text: string, garbageRatio: number) => Promise<void> | void,
+): Promise<{ pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[]> {
+  const pdf = await loadDocFromSource(blob);
+  try {
+    const total = pdf.numPages;
+    const updatedPages = [...pages];
+
+    for (let i = 0; i < updatedPages.length; i++) {
+      const pageData = updatedPages[i];
+      // Update progress callback so UI shows "OCR Processing: Page X of Y"
+      onProgress(pageData.pageNumber, total);
+
+      const quality = checkTextQuality(pageData.text);
+      if (quality.isGarbled) {
+        const page = await pdf.getPage(pageData.pageNumber);
+        try {
+          const ocrText = await ocrPdfPage(page, pageData.columns);
+          if (ocrText && ocrText.trim().length > 0) {
+            const newQuality = checkTextQuality(ocrText);
+            updatedPages[i] = {
+              ...pageData,
+              text: ocrText,
+              garbageRatio: newQuality.symbolRatio,
+              ocrRun: true,
+            };
+            if (onPageOcrComplete) {
+              await onPageOcrComplete(pageData.pageNumber, ocrText, newQuality.symbolRatio);
+            }
+          }
+        } finally {
+          try {
+            page.cleanup();
+          } catch {}
+        }
+      }
+    }
+    return updatedPages;
   } finally {
     try {
       await pdf.destroy();
     } catch {}
   }
 }
+
 
 

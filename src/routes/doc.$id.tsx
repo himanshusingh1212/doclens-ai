@@ -12,6 +12,7 @@ import {
   touchDoc,
   updateDoc,
   writePages,
+  updatePageData,
   StorageError,
   type DocRecord,
   type PageAiSummaryEntry,
@@ -29,6 +30,19 @@ const extractPdfPagesClient = createClientOnlyFn(
     return extractPdfPages(blob, onPage);
   },
 );
+
+const runOcrOnGarbledPagesClient = createClientOnlyFn(
+  async (
+    blob: Blob,
+    pages: { pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[],
+    onProgress: (pageNumber: number, total: number) => void,
+    onPageOcrComplete?: (pageNumber: number, text: string, garbageRatio: number) => Promise<void> | void,
+  ) => {
+    const { runOcrOnGarbledPages } = await import("@/lib/pdf");
+    return runOcrOnGarbledPages(blob, pages, onProgress, onPageOcrComplete);
+  },
+);
+
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
@@ -188,6 +202,32 @@ function DocPage() {
         } else {
           toast.error("Extraction complete but failed to save. Storage may be full.");
         }
+        setAnalyzing(false);
+        return;
+      }
+
+      // Fallback OCR checks and execution on garbled pages
+      setStatus("OCR Processing: Page 1 of " + collected.length);
+      try {
+        await runOcrOnGarbledPagesClient(
+          blob,
+          collected,
+          (pageNumber, total) => {
+            setStatus(`OCR Processing: Page ${pageNumber} of ${total}`);
+          },
+          async (pageNumber, ocrText, garbageRatio) => {
+            await updatePageData(id, pageNumber, {
+              text: ocrText,
+              garbageRatio,
+              ocrRun: true,
+            });
+            await refreshSummary();
+          }
+        );
+        setStatus(`done · ${collected.length} pages`);
+      } catch (ocrErr) {
+        console.warn("OCR fallback failed:", ocrErr);
+        toast.error("OCR fallback failed: " + (ocrErr instanceof Error ? ocrErr.message : "unknown"));
       } finally {
         collected.length = 0;
       }

@@ -10,6 +10,7 @@ import {
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 import { PageWorkstation } from "./PageWorkstation";
+import { checkTextQuality } from "@/lib/pdf";
 
 
 interface Props {
@@ -69,11 +70,11 @@ async function exportAsJson(docId: string) {
     ai:
       page.pageAi?.status === "done" && page.pageAi.result
         ? {
-            status: page.pageAi.status,
-            result: page.pageAi.result,
-            settingsHash: page.pageAi.settingsHash,
-            updatedAt: page.pageAi.updatedAt,
-          }
+          status: page.pageAi.status,
+          result: page.pageAi.result,
+          settingsHash: page.pageAi.settingsHash,
+          updatedAt: page.pageAi.updatedAt,
+        }
         : null,
   }));
   downloadBlob(
@@ -244,30 +245,6 @@ function ExtractedPageRow({
     };
   }, [docId, pageNumber, summary]);
 
-  const checkTextQuality = (text: string) => {
-    if (!text || text.trim().length === 0) {
-      return { isGarbled: false, isScanned: true, symbolRatio: 0 };
-    }
-    const symbolRegex = /[\u2600-\u27BF]|[\uD83C-\uD83F][\uDC00-\uDFFF]/g;
-    const puaRegex = /[\uE000-\uF8FF]|\uDB80[\uDC00-\uDFFD]|\uDBC0[\uDC00-\uDFFD]/g;
-    const garbageRegex = /[\uFFFD\uFFFE\uFFFF]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
-
-    const symbolMatches = text.match(symbolRegex);
-    const puaMatches = text.match(puaRegex);
-    const garbageMatches = text.match(garbageRegex);
-
-    const totalGarbage =
-      (symbolMatches?.length ?? 0) + (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0);
-    const nonSpaceChars = text.replace(/\s/g, "").length;
-    const symbolRatio = nonSpaceChars > 0 ? totalGarbage / nonSpaceChars : 0;
-
-    return {
-      isGarbled: symbolRatio > 0.05 || totalGarbage > 3,
-      isScanned: text.trim().length < 20,
-      symbolRatio,
-    };
-  };
-
   const handleRunOcr = async () => {
     setOcrRunning(true);
     const tid = toast.loading("Loading document and running OCR...");
@@ -397,9 +374,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative px-4 py-2.5 text-[13px] font-medium transition-colors ${
-        active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-      }`}
+      className={`relative px-4 py-2.5 text-[13px] font-medium transition-colors ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+        }`}
     >
       {children}
       {active && <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-primary" />}

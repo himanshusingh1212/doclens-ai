@@ -278,9 +278,9 @@ function db() {
                   garbageRatio: p.garbageRatio ?? 0,
                   pageAi: ai
                     ? (() => {
-                        const { lastSentRequest: _, ...rest } = ai;
-                        return { ...rest, pageNumber: p.pageNumber } as PageAi;
-                      })()
+                      const { lastSentRequest: _, ...rest } = ai;
+                      return { ...rest, pageNumber: p.pageNumber } as PageAi;
+                    })()
                     : undefined,
                 };
                 pagesStore.put(rec);
@@ -430,6 +430,7 @@ export async function writePages(id: string, pages: PageExtraction[] | StoredPag
           text: (p as StoredPage).text ?? "",
           columns: (p as StoredPage).columns ?? 1,
           garbageRatio: (p as StoredPage).garbageRatio ?? 0,
+          ocrRun: (p as any).ocrRun ?? false,
         };
         await tx.store.put(rec);
       }
