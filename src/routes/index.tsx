@@ -21,14 +21,7 @@ import {
   validateKey,
   type KeyStatus,
 } from "@/lib/openrouter";
-import {
-  createDoc,
-  deleteDoc,
-  getLastOpened,
-  listDocs,
-  StorageError,
-  type DocSummary,
-} from "@/lib/storage";
+import { createDoc, deleteDoc, listDocs, StorageError, type DocSummary } from "@/lib/storage";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
@@ -59,8 +52,6 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-const COLD_LAUNCH_KEY = "doclens.coldLaunchHandled";
-
 function DashboardPage() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocSummary[]>([]);
@@ -81,27 +72,10 @@ function DashboardPage() {
       if (cancelled) return;
       setDocs(list);
       setLoading(false);
-
-      // Auto-restore only on cold launch (first dashboard mount this session).
-      // Any subsequent navigation to "/" must show the dashboard.
-      const alreadyHandled = sessionStorage.getItem(COLD_LAUNCH_KEY);
-      sessionStorage.setItem(COLD_LAUNCH_KEY, "1");
-      if (alreadyHandled) return;
-
-      const last = await getLastOpened();
-      if (last && list.some((d) => d.id === last)) {
-        const matchingDoc = list.find((d) => d.id === last);
-        navigate({
-          to: "/doc/$id",
-          params: { id: last },
-          search: matchingDoc?.lastReadPage ? { page: matchingDoc.lastReadPage } : undefined,
-        });
-      }
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFile = async (f: File) => {
