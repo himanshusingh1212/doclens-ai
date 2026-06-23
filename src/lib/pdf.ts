@@ -96,16 +96,16 @@ export interface PageExtraction {
  * Returns column count (1-3 typical).
  */
 
-function detectColumns(items: TextItem[], pageWidth: number): number {
+function detectColumns(items: TextItem[], pageWidth: number, yTolerance = 4): number {
   if (items.length < 20) return 1;
 
-  const segments = groupIntoSegments(items);
+  const segments = groupIntoSegments(items, yTolerance);
   if (segments.length < 5) return 1;
 
-  // Group segments into horizontal rows (within 8px tolerance)
+  // Group segments into horizontal rows (within tolerance)
   const sortedSegments = [...segments].sort((a, b) => b.y - a.y);
   const rows: TextSegment[][] = [];
-  const rowYTolerance = 8;
+  const rowYTolerance = yTolerance * 2;
 
   for (const seg of sortedSegments) {
     let placed = false;
@@ -164,14 +164,13 @@ interface TextSegment {
  * Group text items that are on the same vertical line (within a small tolerance)
  * and close to each other horizontally into single line segments.
  */
-function groupIntoSegments(items: TextItem[]): TextSegment[] {
+function groupIntoSegments(items: TextItem[], yTolerance = 4): TextSegment[] {
   if (items.length === 0) return [];
 
   // Sort items by Y descending (top to bottom), then by X ascending (left to right)
   const sortedItems = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
 
   const rows: TextItem[][] = [];
-  const yTolerance = 4; // pixels
 
   for (const item of sortedItems) {
     let placed = false;
@@ -238,17 +237,17 @@ interface DividerPoint {
  * calculate dynamic column dividers based on adjacent segments, and assign segments
  * to their respective columns before sorting top→bottom.
  */
-function sortByColumns(items: TextItem[], pageWidth: number, columns: number): TextItem[] {
+function sortByColumns(items: TextItem[], pageWidth: number, columns: number, yTolerance = 4): TextItem[] {
   if (columns <= 1) {
     return [...items].sort((a, b) => b.y - a.y || a.x - b.x);
   }
 
-  const segments = groupIntoSegments(items);
+  const segments = groupIntoSegments(items, yTolerance);
 
   // Group segments into horizontal rows to locate column dividers
   const sortedSegments = [...segments].sort((a, b) => b.y - a.y);
   const rows: TextSegment[][] = [];
-  const rowYTolerance = 8; // pixels
+  const rowYTolerance = yTolerance * 2; // pixels
 
   for (const seg of sortedSegments) {
     let placed = false;
@@ -648,77 +647,221 @@ function getColumnDividers(items: TextItem[], pageWidth: number, columnsCount: n
   return dividers;
 }
 
+export function isGarbageLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return false;
+
+  const words = trimmed.split(/\s+/);
+  let score = 0;
+  let standaloneSymbolsCount = 0;
+  let unusualShortWordsCount = 0;
+  let noVowelWordsCount = 0;
+  let mixedCaseWordsCount = 0;
+
+  const vowelRegex = /[aeiouyAEIOUY]/;
+  const letterRegex = /[a-zA-Z]/;
+  const alphanumericRegex = /[a-zA-Z0-9]/;
+
+  const commonShortWords = new Set([
+    "a", "i", "o",
+    "am", "an", "as", "at", "be", "by", "co", "do", "dr", "ex", "go",
+    "he", "hi", "id", "if", "in", "is", "it", "me", "mr", "ms", "my",
+    "no", "of", "oh", "ok", "on", "or", "so", "st", "to", "tv", "up",
+    "us", "vs", "we", "ye"
+  ]);
+
+  for (const word of words) {
+    // 1. Standalone symbols/punctuation
+    if (!alphanumericRegex.test(word)) {
+      standaloneSymbolsCount++;
+      continue;
+    }
+
+    const cleanWord = word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "");
+    if (cleanWord.length === 0) {
+      standaloneSymbolsCount++;
+      continue;
+    }
+
+    // 2. Unusual short words (length 1 or 2, excluding numbers)
+    const isNumber = /^\d+$/.test(cleanWord);
+    if (cleanWord.length <= 2 && !isNumber) {
+      const lower = cleanWord.toLowerCase();
+      if (!commonShortWords.has(lower)) {
+        unusualShortWordsCount++;
+      }
+    }
+
+    // 3. No-vowel words (length >= 2, excluding purely numeric)
+    const hasLetters = letterRegex.test(cleanWord);
+    if (cleanWord.length >= 2 && hasLetters) {
+      const hasVowels = vowelRegex.test(cleanWord);
+      if (!hasVowels) {
+        noVowelWordsCount++;
+      }
+    }
+
+    // 4. Mixed Casing (e.g. oS, eS, oF, aR)
+    if (/[a-z][A-Z]/.test(cleanWord)) {
+      mixedCaseWordsCount++;
+    }
+  }
+
+  const totalWords = words.length;
+
+  // Score Accumulation
+  score += standaloneSymbolsCount * 1.5;
+  score += unusualShortWordsCount * 1.5;
+  score += noVowelWordsCount * 2.0;
+  score += mixedCaseWordsCount * 1.5;
+
+  // Triple consecutive letters (like SSS, eee)
+  if (/([a-zA-Z])\1\1/i.test(trimmed)) {
+    score += 2.0;
+  }
+
+  // Character-level non-alphanumeric ratio (excluding spaces)
+  const nonSpaceChars = trimmed.replace(/\s/g, "");
+  const specialChars = nonSpaceChars.replace(/[a-zA-Z0-9.,?!'"()]/g, "");
+  const specialCharRatio = nonSpaceChars.length > 0 ? specialChars.length / nonSpaceChars.length : 0;
+  if (specialCharRatio > 0.15) {
+    score += specialCharRatio * 8;
+  }
+
+  // If the line consists of exactly 1 word and it is a single character that is non-alphanumeric, it is garbage
+  if (totalWords === 1) {
+    const singleWord = words[0];
+    if (singleWord.length <= 2 && !alphanumericRegex.test(singleWord)) {
+      return true;
+    }
+    const cleanWord = singleWord.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "");
+    if (cleanWord.length >= 2 && !/^\d+$/.test(cleanWord) && !vowelRegex.test(cleanWord)) {
+      return true;
+    }
+  }
+
+  return score >= 2.5;
+}
+
+export function cleanOcrText(text: string): string {
+  if (!text) return "";
+  const lines = text.split("\n");
+  const cleanedLines = lines.filter((line) => !isGarbageLine(line));
+  return cleanedLines.join("\n").trim();
+}
+
 export async function ocrPdfPage(page: any, columns = 1): Promise<string> {
   const worker = await getOcrWorker();
 
   // Render page to canvas at 2.0x scale for better OCR accuracy
-  const viewport = page.getViewport({ scale: 2.0 });
+  const viewport2 = page.getViewport({ scale: 2.0 });
   const canvas = document.createElement("canvas");
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
+  canvas.width = viewport2.width;
+  canvas.height = viewport2.height;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not create 2D canvas context");
 
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  await page.render({ canvasContext: ctx, viewport: viewport2 }).promise;
 
-  const cols = Math.max(1, columns);
-  if (cols === 1) {
-    const result = await worker.recognize(canvas);
-    return result.data?.text || "";
-  }
-
-  // Get custom dividers if possible, falling back to equal widths
-  let scaledDividers: number[] = [];
-  try {
-    const viewport1 = page.getViewport({ scale: 1.0 });
-    const content = await page.getTextContent();
-    const items: TextItem[] = [];
-    for (const it of content.items as Record<string, unknown>[]) {
-      if (!it || typeof it.str !== "string") continue;
-      const tx = it.transform;
-      if (!Array.isArray(tx)) continue;
-      items.push({
-        str: it.str,
-        x: tx[4] as number,
-        y: tx[5] as number,
-        width: it.width as number,
-        height: it.height as number,
-      });
-    }
-    const dividers = getColumnDividers(items, viewport1.width, cols);
-    scaledDividers = dividers.map((x) => x * 2.0);
-  } catch (e) {
-    console.warn("Failed to determine custom column dividers for OCR, falling back to equal split:", e);
-  }
-
-  // Slice canvas into vertical columns
-  const colBounds: { x: number; width: number }[] = [];
-  let currentX = 0;
-  for (let i = 0; i < cols; i++) {
-    let nextX = canvas.width;
-    if (i < cols - 1) {
-      if (scaledDividers[i] !== undefined) {
-        nextX = Math.round(scaledDividers[i]);
-      } else {
-        nextX = Math.round(((i + 1) * canvas.width) / cols);
+  // Run Tesseract OCR on the full canvas
+  console.log("[ocrPdfPage] Starting OCR on full canvas...");
+  const result = await worker.recognize(canvas, {}, { blocks: true });
+  console.log("[ocrPdfPage] OCR finished. result.data keys:", Object.keys(result.data || {}));
+  console.log("[ocrPdfPage] result.data.text length:", result.data?.text?.length);
+  const rawWords = (result.data as any)?.words || [];
+  const words: any[] = [];
+  console.log("[ocrPdfPage] blocks count:", (result.data as any)?.blocks?.length);
+  if ((result.data as any)?.blocks?.length > 0) {
+    const firstBlock = (result.data as any).blocks[0];
+    console.log("[ocrPdfPage] first block keys:", Object.keys(firstBlock));
+    console.log("[ocrPdfPage] first block paragraphs count:", firstBlock.paragraphs?.length);
+    if (firstBlock.paragraphs?.length > 0) {
+      console.log("[ocrPdfPage] first para keys:", Object.keys(firstBlock.paragraphs[0]));
+      console.log("[ocrPdfPage] first para lines count:", firstBlock.paragraphs[0].lines?.length);
+      if (firstBlock.paragraphs[0].lines?.length > 0) {
+        console.log("[ocrPdfPage] first line keys:", Object.keys(firstBlock.paragraphs[0].lines[0]));
+        console.log("[ocrPdfPage] first line words count:", firstBlock.paragraphs[0].lines[0].words?.length);
       }
     }
-    colBounds.push({ x: currentX, width: Math.max(1, nextX - currentX) });
-    currentX = nextX;
   }
-
-  const colTexts: string[] = [];
-  for (const bound of colBounds) {
-    const cropped = cropCanvas(canvas, bound.x, 0, bound.width, canvas.height);
-    const result = await worker.recognize(cropped);
-    const txt = result.data?.text || "";
-    if (txt.trim()) {
-      colTexts.push(txt.trim());
+  if (rawWords.length > 0) {
+    words.push(...rawWords);
+  } else {
+    const blocks = (result.data as any)?.blocks || [];
+    for (const block of blocks) {
+      const paras = block.paragraphs || [];
+      for (const para of paras) {
+        const lines = para.lines || [];
+        for (const line of lines) {
+          const lineWords = line.words || [];
+          for (const w of lineWords) {
+            words.push(w);
+          }
+        }
+      }
     }
   }
+  console.log("[ocrPdfPage] Raw words found:", words.length);
 
-  return colTexts.join("\n\n");
+  const origViewport = page.getViewport({ scale: 1.0 });
+  const items: TextItem[] = [];
+
+  for (const w of words) {
+    if (typeof w.confidence === "number" && w.confidence < 60) {
+      continue;
+    }
+    // Scale coordinates back to 1.0x and invert Y to match PDF.js orientation
+    const x0 = w.bbox.x0 / 2.0;
+    const x1 = w.bbox.x1 / 2.0;
+    const y0 = w.bbox.y0 / 2.0;
+    const y1 = w.bbox.y1 / 2.0;
+
+    items.push({
+      str: w.text || "",
+      x: x0,
+      y: origViewport.height - y1,
+      width: x1 - x0,
+      height: y1 - y0,
+    });
+  }
+  console.log("[ocrPdfPage] Mapped high-confidence items:", items.length);
+
+  // Detect columns dynamically if not forced by the caller
+  let cols = columns;
+  if (cols <= 1) {
+    cols = detectColumns(items, origViewport.width, 8);
+  }
+  console.log("[ocrPdfPage] Detected columns:", cols);
+
+  // Sort words respecting layout structure/columns
+  const sorted = sortByColumns(items, origViewport.width, cols, 8);
+  console.log("[ocrPdfPage] Sorted items:", sorted.length);
+
+  // Reconstruct text layout-aware
+  let rawText = "";
+  let lastY: number | null = null;
+  for (const it of sorted) {
+    if (lastY !== null && Math.abs(it.y - lastY) > 8) {
+      rawText += "\n";
+    } else if (rawText && !rawText.endsWith(" ") && !rawText.endsWith("\n")) {
+      rawText += " ";
+    }
+    rawText += it.str;
+    lastY = it.y;
+  }
+  console.log("[ocrPdfPage] Reconstructed rawText length:", rawText.length);
+  if (rawText.length > 0) {
+    console.log("[ocrPdfPage] First 200 chars of rawText:", rawText.substring(0, 200));
+  }
+
+  const cleaned = cleanOcrText(rawText);
+  console.log("[ocrPdfPage] Cleaned text length:", cleaned.length);
+  if (cleaned.length > 0) {
+    console.log("[ocrPdfPage] First 200 chars of cleaned:", cleaned.substring(0, 200));
+  }
+
+  return cleaned;
 }
 
 export async function ocrPageById(blob: Blob, pageNumber: number, columns = 1): Promise<string> {
