@@ -1,10 +1,11 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, HeadContent, Scripts, useLocation } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect } from "react";
 import { initTheme } from "@/lib/theme";
+import { logPageView } from "@/lib/firebase";
 
 import appCss from "../styles.css?url";
 
@@ -103,9 +104,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 function RootComponent() {
+  const location = useLocation();
+
   useEffect(() => {
     initTheme();
   }, []);
+
+  useEffect(() => {
+    logPageView(location.pathname);
+  }, [location.pathname]);
 
   return (
     <>
