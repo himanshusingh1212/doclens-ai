@@ -364,6 +364,8 @@ function VoicePage() {
   async function handleSelectSupertonicStyle(styleId: string) {
     setStPreferred(styleId);
     localStorage.setItem("doclens.supertonic.preferredStyle", styleId);
+    setTtsEngine("supertonic");
+    setEngineLocal("supertonic");
     // Auto-download if not cached
     const style = stStyles.find((s) => s.id === styleId);
     if (style && !style.installed) {
@@ -448,8 +450,13 @@ function VoicePage() {
   }
 
   function handleSetPreferredPiper(voiceId: string) {
-    if (voiceId) localStorage.setItem("doclens.piper.preferredVoice", voiceId);
-    else localStorage.removeItem("doclens.piper.preferredVoice");
+    if (voiceId) {
+      localStorage.setItem("doclens.piper.preferredVoice", voiceId);
+      setTtsEngine("piper");
+      setEngineLocal("piper");
+    } else {
+      localStorage.removeItem("doclens.piper.preferredVoice");
+    }
     setPreferredPiper(voiceId);
   }
 
