@@ -25,6 +25,13 @@ import {
   testPiperVoice,
   toggleFavorite,
   type TtsEngine,
+  areSupertonicModelsInstalled,
+  downloadSupertonicModels,
+  removeSupertonicModels,
+  listSupertonicVoiceStyles,
+  downloadSupertonicVoiceStyle,
+  testSupertonicVoice,
+  type SupertonicVoiceStyle,
 } from "@/lib/tts";
 
 export const Route = createFileRoute("/settings_/voice")({
@@ -286,6 +293,18 @@ function VoicePage() {
   const [preferredPiper, setPreferredPiper] = useState<string>("");
   const [testingPiper, setTestingPiper] = useState<string | null>(null);
 
+  // Supertonic state
+  const [stInstalled, setStInstalled] = useState(false);
+  const [stDownloading, setStDownloading] = useState(false);
+  const [stDlProgress, setStDlProgress] = useState(0);
+  const [stStyles, setStStyles] = useState<SupertonicVoiceStyle[]>([]);
+  const [stPreferred, setStPreferred] = useState(
+    typeof window !== "undefined"
+      ? localStorage.getItem("doclens.supertonic.preferredStyle") ?? "M1"
+      : "M1",
+  );
+  const [stTesting, setStTesting] = useState<string | null>(null);
+
   // Initialize from stored settings
   useEffect(() => {
     setLanguage(getOutputLanguage() || "English");
@@ -295,11 +314,85 @@ function VoicePage() {
     setEngineLocal(getTtsEngine());
     setPreferredPiper(localStorage.getItem("doclens.piper.preferredVoice") ?? "");
     void refreshInstalled();
+    void refreshSupertonic();
   }, []);
 
   async function refreshInstalled() {
     const ids = await listInstalledPiperVoices();
     setInstalled(ids);
+  }
+
+  async function refreshSupertonic() {
+    const modelsOk = await areSupertonicModelsInstalled().catch(() => false);
+    setStInstalled(modelsOk);
+    if (modelsOk) {
+      const styles = await listSupertonicVoiceStyles().catch(() => [] as SupertonicVoiceStyle[]);
+      setStStyles(styles);
+    }
+  }
+
+  async function handleInstallSupertonic() {
+    setStDownloading(true);
+    setStDlProgress(0);
+    try {
+      await downloadSupertonicModels((loaded, total) => {
+        setStDlProgress(total > 0 ? Math.round((loaded / total) * 100) : 0);
+      });
+      // Auto-download default voice style M1
+      await downloadSupertonicVoiceStyle("M1").catch(() => {});
+      await refreshSupertonic();
+      toast.success("Supertonic 3 models installed successfully.");
+    } catch (e) {
+      toast.error(`Install failed: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setStDownloading(false);
+      setStDlProgress(0);
+    }
+  }
+
+  async function handleRemoveSupertonic() {
+    try {
+      await removeSupertonicModels();
+      setStInstalled(false);
+      setStStyles([]);
+      toast.success("Supertonic 3 models removed.");
+    } catch (e) {
+      toast.error(`Remove failed: ${e instanceof Error ? e.message : "unknown"}`);
+    }
+  }
+
+  async function handleSelectSupertonicStyle(styleId: string) {
+    setStPreferred(styleId);
+    localStorage.setItem("doclens.supertonic.preferredStyle", styleId);
+    // Auto-download if not cached
+    const style = stStyles.find((s) => s.id === styleId);
+    if (style && !style.installed) {
+      try {
+        await downloadSupertonicVoiceStyle(styleId);
+        await refreshSupertonic();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  async function handleTestSupertonic(styleId: string) {
+    if (stTesting === styleId) return;
+    setStTesting(styleId);
+    try {
+      // Auto-download if needed
+      const style = stStyles.find((s) => s.id === styleId);
+      if (style && !style.installed) {
+        await downloadSupertonicVoiceStyle(styleId);
+        await refreshSupertonic();
+      }
+      const code = langCode(language);
+      await testSupertonicVoice(styleId, code);
+    } catch (e) {
+      toast.error(`Test failed: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setStTesting(null);
+    }
   }
 
   async function openPiperCatalog() {
@@ -525,7 +618,7 @@ function VoicePage() {
           {/* Engine preference */}
           <div className="mb-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
             <span>engine</span>
-            {(["auto", "neural", "browser"] as TtsEngine[]).map((e) => (
+            {(["auto", "supertonic", "piper", "browser"] as TtsEngine[]).map((e) => (
               <button
                 key={e}
                 onClick={() => {
@@ -581,6 +674,104 @@ function VoicePage() {
                 );
               })}
             </ul>
+          )}
+        </section>
+
+        {/* Supertonic 3 — High-Quality Neural TTS */}
+        <section className="mb-5 rounded-lg border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                supertonic 3 · high-quality neural tts
+              </div>
+              <div className="mt-1 text-sm text-foreground">
+                31 languages · 10 voice styles · 44.1kHz studio audio
+              </div>
+            </div>
+            {stInstalled ? (
+              <button
+                onClick={handleRemoveSupertonic}
+                className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/10"
+              >
+                remove models
+              </button>
+            ) : (
+              <button
+                onClick={handleInstallSupertonic}
+                disabled={stDownloading}
+                className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {stDownloading ? `installing… ${stDlProgress}%` : "install models (~350 MB)"}
+              </button>
+            )}
+          </div>
+
+          {stDownloading && (
+            <div className="mb-3">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${stDlProgress}%` }}
+                />
+              </div>
+              <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                Downloading 4 ONNX models… {stDlProgress}%
+              </div>
+            </div>
+          )}
+
+          {stInstalled ? (
+            <div>
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                voice style
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {stStyles.length === 0
+                  ? ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"].map((id) => (
+                      <div
+                        key={id}
+                        className="rounded border border-dashed border-border px-3 py-2 text-center font-mono text-[11px] text-muted-foreground"
+                      >
+                        {id}
+                      </div>
+                    ))
+                  : stStyles.map((style) => (
+                      <button
+                        key={style.id}
+                        onClick={() => handleSelectSupertonicStyle(style.id)}
+                        className={`group relative rounded border px-3 py-2 text-center font-mono text-[11px] transition-colors ${
+                          stPreferred === style.id
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                        }`}
+                      >
+                        <div className="font-semibold">{style.id}</div>
+                        <div className="text-[9px] opacity-70">
+                          {style.gender === "male" ? "♂ Male" : "♀ Female"}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTestSupertonic(style.id);
+                          }}
+                          disabled={stTesting === style.id}
+                          className="absolute -right-1 -top-1 hidden rounded-full border border-border bg-surface px-1.5 py-0.5 text-[9px] group-hover:block disabled:opacity-50"
+                        >
+                          {stTesting === style.id ? "⏳" : "▶"}
+                        </button>
+                      </button>
+                    ))}
+              </div>
+              <div className="mt-2 font-mono text-[10px] text-muted-foreground">
+                Selected: <span className="text-primary">{stPreferred}</span> · Supports expression
+                tags: {"<laugh> <breath> <sigh>"}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded border border-dashed border-border bg-background/40 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+              Supertonic 3 delivers studio-grade neural speech in 31 languages. One-time download,
+              then all voices work offline. Click "install models" to get started.
+            </div>
           )}
         </section>
 

@@ -203,6 +203,8 @@ export function stopAll() {
   import("./piper-reader").then((p) => p.stopPiperReader()).catch(() => {});
   // Destroy the Piper engine to kill Web Workers immediately on stop
   destroyPiperEngine().catch(() => {});
+  // Also destroy Supertonic engine
+  destroySupertonicEngine().catch(() => {});
   activeOwner = null;
   notify();
 }
@@ -308,15 +310,18 @@ export function createTtsController(
  * no Piper voice is installed or synthesis fails.
  * ============================================================ */
 
-const ENGINE_PREF_LS = "doclens.tts.engine"; // "auto" | "neural" | "browser"
+const ENGINE_PREF_LS = "doclens.tts.engine"; // "auto" | "piper" | "supertonic" | "browser"
 const PIPER_PREFERRED_LS = "doclens.piper.preferredVoice";
 
-export type TtsEngine = "auto" | "neural" | "browser";
+export type TtsEngine = "auto" | "piper" | "supertonic" | "browser";
 
 export function getTtsEngine(): TtsEngine {
   if (typeof window === "undefined") return "auto";
   const v = localStorage.getItem(ENGINE_PREF_LS);
-  return v === "neural" || v === "browser" ? v : "auto";
+  // Backwards compat: "neural" maps to "piper"
+  if (v === "neural") return "piper";
+  if (v === "piper" || v === "supertonic" || v === "browser") return v;
+  return "auto";
 }
 export function setTtsEngine(e: TtsEngine) {
   localStorage.setItem(ENGINE_PREF_LS, e);
@@ -334,6 +339,7 @@ export function setPreferredPiperVoice(voiceId: string) {
 }
 
 let piperEnginePromise: Promise<typeof import("./neural-tts/piper-engine")> | null = null;
+let supertonicEnginePromise: Promise<typeof import("./neural-tts/supertonic-engine")> | null = null;
 
 /** Lazy-import the Piper engine (keeps main bundle lean). */
 function loadPiperEngine() {
@@ -344,7 +350,16 @@ function loadPiperEngine() {
   return piperEnginePromise;
 }
 
-// Re-export catalog/management functions for the settings UI
+/** Lazy-import the Supertonic engine. */
+function loadSupertonicEngine() {
+  if (import.meta.env.SSR) {
+    return Promise.reject(new Error("Supertonic TTS is only available in the browser."));
+  }
+  if (!supertonicEnginePromise) supertonicEnginePromise = import("./neural-tts/supertonic-engine");
+  return supertonicEnginePromise;
+}
+
+// Re-export Piper catalog/management functions for the settings UI
 export async function listPiperVoices() {
   const engine = await loadPiperEngine();
   return engine.fetchCatalog();
@@ -369,8 +384,48 @@ export async function testPiperVoice(voiceId: string) {
   return engine.testVoice(voiceId);
 }
 
+// Supertonic management functions for the settings UI
+export async function areSupertonicModelsInstalled() {
+  const engine = await loadSupertonicEngine();
+  return engine.areModelsInstalled();
+}
+export async function downloadSupertonicModels(
+  onProgress?: (loaded: number, total: number) => void,
+) {
+  const engine = await loadSupertonicEngine();
+  return engine.downloadModels(onProgress);
+}
+export async function removeSupertonicModels() {
+  const engine = await loadSupertonicEngine();
+  return engine.removeModels();
+}
+export async function listSupertonicVoiceStyles() {
+  const engine = await loadSupertonicEngine();
+  return engine.listVoiceStyles();
+}
+export async function downloadSupertonicVoiceStyle(styleId: string) {
+  const engine = await loadSupertonicEngine();
+  return engine.downloadVoiceStyle(styleId);
+}
+export async function testSupertonicVoice(styleId: string, lang = "en") {
+  const engine = await loadSupertonicEngine();
+  return engine.testVoice(styleId, lang);
+}
+export async function getSupertonicPreferredStyle() {
+  const engine = await loadSupertonicEngine();
+  return engine.getPreferredStyle();
+}
+export async function setSupertonicPreferredStyle(styleId: string) {
+  const engine = await loadSupertonicEngine();
+  return engine.setPreferredStyle(styleId);
+}
+
 export async function hasTtsSelection(language?: string | null): Promise<boolean> {
   void language;
+  // Check Supertonic first
+  const supertonicInstalled = await areSupertonicModelsInstalled().catch(() => false);
+  if (supertonicInstalled) return true;
+  // Then check Piper
   const preferred = getPreferredPiperVoice();
   if (!preferred) return false;
   const installed = await listInstalledPiperVoices().catch(() => [] as string[]);
@@ -378,6 +433,7 @@ export async function hasTtsSelection(language?: string | null): Promise<boolean
 }
 
 export type { PiperVoiceMeta } from "./neural-tts/piper-engine";
+export type { SupertonicVoiceStyle } from "./neural-tts/supertonic-engine";
 
 /**
  * Create a controller that tries neural first (via Piper WASM when
@@ -392,7 +448,7 @@ export function createSmartTtsController(
     language?: string | null;
   },
 ): TtsController {
-  let mode: "neural" | "browser" = "browser";
+  let mode: "supertonic" | "piper" | "browser" = "browser";
   let abort: AbortController | null = null;
   let browserCtrl: TtsController | null = null;
   let destroyed = false;
@@ -404,58 +460,77 @@ export function createSmartTtsController(
     browserCtrl.play();
   };
 
+  const tryPiper = async (): Promise<boolean> => {
+    try {
+      const engine = await loadPiperEngine();
+      const voiceId = await engine.pickVoiceForLanguage(opts.language || "English");
+      if (!voiceId) return false;
+      mode = "piper";
+      abort = new AbortController();
+      opts.onState("playing");
+      await engine.speakChunked(text, voiceId, abort.signal);
+      if (!destroyed && !abort.signal.aborted) opts.onState("ended");
+      return true;
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return true; // intentional abort
+      console.warn("[smart-tts] Piper failed:", e);
+      return false;
+    }
+  };
+
+  const trySupertonic = async (): Promise<boolean> => {
+    try {
+      const engine = await loadSupertonicEngine();
+      const voice = await engine.pickVoiceForLanguage(opts.language || "English");
+      if (!voice) return false;
+      mode = "supertonic";
+      abort = new AbortController();
+      opts.onState("playing");
+      await engine.speakChunked(text, voice.lang, voice.style, abort.signal);
+      if (!destroyed && !abort.signal.aborted) opts.onState("ended");
+      return true;
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return true;
+      console.warn("[smart-tts] Supertonic failed:", e);
+      return false;
+    }
+  };
+
   return {
     play: () => {
       if (destroyed) return;
-      // If user explicitly wants browser engine, skip neural entirely
-      if (enginePref === "browser") {
-        startBrowser();
-        return;
-      }
+      if (enginePref === "browser") { startBrowser(); return; }
 
-      // Try neural via Piper WASM engine
       (async () => {
         try {
-          const engine = await loadPiperEngine();
-          // Find an installed voice that matches the language
-          const voiceId = await engine.pickVoiceForLanguage(opts.language || "English");
-          if (!voiceId) {
-            // No installed voice — fall back or error
-            if (enginePref === "neural") {
-              opts.onError?.("No Piper voice installed. Go to Settings → Voice to install one.");
-              opts.onState("idle");
-              return;
-            }
-            startBrowser();
+          if (enginePref === "supertonic") {
+            if (await trySupertonic()) return;
+            opts.onError?.("Supertonic models not installed. Go to Settings → Voice to install.");
+            opts.onState("idle");
             return;
           }
-          mode = "neural";
-          abort = new AbortController();
-          opts.onState("playing");
-          await engine.speakChunked(text, voiceId, abort.signal);
-          if (!destroyed && !abort.signal.aborted) {
-            opts.onState("ended");
+          if (enginePref === "piper") {
+            if (await tryPiper()) return;
+            opts.onError?.("No Piper voice installed. Go to Settings → Voice to install one.");
+            opts.onState("idle");
+            return;
           }
+          // "auto" mode: Supertonic → Piper → Browser
+          if (await trySupertonic()) return;
+          if (destroyed) return;
+          if (await tryPiper()) return;
+          if (destroyed) return;
+          startBrowser();
         } catch (e) {
           if ((e as Error)?.name === "AbortError") return;
-          console.warn("[smart-tts] Neural failed, falling back:", e);
-          if (enginePref === "neural") {
-            opts.onError?.(e instanceof Error ? e.message : "Neural TTS failed");
-            opts.onState("idle");
-          } else {
-            // "auto" mode: silent fallback to browser
-            startBrowser();
-          }
+          console.warn("[smart-tts] All engines failed, falling back:", e);
+          startBrowser();
         }
       })();
     },
     pause: () => {
       if (mode === "browser") browserCtrl?.pause();
-      // neural pause not supported — treat as stop
-      else {
-        abort?.abort();
-        opts.onState("paused");
-      }
+      else { abort?.abort(); opts.onState("paused"); }
     },
     resume: () => {
       if (mode === "browser") browserCtrl?.resume();
@@ -464,9 +539,8 @@ export function createSmartTtsController(
       if (mode === "browser") browserCtrl?.stop();
       else {
         abort?.abort();
-        loadPiperEngine()
-          .then((p) => p.stop())
-          .catch(() => {});
+        if (mode === "piper") loadPiperEngine().then((p) => p.stop()).catch(() => {});
+        else loadSupertonicEngine().then((s) => s.stop()).catch(() => {});
         opts.onState("idle");
       }
     },
@@ -475,6 +549,7 @@ export function createSmartTtsController(
       browserCtrl?.destroy();
       abort?.abort();
       destroyPiperEngine().catch(() => {});
+      destroySupertonicEngine().catch(() => {});
     },
   };
 }
@@ -482,6 +557,13 @@ export function createSmartTtsController(
 export async function destroyPiperEngine() {
   if (piperEnginePromise) {
     const engine = await piperEnginePromise.catch(() => null);
+    engine?.destroyEngine();
+  }
+}
+
+export async function destroySupertonicEngine() {
+  if (supertonicEnginePromise) {
+    const engine = await supertonicEnginePromise.catch(() => null);
     engine?.destroyEngine();
   }
 }

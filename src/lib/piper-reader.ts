@@ -1,6 +1,7 @@
-import { getTtsRate } from "@/lib/tts";
+import { getTtsEngine, getTtsRate } from "@/lib/tts";
 
 type PiperEngineModule = typeof import("@/lib/neural-tts/piper-engine");
+type SupertonicEngineModule = typeof import("@/lib/neural-tts/supertonic-engine");
 
 export type ReaderStatus = "idle" | "loading" | "playing" | "paused" | "ended" | "error";
 
@@ -47,12 +48,14 @@ interface Options {
 const MAX_CACHE_ENTRIES = 12;
 const MAX_READY_BUFFERS = 5;
 const SCHEDULE_AHEAD_SECONDS = 0.03;
-/** Piper outputs 22050 Hz mono. Match the AudioContext rate so the browser
- *  doesn't resample every buffer on the audio thread. */
+/** Piper outputs 22050 Hz, Supertonic outputs 44100 Hz.
+ *  Match the AudioContext rate to the active engine's sample rate. */
 const PIPER_SAMPLE_RATE = 22050;
+const SUPERTONIC_SAMPLE_RATE = 44100;
 
 let activeController: PiperReader | null = null;
 let enginePromise: Promise<PiperEngineModule> | null = null;
+let supertonicPromise: Promise<SupertonicEngineModule> | null = null;
 
 const globalCache = new Map<string, Promise<AudioEntry>>();
 const globalCacheLru = new Map<string, number>();
@@ -122,6 +125,11 @@ function loadPiperEngine(): Promise<PiperEngineModule> {
   return enginePromise;
 }
 
+function loadSupertonicEngine(): Promise<SupertonicEngineModule> {
+  if (!supertonicPromise) supertonicPromise = import("@/lib/neural-tts/supertonic-engine");
+  return supertonicPromise;
+}
+
 class PiperReader implements PiperReaderController {
   private text: string;
   private chunks: string[];
@@ -131,6 +139,10 @@ class PiperReader implements PiperReaderController {
   private bufferedUntil = -1;
   private audioCtx: AudioContext | null = null;
   private voiceId: string | null = null;
+  /** Which engine is active for this reader session */
+  private activeEngine: "piper" | "supertonic" = "piper";
+  private supertonicLang: string | null = null;
+  private supertonicStyle: string | null = null;
   private generationToken = 0;
   private playToken = 0;
   private destroyed = false;
@@ -273,16 +285,47 @@ class PiperReader implements PiperReaderController {
     this.emit();
 
     try {
-      const engine = await loadPiperEngine();
-      this.voiceId = await engine.pickVoiceForLanguage(this.options.language || "English");
-      if (!this.voiceId) throw new Error("No installed Piper voice found for this language.");
+      const enginePref = getTtsEngine();
+      let resolved = false;
+
+      // Try Supertonic first if preferred or auto mode
+      if (enginePref === "supertonic" || enginePref === "auto") {
+        try {
+          const stEngine = await loadSupertonicEngine();
+          const voice = await stEngine.pickVoiceForLanguage(this.options.language || "English");
+          if (voice) {
+            this.activeEngine = "supertonic";
+            this.supertonicLang = voice.lang;
+            this.supertonicStyle = voice.style;
+            this.voiceId = `supertonic:${voice.style}:${voice.lang}`;
+            resolved = true;
+          }
+        } catch {
+          // Supertonic not available, continue to Piper
+        }
+      }
+
+      // Try Piper if Supertonic unavailable or piper preferred
+      if (!resolved && enginePref !== "supertonic") {
+        const engine = await loadPiperEngine();
+        this.voiceId = await engine.pickVoiceForLanguage(this.options.language || "English");
+        if (this.voiceId) {
+          this.activeEngine = "piper";
+          resolved = true;
+        }
+      }
+
+      if (!resolved || !this.voiceId) {
+        throw new Error("No installed neural voice found for this language.");
+      }
+
       const ctx = this.ensureAudioContext();
       await ctx.resume();
       this.startProducer(index, token);
       await this.playLoop(token);
     } catch (e) {
       if (this.destroyed || token !== this.playToken) return;
-      const message = e instanceof Error ? e.message : "Piper playback failed.";
+      const message = e instanceof Error ? e.message : "Playback failed.";
       this.status = "error";
       this.options.onError?.(message);
       this.emit(message);
@@ -410,24 +453,33 @@ class PiperReader implements PiperReaderController {
   }
 
   private async generateAudio(text: string): Promise<AudioEntry> {
-    if (!this.voiceId) throw new Error("Piper voice is not ready.");
-    const engine = await loadPiperEngine();
-    const audioData = await engine.synthesizeAudio(text, this.voiceId);
+    if (!this.voiceId) throw new Error("Voice is not ready.");
     const ctx = this.ensureAudioContext();
     let buffer: AudioBuffer;
-    if (audioData.pcm) {
-      buffer = ctx.createBuffer(1, audioData.pcm.length, audioData.sampleRate ?? 22050);
+
+    if (this.activeEngine === "supertonic" && this.supertonicLang && this.supertonicStyle) {
+      const stEngine = await loadSupertonicEngine();
+      const audioData = await stEngine.synthesizeAudio(text, this.supertonicLang, this.supertonicStyle);
+      buffer = ctx.createBuffer(1, audioData.pcm.length, audioData.sampleRate);
       buffer.getChannelData(0).set(audioData.pcm);
-    } else if (audioData.blob) {
-      const arrayBuffer = await audioData.blob.arrayBuffer();
-      buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
     } else {
-      throw new Error("Piper returned no audio.");
+      const engine = await loadPiperEngine();
+      const audioData = await engine.synthesizeAudio(text, this.voiceId);
+      if (audioData.pcm) {
+        buffer = ctx.createBuffer(1, audioData.pcm.length, audioData.sampleRate ?? 22050);
+        buffer.getChannelData(0).set(audioData.pcm);
+      } else if (audioData.blob) {
+        const arrayBuffer = await audioData.blob.arrayBuffer();
+        buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      } else {
+        throw new Error("Engine returned no audio.");
+      }
     }
     return { buffer };
   }
 
   private ensureAudioContext(): AudioContext {
+    const targetRate = this.activeEngine === "supertonic" ? SUPERTONIC_SAMPLE_RATE : PIPER_SAMPLE_RATE;
     if (!this.audioCtx || this.audioCtx.state === "closed") {
       const Ctor =
         window.AudioContext ||
@@ -436,10 +488,9 @@ class PiperReader implements PiperReaderController {
             webkitAudioContext?: typeof AudioContext;
           }
         ).webkitAudioContext;
-      // Match Piper's native sample rate to avoid browser-side resampling
-      // (which silently doubles CPU on the audio thread on most laptops).
+      // Match engine's native sample rate to avoid browser-side resampling.
       try {
-        this.audioCtx = new Ctor({ sampleRate: PIPER_SAMPLE_RATE });
+        this.audioCtx = new Ctor({ sampleRate: targetRate });
       } catch {
         // Safari < 14 rejects the constructor option — fall back to default.
         this.audioCtx = new Ctor();
