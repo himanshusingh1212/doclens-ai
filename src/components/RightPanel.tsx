@@ -143,12 +143,14 @@ export function RightPanel({
   // Auto-play when advancing pages
   useEffect(() => {
     if (isPlaying && activePageNumber !== null && activePageNumber !== activePage) {
-      const textToRead = tab === "ai" ? activePageData?.pageAi?.result : activePageData?.text;
-      const source: TtsSource = tab === "ai" ? "ai" : "original";
-      if (textToRead) {
-        play(textToRead, source, activePage, 0);
-      } else {
-        stop();
+      if (activePageData && activePageData.pageNumber === activePage) {
+        const textToRead = tab === "ai" ? activePageData?.pageAi?.result : activePageData?.text;
+        const source: TtsSource = tab === "ai" ? "ai" : "original";
+        if (textToRead) {
+          play(textToRead, source, activePage, 0);
+        } else {
+          stop();
+        }
       }
     }
   }, [activePage, activePageData, isPlaying, activePageNumber, tab, play, stop]);
