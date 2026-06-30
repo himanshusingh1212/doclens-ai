@@ -8,9 +8,13 @@ import {
   getDocBlob,
   updatePageData,
   type PageAiSummaryEntry,
+  type PageDataRecord,
 } from "@/lib/storage";
 import { PageWorkstation } from "./PageWorkstation";
 import { checkTextQuality } from "@/lib/pdf";
+import { useTts, type TtsSource } from "@/context/TtsContext";
+import { TtsPlayer } from "./TtsPlayer";
+import { HighlightableText } from "./HighlightableText";
 
 interface Props {
   docId: string;
@@ -100,11 +104,57 @@ export function RightPanel({
 }: Props) {
   const [tab, setTab] = useState<Tab>("ai");
   const [showExport, setShowExport] = useState(false);
+  const [activePageData, setActivePageData] = useState<PageDataRecord | null>(null);
+
+  const { isPlaying, activePageNumber, play, stop } = useTts();
 
   const doneCount = useMemo(
     () => Object.values(aiSummary).filter((e) => e.status === "done").length,
     [aiSummary],
   );
+
+  // Load the active page data
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const p = await getPageData(docId, activePage);
+      if (cancelled) return;
+      setActivePageData(p ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [docId, activePage, aiSummary]);
+
+  // Handle continuous play page transition event
+  useEffect(() => {
+    const handleNextPage = (e: Event) => {
+      const ev = e as CustomEvent<{ currentPage: number; source: TtsSource }>;
+      if (ev.detail && ev.detail.currentPage === activePage && activePage < pageCount) {
+        setActivePage(activePage + 1);
+      }
+    };
+    window.addEventListener("doclens:tts-next-page", handleNextPage);
+    return () => {
+      window.removeEventListener("doclens:tts-next-page", handleNextPage);
+    };
+  }, [activePage, pageCount, setActivePage]);
+
+  // Auto-play when advancing pages
+  useEffect(() => {
+    if (isPlaying && activePageNumber !== null && activePageNumber !== activePage) {
+      const textToRead = tab === "ai" ? activePageData?.pageAi?.result : activePageData?.text;
+      const source: TtsSource = tab === "ai" ? "ai" : "original";
+      if (textToRead) {
+        play(textToRead, source, activePage, 0);
+      } else {
+        stop();
+      }
+    }
+  }, [activePage, activePageData, isPlaying, activePageNumber, tab, play, stop]);
+
+  const textToRead = tab === "ai" ? activePageData?.pageAi?.result : activePageData?.text;
+  const source: TtsSource = tab === "ai" ? "ai" : "original";
 
   return (
     <div className="flex h-full flex-col bg-surface/30">
@@ -178,6 +228,13 @@ export function RightPanel({
           <ExtractedTextTab docId={docId} activePage={activePage} aiSummary={aiSummary} />
         )}
       </div>
+
+      {/* Sticky bottom TTS Player */}
+      {pageCount > 0 && activePageData && (
+        <div className="border-t border-border bg-surface/40 px-4 pb-4 pt-2 shrink-0">
+          <TtsPlayer text={textToRead} source={source} pageNumber={activePage} />
+        </div>
+      )}
     </div>
   );
 }
@@ -352,7 +409,7 @@ function ExtractedPageRow({
 
       <div className="reader-text">
         {data.text ? (
-          <div className="whitespace-pre-wrap break-words">{data.text}</div>
+          <HighlightableText text={data.text} source="original" pageNumber={pageNumber} />
         ) : (
           <p className="italic text-muted-foreground">No extractable text on this page.</p>
         )}

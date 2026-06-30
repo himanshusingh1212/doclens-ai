@@ -44,6 +44,7 @@ import {
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Info } from "lucide-react";
+import { HighlightableText } from "./HighlightableText";
 
 interface Props {
   docId: string;
@@ -1220,7 +1221,7 @@ function PageCard({
             )}
           </div>
         ) : state.result ? (
-          <ReadableResult text={state.result} />
+          <ReadableResult text={state.result} pageNumber={pageNumber} />
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
             Click <span className="font-semibold text-primary">{modeLabel}</span> to process this
@@ -1232,8 +1233,8 @@ function PageCard({
   );
 }
 
-function ReadableResult({ text }: { text: string }) {
-  return <div className="whitespace-pre-wrap break-words">{text}</div>;
+function ReadableResult({ text, pageNumber }: { text: string; pageNumber: number }) {
+  return <HighlightableText text={text} source="ai" pageNumber={pageNumber} />;
 }
 
 function SmallSelect({

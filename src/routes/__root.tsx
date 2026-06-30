@@ -15,6 +15,8 @@ import { initTheme } from "@/lib/theme";
 import { logPageView } from "@/lib/firebase";
 
 import appCss from "../styles.css?url";
+import { TtsProvider } from "@/context/TtsContext";
+
 
 function NotFoundComponent() {
   return (
@@ -122,12 +124,12 @@ function RootComponent() {
   }, [location.pathname]);
 
   return (
-    <>
+    <TtsProvider>
       <Outlet />
       <ApiKeyModal />
       <Analytics />
       <SpeedInsights />
       <Toaster position="bottom-right" richColors closeButton />
-    </>
+    </TtsProvider>
   );
 }
