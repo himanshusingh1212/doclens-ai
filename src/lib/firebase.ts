@@ -8,7 +8,7 @@ const firebaseConfig = {
   storageBucket: "anuwad-789a9.firebasestorage.app",
   messagingSenderId: "157515258017",
   appId: "1:157515258017:web:9d1608bbe9fb715f5ef8e0",
-  measurementId: "G-71BDQV3HG5"
+  measurementId: "G-71BDQV3HG5",
 };
 
 // Initialize Firebase App

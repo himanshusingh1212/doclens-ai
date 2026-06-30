@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { to: "/", label: "Library", icon: "📁" },
   { to: "/settings/appearance", label: "Appearance", icon: "🎨" },
   { to: "/settings", label: "General Settings", icon: "⚙" },
-  { to: "/settings/voice", label: "Voice Settings", icon: "🎙" },
 ] as const;
 
 export function SidebarLayout({
@@ -73,7 +72,9 @@ export function SidebarLayout({
             <h1 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
               DocLens
             </h1>
-            <p className="text-[11px] font-medium tracking-wide text-muted-foreground">AI Intelligence</p>
+            <p className="text-[11px] font-medium tracking-wide text-muted-foreground">
+              AI Intelligence
+            </p>
           </div>
         </Link>
       </div>

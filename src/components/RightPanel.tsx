@@ -12,7 +12,6 @@ import {
 import { PageWorkstation } from "./PageWorkstation";
 import { checkTextQuality } from "@/lib/pdf";
 
-
 interface Props {
   docId: string;
   pageCount: number;
@@ -70,11 +69,11 @@ async function exportAsJson(docId: string) {
     ai:
       page.pageAi?.status === "done" && page.pageAi.result
         ? {
-          status: page.pageAi.status,
-          result: page.pageAi.result,
-          settingsHash: page.pageAi.settingsHash,
-          updatedAt: page.pageAi.updatedAt,
-        }
+            status: page.pageAi.status,
+            result: page.pageAi.result,
+            settingsHash: page.pageAi.settingsHash,
+            updatedAt: page.pageAi.updatedAt,
+          }
         : null,
   }));
   downloadBlob(
@@ -320,7 +319,9 @@ function ExtractedPageRow({
             </span>
             <div className="flex-1">
               <p className="font-semibold text-primary">
-                {quality.isGarbled ? "Garbled character symbols detected" : "Minimal extractable text found"}
+                {quality.isGarbled
+                  ? "Garbled character symbols detected"
+                  : "Minimal extractable text found"}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {quality.isGarbled
@@ -374,8 +375,9 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative px-4 py-2.5 text-[13px] font-medium transition-colors ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-        }`}
+      className={`relative px-4 py-2.5 text-[13px] font-medium transition-colors ${
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+      }`}
     >
       {children}
       {active && <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-primary" />}

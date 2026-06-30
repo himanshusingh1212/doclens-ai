@@ -1,4 +1,11 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts, useLocation } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  createRootRoute,
+  HeadContent,
+  Scripts,
+  useLocation,
+} from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
@@ -36,39 +43,39 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Anuwad — Private PDF Reader, Translator & AI Voice Reader" },
+      { title: "Anuwad — Private PDF Reader & Translator" },
       {
         name: "description",
         content:
-          "Anuwad is a free, private, browser-only PDF reader with AI translation, neural text-to-speech, and document pipeline inspection. Nothing leaves your device.",
+          "Anuwad is a free, private, browser-only PDF reader with AI translation and document pipeline inspection. Nothing leaves your device.",
       },
       {
         name: "keywords",
         content:
-          "Anuwad, DocLens AI, private PDF reader, browser PDF translator, local text to speech, neural TTS PDF, PDF pipeline inspector, offline PDF reader, AI document reader",
+          "Anuwad, DocLens AI, private PDF reader, browser PDF translator, PDF pipeline inspector, offline PDF reader, AI document reader",
       },
       { name: "author", content: "Anuwad" },
       { property: "og:site_name", content: "Anuwad" },
       {
         property: "og:title",
-        content: "Anuwad — Private PDF Reader, Translator & AI Voice Reader",
+        content: "Anuwad — Private PDF Reader & Translator",
       },
       {
         property: "og:description",
         content:
-          "Free, browser-only PDF reader with AI translation and neural text-to-speech. 100% local — nothing leaves your device.",
+          "Free, browser-only PDF reader with AI translation. 100% local — nothing leaves your device.",
       },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://www.anuwad.com/" },
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:title",
-        content: "Anuwad — Private PDF Reader, Translator & AI Voice Reader",
+        content: "Anuwad — Private PDF Reader & Translator",
       },
       {
         name: "twitter:description",
         content:
-          "Free, browser-only PDF reader with AI translation and neural text-to-speech. 100% local — nothing leaves your device.",
+          "Free, browser-only PDF reader with AI translation. 100% local — nothing leaves your device.",
       },
     ],
     links: [

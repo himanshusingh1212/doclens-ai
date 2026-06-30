@@ -77,7 +77,7 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
         image: window.location.origin + "/light_13746323.png",
         handler: function (response: any) {
           toast.success(
-            `Thank you for your contribution! Payment ID: ${response.razorpay_payment_id}`
+            `Thank you for your contribution! Payment ID: ${response.razorpay_payment_id}`,
           );
           onOpenChange(false);
         },
@@ -116,7 +116,8 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
                 Become a Premium Supporter
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Every language barrier broken is a mind set free. Join us in making knowledge accessible to all.
+                Every language barrier broken is a mind set free. Join us in making knowledge
+                accessible to all.
               </DialogDescription>
             </div>
           </div>
@@ -129,7 +130,8 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
               📋 1. Take Our Survey
             </h4>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your feedback shapes the future of DocLens. Take our quick 2-minute Google Forms survey.
+              Your feedback shapes the future of DocLens. Take our quick 2-minute Google Forms
+              survey.
             </p>
             <a
               href="https://docs.google.com/forms/d/e/1FAIpQLSde85yO0QiwAYb_fxbtD1inrGLn5Vry6pCjtEd_O_nUbx7pQQ/viewform?usp=publish-editor"
@@ -167,7 +169,9 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
                 Fund the Mission
               </h5>
               <p className="mt-1 text-xs text-muted-foreground">
-                Millions of students struggle with textbooks they can't read in their own language. Your contribution keeps Anuwad free, fast, and private — so that no learner is left behind.
+                Millions of students struggle with textbooks they can't read in their own language.
+                Your contribution keeps Anuwad free, fast, and private — so that no learner is left
+                behind.
               </p>
 
               {/* Amount Preset Grid */}

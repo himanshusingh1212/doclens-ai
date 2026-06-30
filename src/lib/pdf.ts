@@ -73,7 +73,6 @@ function cleanExtractedText(raw: string): { text: string; garbageRatio: number }
   return { text: cleaned, garbageRatio };
 }
 
-
 export interface TextItem {
   str: string;
   x: number;
@@ -237,7 +236,12 @@ interface DividerPoint {
  * calculate dynamic column dividers based on adjacent segments, and assign segments
  * to their respective columns before sorting top→bottom.
  */
-function sortByColumns(items: TextItem[], pageWidth: number, columns: number, yTolerance = 4): TextItem[] {
+function sortByColumns(
+  items: TextItem[],
+  pageWidth: number,
+  columns: number,
+  yTolerance = 4,
+): TextItem[] {
   if (columns <= 1) {
     return [...items].sort((a, b) => b.y - a.y || a.x - b.x);
   }
@@ -424,8 +428,6 @@ export async function extractPdfPages(
         let finalText = text;
         let finalGarbageRatio = garbageRatio;
 
-
-
         // NOTE: We intentionally drop the per-item `items[]` from the returned
         // extraction — the caller stores only `{pageNumber, text, columns,
         // garbageRatio}`, and the live PdfViewer re-fetches its own text layer
@@ -439,7 +441,6 @@ export async function extractPdfPages(
           columns,
           garbageRatio: finalGarbageRatio,
         };
-
       } finally {
         // Release the operator list / decoded fonts pdf.js caches per page so
         // a 500-page document doesn't keep all pages hot at once.
@@ -558,7 +559,7 @@ if (import.meta.hot) {
               /* ignore */
             }
           })
-          .catch(() => { });
+          .catch(() => {});
       }
       if (ocrWorkerPromise) {
         ocrWorkerPromise
@@ -569,7 +570,7 @@ if (import.meta.hot) {
               /* ignore */
             }
           })
-          .catch(() => { });
+          .catch(() => {});
       }
     } catch (e) {
       console.warn("[HMR] Failed to dispose workers:", e);
@@ -663,11 +664,46 @@ export function isGarbageLine(line: string): boolean {
   const alphanumericRegex = /[a-zA-Z0-9]/;
 
   const commonShortWords = new Set([
-    "a", "i", "o",
-    "am", "an", "as", "at", "be", "by", "co", "do", "dr", "ex", "go",
-    "he", "hi", "id", "if", "in", "is", "it", "me", "mr", "ms", "my",
-    "no", "of", "oh", "ok", "on", "or", "so", "st", "to", "tv", "up",
-    "us", "vs", "we", "ye"
+    "a",
+    "i",
+    "o",
+    "am",
+    "an",
+    "as",
+    "at",
+    "be",
+    "by",
+    "co",
+    "do",
+    "dr",
+    "ex",
+    "go",
+    "he",
+    "hi",
+    "id",
+    "if",
+    "in",
+    "is",
+    "it",
+    "me",
+    "mr",
+    "ms",
+    "my",
+    "no",
+    "of",
+    "oh",
+    "ok",
+    "on",
+    "or",
+    "so",
+    "st",
+    "to",
+    "tv",
+    "up",
+    "us",
+    "vs",
+    "we",
+    "ye",
   ]);
 
   for (const word of words) {
@@ -723,7 +759,8 @@ export function isGarbageLine(line: string): boolean {
   // Character-level non-alphanumeric ratio (excluding spaces)
   const nonSpaceChars = trimmed.replace(/\s/g, "");
   const specialChars = nonSpaceChars.replace(/[a-zA-Z0-9.,?!'"()]/g, "");
-  const specialCharRatio = nonSpaceChars.length > 0 ? specialChars.length / nonSpaceChars.length : 0;
+  const specialCharRatio =
+    nonSpaceChars.length > 0 ? specialChars.length / nonSpaceChars.length : 0;
   if (specialCharRatio > 0.15) {
     score += specialCharRatio * 8;
   }
@@ -780,8 +817,14 @@ export async function ocrPdfPage(page: any, columns = 1): Promise<string> {
       console.log("[ocrPdfPage] first para keys:", Object.keys(firstBlock.paragraphs[0]));
       console.log("[ocrPdfPage] first para lines count:", firstBlock.paragraphs[0].lines?.length);
       if (firstBlock.paragraphs[0].lines?.length > 0) {
-        console.log("[ocrPdfPage] first line keys:", Object.keys(firstBlock.paragraphs[0].lines[0]));
-        console.log("[ocrPdfPage] first line words count:", firstBlock.paragraphs[0].lines[0].words?.length);
+        console.log(
+          "[ocrPdfPage] first line keys:",
+          Object.keys(firstBlock.paragraphs[0].lines[0]),
+        );
+        console.log(
+          "[ocrPdfPage] first line words count:",
+          firstBlock.paragraphs[0].lines[0].words?.length,
+        );
       }
     }
   }
@@ -873,16 +916,20 @@ export async function ocrPageById(blob: Blob, pageNumber: number, columns = 1): 
     } finally {
       try {
         page.cleanup();
-      } catch { }
+      } catch {}
     }
   } finally {
     try {
       await pdf.destroy();
-    } catch { }
+    } catch {}
   }
 }
 
-export function checkTextQuality(text: string): { isGarbled: boolean; isScanned: boolean; symbolRatio: number } {
+export function checkTextQuality(text: string): {
+  isGarbled: boolean;
+  isScanned: boolean;
+  symbolRatio: number;
+} {
   if (!text || text.trim().length === 0) {
     return { isGarbled: false, isScanned: true, symbolRatio: 0 };
   }
@@ -904,10 +951,22 @@ export function checkTextQuality(text: string): { isGarbled: boolean; isScanned:
 
 export async function runOcrOnGarbledPages(
   blob: Blob,
-  pages: { pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[],
+  pages: {
+    pageNumber: number;
+    text: string;
+    columns: number;
+    garbageRatio: number;
+    ocrRun?: boolean;
+  }[],
   onProgress: (pageNumber: number, total: number) => void,
-  onPageOcrComplete?: (pageNumber: number, text: string, garbageRatio: number) => Promise<void> | void,
-): Promise<{ pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[]> {
+  onPageOcrComplete?: (
+    pageNumber: number,
+    text: string,
+    garbageRatio: number,
+  ) => Promise<void> | void,
+): Promise<
+  { pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[]
+> {
   const pdf = await loadDocFromSource(blob);
   try {
     const total = pdf.numPages;
@@ -949,6 +1008,3 @@ export async function runOcrOnGarbledPages(
     } catch {}
   }
 }
-
-
-

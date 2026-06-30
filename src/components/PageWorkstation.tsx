@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { estimateTokens } from "@/lib/models";
 import { ExplainSetupDialog } from "@/components/ExplainSetupDialog";
-import { TtsVoiceSetupDialog } from "@/components/TtsVoiceSetupDialog";
 import {
   buildPagePayload,
   fetchModels,
@@ -42,19 +41,8 @@ import {
   type PageAiSummaryEntry,
   type PageOverrides,
 } from "@/lib/storage";
-import { hasTtsSelection, stopAll as stopAllTts } from "@/lib/tts";
-import {
-  createPiperReaderController,
-  prefetchTts,
-  type PiperReaderController,
-  type ReaderSnapshot,
-  type ReaderStatus,
-} from "@/lib/piper-reader";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Info } from "lucide-react";
 
 interface Props {
@@ -165,136 +153,6 @@ export function PageWorkstation({
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
     null,
   );
-  const [ttsReader, setTtsReader] = useState<ReaderSnapshot | null>(null);
-  const [ttsPlayingPage, setTtsPlayingPage] = useState<number | null>(null);
-  const ttsPlayingPageRef = useRef<number | null>(null);
-  ttsPlayingPageRef.current = ttsPlayingPage;
-  const [ttsWaitingForTranslation, setTtsWaitingForTranslation] = useState<number | null>(null);
-  const ttsRef = useRef<PiperReaderController | null>(null);
-  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
-
-  const startTtsForPage = useCallback(
-    async (pageNumber: number) => {
-      const rec = await getPageData(docId, pageNumber);
-      if (!rec?.pageAi?.result) {
-        toast.error(`Page ${pageNumber} translation text is not available.`);
-        return;
-      }
-      const ready = await hasTtsSelection(globals.language);
-      if (!ready) {
-        setVoiceSetupOpen(true);
-        return;
-      }
-
-      ttsRef.current?.destroy();
-      setTtsPlayingPage(pageNumber);
-
-      toast.info(`Initializing TTS voice model for Page ${pageNumber}...`, {
-        id: `tts-init-${pageNumber}`,
-        duration: 10000,
-      });
-
-      const ctrl = createPiperReaderController(rec.pageAi.result, {
-        language: globals.language,
-        onSnapshot: (snapshot) => {
-          if (snapshot.status === "playing" || snapshot.status === "paused") {
-            toast.dismiss(`tts-init-${pageNumber}`);
-          }
-          setTtsReader(snapshot);
-
-          if (snapshot.status === "ended") {
-            const nextP = pageNumber + 1;
-            if (nextP <= pageCount) {
-              setActivePage(nextP);
-              if (aiSummary[nextP]?.status === "done") {
-                void startTtsForPage(nextP);
-              } else {
-                setTtsWaitingForTranslation(nextP);
-                if (aiSummary[nextP]?.status !== "running") {
-                  void runPageWithSetup(nextP);
-                }
-              }
-            } else {
-              setTtsPlayingPage(null);
-              setTtsReader(null);
-              setTtsWaitingForTranslation(null);
-            }
-          }
-
-          if (snapshot.status === "playing") {
-            const nextP = pageNumber + 1;
-            if (nextP <= pageCount && aiSummary[nextP]?.status === "done") {
-              void getPageData(docId, nextP).then((nextRec) => {
-                if (nextRec?.pageAi?.result) {
-                  void prefetchTts(nextRec.pageAi.result, globals.language);
-                }
-              });
-            }
-          }
-        },
-        onError: (message) => {
-          toast.dismiss(`tts-init-${pageNumber}`);
-          toast.error(message);
-          setTtsPlayingPage(null);
-          setTtsReader(null);
-          setTtsWaitingForTranslation(null);
-        },
-      });
-      ttsRef.current = ctrl;
-      ctrl.play();
-    },
-    [docId, globals.language, pageCount, aiSummary],
-  );
-
-  const handleTtsPlay = useCallback(() => {
-    if (ttsReader?.status === "paused" && ttsRef.current) {
-      ttsRef.current.resume();
-      return;
-    }
-    setTtsWaitingForTranslation(null);
-    void startTtsForPage(activePage);
-  }, [activePage, ttsReader?.status, startTtsForPage]);
-
-  const handleTtsPause = useCallback(() => {
-    ttsRef.current?.pause();
-  }, []);
-
-  const handleTtsStop = useCallback(() => {
-    ttsRef.current?.stop();
-    setTtsReader(null);
-    setTtsPlayingPage(null);
-    setTtsWaitingForTranslation(null);
-  }, []);
-
-  // Auto-play when a waiting translation completes
-  useEffect(() => {
-    if (ttsWaitingForTranslation !== null) {
-      const status = aiSummary[ttsWaitingForTranslation]?.status;
-      if (status === "done") {
-        const pageToPlay = ttsWaitingForTranslation;
-        setTtsWaitingForTranslation(null);
-        void startTtsForPage(pageToPlay);
-      } else if (status === "error") {
-        setTtsWaitingForTranslation(null);
-        toast.error(`Translation failed for Page ${ttsWaitingForTranslation}. TTS stopped.`);
-      }
-    }
-  }, [aiSummary, ttsWaitingForTranslation, startTtsForPage]);
-
-  const handleTtsRewind = useCallback(() => {
-    ttsRef.current?.rewind();
-  }, []);
-
-  const handleTtsForward = useCallback(() => {
-    ttsRef.current?.forward();
-  }, []);
-
-  // When a page starts running, stop any active TTS if it is the page currently playing
-  useEffect(() => {
-    if (ttsPlayingPage !== null && runningPages.has(ttsPlayingPage)) {
-      handleTtsStop();
-    }
-  }, [runningPages, ttsPlayingPage, handleTtsStop]);
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
 
   // ─── Auto-Translate toggle (persisted per doc) ───
@@ -329,9 +187,6 @@ export function PageWorkstation({
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
       if (batchRef.current) batchRef.current.cancelled = true;
-      ttsRef.current?.destroy();
-      // Stop all active TTS playbacks, releasing AudioBuffers and closing contexts, but keeping engine warm
-      stopAllTts();
     };
   }, []);
 
@@ -459,11 +314,6 @@ export function PageWorkstation({
       const eff = effective(currentGlobals, state.overrides);
       if (!eff.modelId) return;
       if (batch?.cancelled) return;
-
-      if (pageNumber === ttsPlayingPageRef.current) {
-        handleTtsStop();
-        stopAllTts();
-      }
 
       // One-shot selection override (from PDF text selection → "Translate")
       const selOverride = selectionOverridesRef.current.get(pageNumber);
@@ -787,7 +637,11 @@ export function PageWorkstation({
     if (shouldShowExplainSetup()) return;
 
     const page1State = aiSummary[1];
-    const isIdle = !page1State || (page1State.status !== "done" && page1State.status !== "running" && page1State.status !== "error");
+    const isIdle =
+      !page1State ||
+      (page1State.status !== "done" &&
+        page1State.status !== "running" &&
+        page1State.status !== "error");
     const alreadyTried = autoTranslatedPage1Ref.current[docId];
 
     if (isIdle && !alreadyTried) {
@@ -925,12 +779,7 @@ export function PageWorkstation({
         }}
         onConfirm={handleExplainSetupConfirm}
       />
-      <TtsVoiceSetupDialog
-        open={voiceSetupOpen}
-        language={globals.language}
-        onOpenChange={setVoiceSetupOpen}
-        onReady={handleTtsPlay}
-      />
+
       {/* ─── Compact toolbar ─── */}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-3">
@@ -943,102 +792,6 @@ export function PageWorkstation({
               <>{pageCount} pages ready</>
             )}
           </span>
-        </div>
-
-        {/* TTS Player in the middle */}
-        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-border/80 bg-surface-2/40 backdrop-blur-sm shadow-sm">
-          {ttsReader?.status === "loading" && (
-            <span className="flex h-2 w-2 relative mr-0.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-            </span>
-          )}
-          {ttsReader?.status === "playing" && (
-            <span className="flex h-2 w-2 relative mr-0.5">
-              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-          )}
-          {ttsWaitingForTranslation !== null && (
-            <span className="flex h-2 w-2 relative mr-0.5">
-              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-            </span>
-          )}
-          {ttsPlayingPage && (
-            <span className="text-[10px] font-semibold text-muted-foreground mr-1">
-              Page {ttsPlayingPage}
-            </span>
-          )}
-          {ttsWaitingForTranslation !== null && (
-            <span className="text-[10px] font-semibold text-muted-foreground mr-1">
-              Translating Page {ttsWaitingForTranslation}…
-            </span>
-          )}
-
-          {/* Rewind */}
-          {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
-            <button
-              onClick={handleTtsRewind}
-              disabled={!ttsReader.canRewind}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-3 hover:text-foreground disabled:opacity-30"
-              title="Rewind"
-            >
-              ‹
-            </button>
-          )}
-
-          {/* Play / Pause */}
-          {ttsReader?.status !== "playing" && ttsReader?.status !== "loading" ? (
-            <button
-              onClick={handleTtsPlay}
-              disabled={aiSummary[activePage]?.status !== "done"}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary transition-all hover:bg-primary hover:text-primary-foreground disabled:opacity-35 disabled:hover:bg-primary/10 disabled:hover:text-primary"
-              title={ttsReader?.status === "paused" ? "Resume" : "Listen to page"}
-            >
-              ▶
-            </button>
-          ) : (
-            <button
-              onClick={handleTtsPause}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground transition-all hover:bg-primary/90"
-              title="Pause"
-            >
-              ❚❚
-            </button>
-          )}
-
-          {/* Forward */}
-          {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
-            <button
-              onClick={handleTtsForward}
-              disabled={!ttsReader.canForward}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-3 hover:text-foreground disabled:opacity-30"
-              title="Forward"
-            >
-              ›
-            </button>
-          )}
-
-          {/* Stop */}
-          {ttsReader && ttsReader.status !== "idle" && ttsReader.status !== "ended" && (
-            <button
-              onClick={handleTtsStop}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
-              title="Stop"
-            >
-              ■
-            </button>
-          )}
-
-          {/* Settings / Preferences */}
-          <button
-            onClick={() => setVoiceSetupOpen(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-3 hover:text-foreground"
-            title="Voice settings"
-          >
-            ⚙
-          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1089,11 +842,10 @@ export function PageWorkstation({
                 <p className="text-muted-foreground">
                   Automatically translates the next 3 pages in the background as you read.
                 </p>
-                <p className="font-semibold text-foreground">
-                  Why it's useful:
-                </p>
+                <p className="font-semibold text-foreground">Why it's useful:</p>
                 <p className="text-muted-foreground text-[11px]">
-                  Pre-translating upcoming pages in the background ensures a zero-latency, fluid reading experience when you click Next.
+                  Pre-translating upcoming pages in the background ensures a zero-latency, fluid
+                  reading experience when you click Next.
                 </p>
               </div>
             </PopoverContent>
@@ -1124,8 +876,6 @@ export function PageWorkstation({
           onPageAiChange={onPageAiChange}
           onRun={() => runPageWithSetup(activePage)}
           onCancel={() => cancelPage(activePage)}
-          reader={ttsPlayingPage === activePage ? ttsReader : null}
-          onSeek={(idx) => ttsRef.current?.seek(idx)}
         />
 
         {/* ─── Floating background-progress pill ─── */}
@@ -1172,8 +922,6 @@ interface CardLoaderProps {
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
   onRun: () => void;
   onCancel: () => void;
-  reader: ReaderSnapshot | null;
-  onSeek: (index: number) => void;
 }
 
 function PageCardLoader(props: CardLoaderProps) {
@@ -1238,8 +986,6 @@ function PageCardLoader(props: CardLoaderProps) {
       onUpdate={handleUpdate}
       onRun={props.onRun}
       onCancel={props.onCancel}
-      reader={props.reader}
-      onSeek={props.onSeek}
     />
   );
 }
@@ -1259,8 +1005,6 @@ interface CardProps {
   onUpdate: (patch: Partial<PageAi>) => void;
   onRun: () => void;
   onCancel: () => void;
-  reader: ReaderSnapshot | null;
-  onSeek: (index: number) => void;
 }
 
 function PageCard({
@@ -1274,8 +1018,6 @@ function PageCard({
   onUpdate,
   onRun,
   onCancel,
-  reader,
-  onSeek,
 }: CardProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [editingJson, setEditingJson] = useState(false);
@@ -1404,11 +1146,6 @@ function PageCard({
           {state.error}
         </div>
       )}
-      {reader?.status === "error" && reader.error && (
-        <div className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {reader.error}
-        </div>
-      )}
 
       {/* ─── Settings panel (collapsed by default) ─── */}
       <div className={`collapsible-content ${showSettings ? "open" : ""}`}>
@@ -1483,7 +1220,7 @@ function PageCard({
             )}
           </div>
         ) : state.result ? (
-          <ReadableResult text={state.result} reader={reader} onSeek={onSeek} />
+          <ReadableResult text={state.result} />
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
             Click <span className="font-semibold text-primary">{modeLabel}</span> to process this
@@ -1495,60 +1232,8 @@ function PageCard({
   );
 }
 
-function ReadableResult({
-  text,
-  reader,
-  onSeek,
-}: {
-  text: string;
-  reader: ReaderSnapshot | null;
-  onSeek: (index: number) => void;
-}) {
-  if (!reader?.chunks.length) {
-    return <div className="whitespace-pre-wrap break-words">{text}</div>;
-  }
-
-  if (reader.paragraphs?.length) {
-    return (
-      <div className="space-y-4">
-        {reader.paragraphs.map((paragraph, pIdx) => (
-          <p key={pIdx} className="whitespace-pre-wrap break-words">
-            {paragraph.chunks.map((chunk, cIdx) => (
-              <span
-                key={`${chunk.index}-${chunk.text.slice(0, 16)}`}
-                onClick={() => onSeek(chunk.index)}
-                className={`reader-chunk ${chunk.index === reader.index ? "reader-chunk-active" : ""} ${
-                  chunk.index <= reader.bufferedUntil ? "reader-chunk-buffered" : ""
-                }`}
-                title="Seek here"
-              >
-                {chunk.text}
-                {cIdx < paragraph.chunks.length - 1 ? " " : ""}
-              </span>
-            ))}
-          </p>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="whitespace-pre-wrap break-words">
-      {reader.chunks.map((chunk, index) => (
-        <span
-          key={`${index}-${chunk.slice(0, 16)}`}
-          onClick={() => onSeek(index)}
-          className={`reader-chunk ${index === reader.index ? "reader-chunk-active" : ""} ${
-            index <= reader.bufferedUntil ? "reader-chunk-buffered" : ""
-          }`}
-          title="Seek here"
-        >
-          {chunk}
-          {index < reader.chunks.length - 1 ? " " : ""}
-        </span>
-      ))}
-    </div>
-  );
+function ReadableResult({ text }: { text: string }) {
+  return <div className="whitespace-pre-wrap break-words">{text}</div>;
 }
 
 function SmallSelect({

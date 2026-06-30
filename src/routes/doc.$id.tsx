@@ -34,15 +34,24 @@ const extractPdfPagesClient = createClientOnlyFn(
 const runOcrOnGarbledPagesClient = createClientOnlyFn(
   async (
     blob: Blob,
-    pages: { pageNumber: number; text: string; columns: number; garbageRatio: number; ocrRun?: boolean }[],
+    pages: {
+      pageNumber: number;
+      text: string;
+      columns: number;
+      garbageRatio: number;
+      ocrRun?: boolean;
+    }[],
     onProgress: (pageNumber: number, total: number) => void,
-    onPageOcrComplete?: (pageNumber: number, text: string, garbageRatio: number) => Promise<void> | void,
+    onPageOcrComplete?: (
+      pageNumber: number,
+      text: string,
+      garbageRatio: number,
+    ) => Promise<void> | void,
   ) => {
     const { runOcrOnGarbledPages } = await import("@/lib/pdf");
     return runOcrOnGarbledPages(blob, pages, onProgress, onPageOcrComplete);
   },
 );
-
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
@@ -111,17 +120,6 @@ function DocPage() {
       toast.success(`Jumped to last translated page: ${targetPage}`);
     }
   }, [aiSummary, setActivePage]);
-
-  // Stop active playback when leaving the document reader, but keep the workers warm in the JS heap
-  useEffect(() => {
-    return () => {
-      import("@/lib/tts")
-        .then((tts) => {
-          tts.stopAll();
-        })
-        .catch((err) => console.warn("[tts-cleanup] failed:", err));
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,12 +220,14 @@ function DocPage() {
               ocrRun: true,
             });
             await refreshSummary();
-          }
+          },
         );
         setStatus(`done · ${collected.length} pages`);
       } catch (ocrErr) {
         console.warn("OCR fallback failed:", ocrErr);
-        toast.error("OCR fallback failed: " + (ocrErr instanceof Error ? ocrErr.message : "unknown"));
+        toast.error(
+          "OCR fallback failed: " + (ocrErr instanceof Error ? ocrErr.message : "unknown"),
+        );
       } finally {
         collected.length = 0;
       }

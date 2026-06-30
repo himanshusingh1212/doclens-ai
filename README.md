@@ -37,13 +37,13 @@ The application is deployed at [anuwad.com](https://www.anuwad.com) and is built
 
 Millions of PDF documents — textbooks, research papers, legal contracts, government forms — are published in languages the reader doesn't speak. According to UNESCO, over 50% of online content is in English, yet only 16% of the world's population speaks it. Existing solutions have critical gaps:
 
-| Existing Approach       | Limitation                                                             |
-|-------------------------|------------------------------------------------------------------------|
-| **Google Translate**    | Copy-paste workflow, loses document structure, no offline capability   |
-| **Adobe Acrobat**       | No AI translation, expensive subscription, cloud-dependent             |
-| **ChatGPT / Claude**   | Manual copy-paste per page, no document-native UX, data leaves device  |
-| **DeepL**              | No PDF viewer, no text-to-speech, no per-page control                  |
-| **Speechify**          | Cloud-based TTS, subscription model, no local processing               |
+| Existing Approach    | Limitation                                                            |
+| -------------------- | --------------------------------------------------------------------- |
+| **Google Translate** | Copy-paste workflow, loses document structure, no offline capability  |
+| **Adobe Acrobat**    | No AI translation, expensive subscription, cloud-dependent            |
+| **ChatGPT / Claude** | Manual copy-paste per page, no document-native UX, data leaves device |
+| **DeepL**            | No PDF viewer, no text-to-speech, no per-page control                 |
+| **Speechify**        | Cloud-based TTS, subscription model, no local processing              |
 
 DocLens AI eliminates these gaps by combining **PDF viewing**, **AI translation**, and **neural TTS** into a single, privacy-first browser application. According to the DocLens AI architecture, all PDF processing is performed client-side using pdf.js, AI translation is proxied through a secure server function (so the API key never touches the browser), and speech synthesis runs entirely in WebAssembly via Piper — ensuring complete data sovereignty.
 
@@ -51,13 +51,13 @@ DocLens AI eliminates these gaps by combining **PDF viewing**, **AI translation*
 
 ## Who Is It Built For?
 
-| Persona                  | Use Case                                                                             |
-|--------------------------|--------------------------------------------------------------------------------------|
-| **Language learners**    | Read academic PDFs explained in their native language                                |
-| **Researchers**          | Quickly translate foreign-language papers with full context preservation             |
-| **Students**             | Get simplified, style-configurable explanations of complex textbook pages            |
-| **Developers**           | Process technical documentation with full AI control (JSON editor, model selection)  |
-| **Accessibility users**  | Listen to translated content via offline neural TTS with sentence-level highlighting |
+| Persona                 | Use Case                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| **Language learners**   | Read academic PDFs explained in their native language                                |
+| **Researchers**         | Quickly translate foreign-language papers with full context preservation             |
+| **Students**            | Get simplified, style-configurable explanations of complex textbook pages            |
+| **Developers**          | Process technical documentation with full AI control (JSON editor, model selection)  |
+| **Accessibility users** | Listen to translated content via offline neural TTS with sentence-level highlighting |
 
 **Primary audience:** Indian-language speakers processing English-language PDFs — Hindi, Bengali, Telugu, Malayalam, and 25+ other Indian languages appear in native scripts, not romanized.
 
@@ -96,12 +96,13 @@ DocLens AI eliminates these gaps by combining **PDF viewing**, **AI translation*
 
 DocLens AI provides two TTS engines, selectable per language:
 
-| Engine                | Technology      | Quality    | Offline | Latency           |
-|-----------------------|-----------------|------------|---------|-------------------|
-| **Piper Neural TTS**  | WebAssembly ONNX | High       | ✅ Yes  | ~2-4s first load  |
-| **Web Speech API**    | Browser native   | Variable   | ✅ Yes  | Instant            |
+| Engine               | Technology       | Quality  | Offline | Latency          |
+| -------------------- | ---------------- | -------- | ------- | ---------------- |
+| **Piper Neural TTS** | WebAssembly ONNX | High     | ✅ Yes  | ~2-4s first load |
+| **Web Speech API**   | Browser native   | Variable | ✅ Yes  | Instant          |
 
 **Piper Neural TTS** highlights:
+
 - Runs **entirely in the browser** via WebAssembly — no audio data is sent to any server
 - ONNX voice models (20–60 MB each) are downloaded once and cached in IndexedDB for offline use
 - Inference runs in a **dedicated Web Worker** to keep the UI thread responsive
@@ -109,6 +110,7 @@ DocLens AI provides two TTS engines, selectable per language:
 - **LRU audio buffer cache** (5 entries) for instant replay of recently synthesized sentences
 
 **Playback features:**
+
 - **Sentence-level highlighting** — the active sentence is visually highlighted; buffered sentences are underlined
 - **Click-to-seek** — clicking any sentence jumps playback to that position
 - **Speed control** — adjustable from 0.25x to 4x
@@ -175,22 +177,22 @@ Server Functions (Vercel / Nitro)
 
 ### Tech Stack
 
-| Layer              | Technology                            | Purpose                                           |
-|--------------------|---------------------------------------|-------------------------------------------------  |
-| **UI Framework**   | React 19 + TypeScript                 | Component rendering with latest React features    |
-| **Routing**        | TanStack Router + TanStack Start      | File-based routing with URL-synced state          |
-| **Styling**        | Tailwind CSS 4 + shadcn/ui + Radix    | Utility-first CSS with accessible component primitives |
-| **Bundler**        | Vite 7                                | Dev server and optimized production builds        |
-| **PDF Engine**     | pdf.js v5 (pdfjs-dist)                | Canvas rendering, text extraction, text layer     |
-| **AI Gateway**     | OpenRouter API                        | Unified access to GPT-4o, Claude, Gemini, Llama   |
-| **Neural TTS**     | Piper TTS (piper-tts-web)             | Offline WASM speech synthesis with ONNX models    |
-| **Browser TTS**    | Web Speech API                        | Native browser speech synthesis fallback          |
-| **Storage**        | IndexedDB (idb) + localStorage        | Document persistence, model caching, preferences  |
-| **Deployment**     | Vercel + Nitro                        | Server functions for API proxying                 |
-| **Analytics**      | Vercel Analytics + Speed Insights     | Performance monitoring                            |
-| **UI Components**  | Radix UI + shadcn/ui + Lucide Icons   | Accessible dialogs, dropdowns, tooltips, etc.     |
-| **Forms**          | React Hook Form + Zod                 | Type-safe form validation                         |
-| **Virtualization** | TanStack Virtual                      | Efficient rendering of large lists                |
+| Layer              | Technology                          | Purpose                                                |
+| ------------------ | ----------------------------------- | ------------------------------------------------------ |
+| **UI Framework**   | React 19 + TypeScript               | Component rendering with latest React features         |
+| **Routing**        | TanStack Router + TanStack Start    | File-based routing with URL-synced state               |
+| **Styling**        | Tailwind CSS 4 + shadcn/ui + Radix  | Utility-first CSS with accessible component primitives |
+| **Bundler**        | Vite 7                              | Dev server and optimized production builds             |
+| **PDF Engine**     | pdf.js v5 (pdfjs-dist)              | Canvas rendering, text extraction, text layer          |
+| **AI Gateway**     | OpenRouter API                      | Unified access to GPT-4o, Claude, Gemini, Llama        |
+| **Neural TTS**     | Piper TTS (piper-tts-web)           | Offline WASM speech synthesis with ONNX models         |
+| **Browser TTS**    | Web Speech API                      | Native browser speech synthesis fallback               |
+| **Storage**        | IndexedDB (idb) + localStorage      | Document persistence, model caching, preferences       |
+| **Deployment**     | Vercel + Nitro                      | Server functions for API proxying                      |
+| **Analytics**      | Vercel Analytics + Speed Insights   | Performance monitoring                                 |
+| **UI Components**  | Radix UI + shadcn/ui + Lucide Icons | Accessible dialogs, dropdowns, tooltips, etc.          |
+| **Forms**          | React Hook Form + Zod               | Type-safe form validation                              |
+| **Virtualization** | TanStack Virtual                    | Efficient rendering of large lists                     |
 
 ---
 
@@ -294,18 +296,18 @@ doclens-ai/
 
 DocLens AI is engineered to handle large PDF documents (500+ pages) in the browser without crashes or excessive memory usage:
 
-| Optimization                        | Technique                                                                     | Impact                           |
-|-------------------------------------|-------------------------------------------------------------------------------|----------------------------------|
-| **Lazy canvas rendering**           | `IntersectionObserver` with +200px margin; only visible pages are drawn       | Keeps GPU memory bounded         |
-| **Canvas eviction (MAX_RENDERED=5)**| Oldest rendered canvas is cleared when a 6th page enters viewport             | Prevents GPU memory exhaustion   |
-| **Per-page IndexedDB storage**      | Pages stored individually, not as a giant array; loaded on demand             | Fast document open, low heap     |
-| **TTS Web Worker isolation**        | Piper ONNX inference runs in a dedicated Web Worker                           | UI thread stays responsive       |
-| **Audio buffer LRU cache**          | 5-entry cache for recently synthesized audio; ~4.4 MB peak                    | Instant replay without re-synthesis |
-| **ONNX model caching**             | Voice models downloaded once, cached in IndexedDB                             | Offline TTS after first install  |
-| **Translation result caching**      | Results stored with settings hash; cache invalidated only on settings change  | No redundant API calls           |
-| **AbortController on navigation**   | Active translation streams are cancelled when user navigates away             | No orphaned network requests     |
-| **Write mutex (writeLocks Map)**    | Prevents concurrent IDB write corruption                                      | Data integrity under concurrency |
-| **PDF.js dedicated worker**         | PDF parsing runs in a separate web worker with Blob URL cleanup               | Non-blocking document load       |
+| Optimization                         | Technique                                                                    | Impact                              |
+| ------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------- |
+| **Lazy canvas rendering**            | `IntersectionObserver` with +200px margin; only visible pages are drawn      | Keeps GPU memory bounded            |
+| **Canvas eviction (MAX_RENDERED=5)** | Oldest rendered canvas is cleared when a 6th page enters viewport            | Prevents GPU memory exhaustion      |
+| **Per-page IndexedDB storage**       | Pages stored individually, not as a giant array; loaded on demand            | Fast document open, low heap        |
+| **TTS Web Worker isolation**         | Piper ONNX inference runs in a dedicated Web Worker                          | UI thread stays responsive          |
+| **Audio buffer LRU cache**           | 5-entry cache for recently synthesized audio; ~4.4 MB peak                   | Instant replay without re-synthesis |
+| **ONNX model caching**               | Voice models downloaded once, cached in IndexedDB                            | Offline TTS after first install     |
+| **Translation result caching**       | Results stored with settings hash; cache invalidated only on settings change | No redundant API calls              |
+| **AbortController on navigation**    | Active translation streams are cancelled when user navigates away            | No orphaned network requests        |
+| **Write mutex (writeLocks Map)**     | Prevents concurrent IDB write corruption                                     | Data integrity under concurrency    |
+| **PDF.js dedicated worker**          | PDF parsing runs in a separate web worker with Blob URL cleanup              | Non-blocking document load          |
 
 ---
 
@@ -383,6 +385,7 @@ Yes. DocLens AI uses Piper, an open-source neural text-to-speech system that run
 Contributions are welcome. The `documentation/` folder contains an Obsidian knowledge base with detailed notes on every feature, component, pipeline, and API integration. Start with [00 — Index.md](documentation/00%20—%20Index.md) for a complete project map.
 
 Key areas for contribution:
+
 - **OCR integration** for scanned/image-only PDFs
 - **Additional Piper voice models** for underrepresented languages
 - **Mobile UI improvements** for the workspace view

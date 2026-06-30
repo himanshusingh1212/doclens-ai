@@ -547,8 +547,8 @@ export function resolveTheme(id: string): ThemeDefinition {
   // system / fallback
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   return prefersDark
-    ? (findTheme("apple-dark") as ThemeDefinition || findTheme("dark") as ThemeDefinition)
-    : (findTheme("apple") as ThemeDefinition || findTheme("light") as ThemeDefinition);
+    ? (findTheme("apple-dark") as ThemeDefinition) || (findTheme("dark") as ThemeDefinition)
+    : (findTheme("apple") as ThemeDefinition) || (findTheme("light") as ThemeDefinition);
 }
 
 /**

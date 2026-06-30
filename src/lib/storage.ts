@@ -278,9 +278,9 @@ function db() {
                   garbageRatio: p.garbageRatio ?? 0,
                   pageAi: ai
                     ? (() => {
-                      const { lastSentRequest: _, ...rest } = ai;
-                      return { ...rest, pageNumber: p.pageNumber } as PageAi;
-                    })()
+                        const { lastSentRequest: _, ...rest } = ai;
+                        return { ...rest, pageNumber: p.pageNumber } as PageAi;
+                      })()
                     : undefined,
                 };
                 pagesStore.put(rec);
@@ -465,7 +465,7 @@ export async function getPageData(
 export async function updatePageData(
   docId: string,
   pageNumber: number,
-  patch: Partial<Omit<PageDataRecord, "key" | "docId" | "pageNumber">>
+  patch: Partial<Omit<PageDataRecord, "key" | "docId" | "pageNumber">>,
 ): Promise<void> {
   const d = await db();
   const key = pageKey(docId, pageNumber);
@@ -474,7 +474,6 @@ export async function updatePageData(
   const merged = { ...existing, ...patch };
   await d.put(PAGES, merged);
 }
-
 
 /** Read every page's text+AI for a doc. Heavy — use only for export. */
 export async function getAllPages(docId: string): Promise<PageDataRecord[]> {
@@ -611,41 +610,6 @@ export async function setLastOpened(id: string | null) {
   const d = await db();
   if (id === null) await d.delete(META, LAST_OPENED_KEY);
   else await safePut(d, META, id, LAST_OPENED_KEY);
-}
-
-/* ---------- Voice packs (Piper TTS) ---------- */
-
-export interface VoicePackRecord {
-  voiceId: string;
-  language: string;
-  installedAt: number;
-  sizeBytes?: number;
-}
-
-export async function listVoicePacks(): Promise<VoicePackRecord[]> {
-  const d = await db();
-  return ((await d.getAll(VOICE_PACKS)) as VoicePackRecord[]).sort((a, b) =>
-    a.voiceId.localeCompare(b.voiceId),
-  );
-}
-export async function recordVoicePack(rec: VoicePackRecord) {
-  const d = await db();
-  await safePut(d, VOICE_PACKS, rec);
-}
-export async function deleteVoicePack(voiceId: string) {
-  const d = await db();
-  await d.delete(VOICE_PACKS, voiceId);
-}
-
-const PIPER_PREF_KEY = "piper.preferredVoice";
-export async function getPiperPreferred(): Promise<string | null> {
-  const d = await db();
-  return ((await d.get(META, PIPER_PREF_KEY)) as string | null) ?? null;
-}
-export async function setPiperPreferred(voiceId: string | null) {
-  const d = await db();
-  if (!voiceId) await d.delete(META, PIPER_PREF_KEY);
-  else await safePut(d, META, voiceId, PIPER_PREF_KEY);
 }
 
 /* ---------- IDB quota estimate ---------- */

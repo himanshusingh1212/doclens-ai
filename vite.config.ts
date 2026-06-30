@@ -19,12 +19,12 @@ export default defineConfig({
   },
   vite: {
     ssr: {
-      external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
+      external: ["pdfjs-dist"],
     },
     environments: {
       nitro: {
         resolve: {
-          external: ["piper-tts-web", "@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"],
+          external: ["pdfjs-dist"],
         },
       },
     },
@@ -38,12 +38,7 @@ export default defineConfig({
             },
           },
           rollupConfig: {
-            external: [
-              "piper-tts-web",
-              "@huggingface/transformers",
-              "onnxruntime-web",
-              "pdfjs-dist",
-            ],
+            external: ["pdfjs-dist"],
           },
         }),
       ]

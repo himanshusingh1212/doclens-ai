@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { TtsVoiceSetupDialog } from "@/components/TtsVoiceSetupDialog";
-import { getOutputLanguage } from "@/lib/openrouter";
 import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob } from "@/lib/storage";
-import { hasTtsSelection } from "@/lib/tts";
-import { createPiperReaderController, type PiperReaderController } from "@/lib/piper-reader";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 
 interface Props {
@@ -49,8 +45,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
-  const [speakState, setSpeakState] = useState<"idle" | "playing">("idle");
-  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
@@ -60,7 +54,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const renderingPages = useRef<Set<number>>(new Set());
   const recentlyVisibleOrder = useRef<number[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const ttsRef = useRef<PiperReaderController | null>(null);
 
   // Load PDF on-demand from IndexedDB (as Blob → objectURL)
   useEffect(() => {
@@ -284,8 +277,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       visiblePages.current.clear();
       renderingPages.current.clear();
       recentlyVisibleOrder.current = [];
-      ttsRef.current?.destroy();
-      ttsRef.current = null;
       // Destroy the PDFDocumentProxy to release all native memory
       // (decoded fonts, CMap tables, page caches, operator lists).
       // The load effect cleanup also handles this, but this is a safety net
@@ -402,34 +393,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     );
   }, [selection, docId]);
 
-  const startSpeak = useCallback(() => {
-    if (!selection) return;
-    ttsRef.current?.destroy();
-    ttsRef.current = createPiperReaderController(selection.text, {
-      onSnapshot: (snapshot) => {
-        setSpeakState(
-          snapshot.status === "playing" || snapshot.status === "loading" ? "playing" : "idle",
-        );
-      },
-      language: getOutputLanguage(),
-    });
-    ttsRef.current.play();
-  }, [selection]);
-
-  const handleSpeak = useCallback(() => {
-    if (!selection) return;
-    if (speakState === "playing") {
-      ttsRef.current?.stop();
-      setSpeakState("idle");
-      return;
-    }
-    const language = getOutputLanguage();
-    void hasTtsSelection(language).then((ready) => {
-      if (ready) startSpeak();
-      else setVoiceSetupOpen(true);
-    });
-  }, [selection, speakState, startSpeak]);
-
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -471,12 +434,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
   return (
     <>
-      <TtsVoiceSetupDialog
-        open={voiceSetupOpen}
-        language={getOutputLanguage()}
-        onOpenChange={setVoiceSetupOpen}
-        onReady={startSpeak}
-      />
       <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
         <div className="flex flex-col items-center gap-4 py-6 px-4" onClick={handlePageClick}>
           {pageMetas.map((meta) => (
@@ -536,12 +493,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
               </button>
               <button onClick={handleTranslate} className="primary-action" title="Translate">
                 🌐
-              </button>
-              <button
-                onClick={handleSpeak}
-                title={speakState === "playing" ? "Stop reading" : "Read aloud"}
-              >
-                {speakState === "playing" ? "⏹" : "🔊"}
               </button>
             </div>
           </div>
