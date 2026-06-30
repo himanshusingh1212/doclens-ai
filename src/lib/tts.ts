@@ -5,99 +5,107 @@
 export function splitSentences(text: string): string[] {
   if (!text) return [];
 
-  // Check if text contains East Asian characters
   const isEastAsian = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(text);
 
-  // 1. Split by newlines first to isolate individual lines/paragraphs
-  const lines = text.split(/\r?\n/);
+  // Split by newlines, keeping the newlines in the tokens array
+  const tokens = text.split(/(\r?\n+)/);
   const chunks: string[] = [];
+  let currentChunk = "";
 
-  for (let line of lines) {
-    line = line.trim();
-    if (!line) continue;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token) continue;
 
-    // If the line is short enough, keep it as one chunk
-    if (line.length <= 200) {
-      chunks.push(line);
+    // If it's a newline token, append to current chunk and flush
+    if (/^\r?\n+$/.test(token)) {
+      currentChunk += token;
+      chunks.push(currentChunk);
+      currentChunk = "";
       continue;
     }
 
-    // 2. Split line into sentences using punctuation boundaries
-    const sentences = splitParagraphIntoSentences(line, isEastAsian);
+    // Otherwise, it is a text line.
+    if (token.length <= 200) {
+      currentChunk += token;
+      continue;
+    }
 
-    for (let sentence of sentences) {
-      sentence = sentence.trim();
-      if (!sentence) continue;
-
-      if (sentence.length <= 200) {
-        chunks.push(sentence);
-        continue;
-      }
-
-      // 3. Split by clause boundaries if still too long
-      const clauses = sentence.split(/(?<=[,;:，；：])\s+/);
-      for (let clause of clauses) {
-        clause = clause.trim();
-        if (!clause) continue;
-
-        if (clause.length <= 200) {
-          chunks.push(clause);
-          continue;
-        }
-
-        // 4. Split by word boundaries if still too long
-        const words = clause.split(/\s+/);
-        let currentChunk = "";
-
-        for (const word of words) {
-          if (!word) continue;
-          if ((currentChunk + " " + word).trim().length <= 200) {
-            currentChunk = currentChunk ? currentChunk + " " + word : word;
-          } else {
-            if (currentChunk) {
-              chunks.push(currentChunk);
-            }
-            currentChunk = word;
-          }
-        }
-        if (currentChunk) {
-          chunks.push(currentChunk);
-        }
+    // If the token is > 200 characters, losslessly split it.
+    const subChunks = losslessSplit(token, 200, isEastAsian);
+    for (let j = 0; j < subChunks.length; j++) {
+      if (j === subChunks.length - 1) {
+        currentChunk += subChunks[j];
+      } else {
+        chunks.push(subChunks[j]);
       }
     }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
   }
 
   return chunks;
 }
 
-function splitParagraphIntoSentences(paragraph: string, isEastAsian: boolean): string[] {
-  if (isEastAsian) {
-    const tokens = paragraph.split(/([.!?]+[\s\u200b]+|[\u3002\uff01\uff1f]+)/);
-    const result: string[] = [];
-    for (let i = 0; i < tokens.length; i += 2) {
-      if (i + 1 < tokens.length) {
-        result.push(tokens[i] + tokens[i + 1]);
-      } else if (tokens[i]) {
-        result.push(tokens[i]);
-      }
-    }
-    return result.map(s => s.trim()).filter(Boolean);
-  } else {
-    const nonSentenceEndingAbbrev = /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.\s+$/;
-    const tokens = paragraph.split(/([.!?]+[\s\u200b]+)/);
-    const result: string[] = [];
-    for (let i = 0; i < tokens.length; i += 2) {
-      const part = (i + 1 < tokens.length) ? (tokens[i] + tokens[i + 1]) : tokens[i];
-      if (part) {
-        if (result.length && nonSentenceEndingAbbrev.test(result[result.length - 1])) {
-          result[result.length - 1] += part;
-        } else {
-          result.push(part);
+function losslessSplit(text: string, limit: number, isEastAsian: boolean, level = 0): string[] {
+  if (text.length <= limit) {
+    return [text];
+  }
+
+  let tokens: string[] = [];
+  if (level === 0) {
+    if (isEastAsian) {
+      tokens = text.split(/([\u3002\uff01\uff1f]+)/);
+    } else {
+      const nonSentenceEndingAbbrev = /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/;
+      const rawTokens = text.split(/([.!?]+[\s\u200b]+)/);
+      for (let i = 0; i < rawTokens.length; i += 2) {
+        const part = rawTokens[i];
+        const sep = rawTokens[i + 1] || "";
+        if (part) {
+          if (tokens.length && nonSentenceEndingAbbrev.test(tokens[tokens.length - 1])) {
+            tokens[tokens.length - 1] += part + sep;
+          } else {
+            tokens.push(part + sep);
+          }
         }
       }
     }
-    return result.map(s => s.trim()).filter(Boolean);
+  } else if (level === 1) {
+    tokens = text.split(/([,;:，；：]+[\s\u200b]*)/);
+  } else if (level === 2) {
+    tokens = text.split(/(\s+)/);
+  } else {
+    tokens = text.split("");
   }
+
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const token of tokens) {
+    if (!token) continue;
+    
+    if (token.length > limit) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      const subChunks = losslessSplit(token, limit, isEastAsian, level + 1);
+      chunks.push(...subChunks);
+    } else if (current.length + token.length <= limit) {
+      current += token;
+    } else {
+      if (current) chunks.push(current);
+      current = token;
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks;
 }
 
 /**

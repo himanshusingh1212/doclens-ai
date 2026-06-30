@@ -63,7 +63,7 @@ export function HighlightableText({ text, source, pageNumber }: HighlightableTex
             }`}
             title="Click to read from here"
           >
-            {sentence}{" "}
+            {sentence}
           </span>
         );
       })}

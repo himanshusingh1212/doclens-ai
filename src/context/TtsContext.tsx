@@ -128,7 +128,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     }
 
     setCurrentSentenceIndex(index);
-    const sentenceText = sentenceList[index];
+    const rawSentence = sentenceList[index];
+    const sentenceText = rawSentence.trim();
+
+    if (!sentenceText) {
+      if (isTransitioningRef.current) return;
+      isTransitioningRef.current = true;
+      speakSentence(index + 1, sentenceList);
+      return;
+    }
+
     const utterance = new SpeechSynthesisUtterance(sentenceText);
     utteranceRef.current = utterance; // Keep reference to prevent GC
 
