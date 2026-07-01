@@ -25,7 +25,7 @@ interface TtsContextType {
   availableVoices: TtsVoice[];
   continuousPlay: boolean;
   isNeuralLoading: boolean;
-
+  
   play: (text: string, source: TtsSource, pageNumber: number, startIndex?: number) => void;
   pause: () => void;
   resume: () => void;
@@ -41,13 +41,37 @@ interface TtsContextType {
 const TtsContext = createContext<TtsContextType | undefined>(undefined);
 
 export function TtsProvider({ children }: { children: React.ReactNode }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [sentences, setSentences] = useState<string[]>([]);
-  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+  const isPlayingRef = useRef(false);
+  const [isPlaying, setIsPlayingState] = useState(false);
+  const setIsPlaying = useCallback((val: boolean) => {
+    setIsPlayingState(val);
+    isPlayingRef.current = val;
+  }, []);
+
+  const isPausedRef = useRef(false);
+  const [isPaused, setIsPausedState] = useState(false);
+  const setIsPaused = useCallback((val: boolean) => {
+    setIsPausedState(val);
+    isPausedRef.current = val;
+  }, []);
+
+  const sentencesRef = useRef<string[]>([]);
+  const [sentences, setSentencesState] = useState<string[]>([]);
+  const setSentences = useCallback((val: string[]) => {
+    setSentencesState(val);
+    sentencesRef.current = val;
+  }, []);
+
+  const currentSentenceIndexRef = useRef(0);
+  const [currentSentenceIndex, setCurrentSentenceIndexState] = useState(0);
+  const setCurrentSentenceIndex = useCallback((val: number) => {
+    setCurrentSentenceIndexState(val);
+    currentSentenceIndexRef.current = val;
+  }, []);
+
   const [currentTextSource, setCurrentTextSource] = useState<TtsSource | null>(null);
   const [activePageNumber, setActivePageNumber] = useState<number | null>(null);
-
+  
   // Persist rate, voice, and continuous play to localStorage
   const [rate, setRateState] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -56,14 +80,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     }
     return 1.0;
   });
-
+  
   const [selectedVoiceUri, setSelectedVoiceUriState] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("doclens:tts-voice-uri");
     }
     return null;
   });
-
+  
   const [continuousPlay, setContinuousPlayState] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("doclens:tts-continuous");
@@ -75,7 +99,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const [availableVoices, setAvailableVoices] = useState<TtsVoice[]>([]);
   const [isNeuralLoading, setIsNeuralLoading] = useState(false);
   const [neuralVoices, setNeuralVoices] = useState<TtsVoice[]>([]);
-
+  
   // Utterance and Audio refs to prevent garbage collection during playback
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -102,7 +126,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       const combined = [...native, ...neuralVoices];
       setAvailableVoices(combined);
-
+      
       // Auto-select default voice if none set
       if (!selectedVoiceUri && combined.length > 0) {
         const defaultVoice = combined.find(v => v.lang.startsWith("en") || v.default) || combined[0];
@@ -130,16 +154,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         if (!ort.InferenceSession.originalCreate) {
           ort.InferenceSession.originalCreate = ort.InferenceSession.create;
           const sessionCache = new Map<string, any>();
-
+          
           ort.InferenceSession.create = async function (model: any, options?: any) {
             const cacheKey = model instanceof ArrayBuffer
               ? `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`
               : String(model);
-
+            
             if (sessionCache.has(cacheKey)) {
               return sessionCache.get(cacheKey);
             }
-
+            
             const session = await ort.InferenceSession.originalCreate(model, options);
             sessionCache.set(cacheKey, session);
             return session;
@@ -164,7 +188,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const vitsVoices = await mod.voices();
-
+        
         // Filter and map voices to include Hindi and English Neural voices
         const englishNeural = vitsVoices
           .filter((v: any) => v.key.startsWith("en_US-"))
@@ -235,21 +259,23 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const cleanupAudio = useCallback(() => {
     if (audioRef.current) {
       try {
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
         audioRef.current.pause();
-      } catch (e) { }
+      } catch (e) {}
       audioRef.current.src = "";
       audioRef.current = null;
     }
     if (activeAudioUrlRef.current) {
       try {
         URL.revokeObjectURL(activeAudioUrlRef.current);
-      } catch (e) { }
+      } catch (e) {}
       activeAudioUrlRef.current = null;
     }
     if (nextAudioUrlRef.current) {
       try {
         URL.revokeObjectURL(nextAudioUrlRef.current);
-      } catch (e) { }
+      } catch (e) {}
       nextAudioUrlRef.current = null;
     }
     if (transitionTimeoutRef.current) {
@@ -262,7 +288,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   const preSynthesizeNext = useCallback((nextIndex: number, sentenceList: string[]) => {
     if (nextIndex < 0 || nextIndex >= sentenceList.length) return;
-
+    
     // If already pre-synthesized/synthesizing this index, skip
     if (nextAudioIndexRef.current === nextIndex) return;
 
@@ -298,27 +324,29 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   // Speaks the sentence at the specified index
   const speakSentence = useCallback((index: number, sentenceList: string[]) => {
     isTransitioningRef.current = false;
-
+    
     // Clear any previous active audio element before starting a new one.
     // Do NOT call cleanupAudio() because we want to preserve nextAudioUrlRef (pre-synthesized)!
     if (audioRef.current) {
       try {
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
         audioRef.current.pause();
-      } catch (e) { }
+      } catch (e) {}
       audioRef.current.src = "";
       audioRef.current = null;
     }
     if (activeAudioUrlRef.current) {
       try {
         URL.revokeObjectURL(activeAudioUrlRef.current);
-      } catch (e) { }
+      } catch (e) {}
       activeAudioUrlRef.current = null;
     }
     if (transitionTimeoutRef.current) {
       clearTimeout(transitionTimeoutRef.current);
       transitionTimeoutRef.current = null;
     }
-
+    
     loadingIndexRef.current = null;
 
     if (index < 0 || index >= sentenceList.length) {
@@ -339,6 +367,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    setIsPaused(false);
     setCurrentSentenceIndex(index);
     const rawSentence = sentenceList[index];
     const sentenceText = rawSentence.trim();
@@ -366,10 +395,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           activeAudioUrlRef.current = null;
         }
 
+        const nextIdx = index + 1;
+        if (nextIdx < sentenceList.length) {
+          setCurrentSentenceIndex(nextIdx);
+        }
+
         if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
         transitionTimeoutRef.current = setTimeout(() => {
           transitionTimeoutRef.current = null;
-          speakSentence(index + 1, sentenceList);
+          if (isPausedRef.current) return;
+          speakSentence(nextIdx, sentenceList);
         }, 250);
       };
 
@@ -417,7 +452,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
         loadingIndexRef.current = index;
         setIsNeuralLoading(true);
-
+        
         let toastId: string | number | undefined;
 
         ttsRef.current.predict({
@@ -493,41 +528,37 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
     const list = splitSentences(text);
     if (list.length === 0) return;
-
+    
     setSentences(list);
     setCurrentTextSource(source);
     setActivePageNumber(pageNumber);
     setIsPlaying(true);
     setIsPaused(false);
-
+    
     speakSentence(startIndex, list);
   }, [speakSentence, cleanupAudio]);
 
   const pause = useCallback(() => {
-    const voice = availableVoices.find((v) => v.voiceURI === selectedVoiceUri);
-    if (voice?.isNeural) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    } else {
-      if (typeof window === "undefined" || !window.speechSynthesis) return;
+    setIsPaused(true);
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.pause();
     }
-    setIsPaused(true);
-  }, [availableVoices, selectedVoiceUri]);
+  }, [setIsPaused]);
 
   const resume = useCallback(() => {
-    const voice = availableVoices.find((v) => v.voiceURI === selectedVoiceUri);
-    if (voice?.isNeural) {
-      if (audioRef.current) {
-        audioRef.current.play().catch(e => console.error("Resume failed:", e));
-      }
+    setIsPaused(false);
+    if (audioRef.current && !audioRef.current.ended) {
+      audioRef.current.play().catch(e => console.error("Resume failed:", e));
     } else {
-      if (typeof window === "undefined" || !window.speechSynthesis) return;
+      speakSentence(currentSentenceIndexRef.current, sentencesRef.current);
+    }
+    if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.resume();
     }
-    setIsPaused(false);
-  }, [availableVoices, selectedVoiceUri]);
+  }, [speakSentence, setIsPaused]);
 
   const stop = useCallback(() => {
     cleanupAudio();
@@ -540,34 +571,34 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setCurrentSentenceIndex(0);
     setCurrentTextSource(null);
     setActivePageNumber(null);
-  }, [cleanupAudio]);
+  }, [cleanupAudio, setIsPlaying, setIsPaused, setSentences, setCurrentSentenceIndex]);
 
   const nextSentence = useCallback(() => {
-    if (!isPlaying) return;
+    if (!isPlayingRef.current) return;
     cleanupAudio();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    speakSentence(currentSentenceIndex + 1, sentences);
-  }, [isPlaying, currentSentenceIndex, sentences, speakSentence, cleanupAudio]);
+    speakSentence(currentSentenceIndexRef.current + 1, sentencesRef.current);
+  }, [speakSentence, cleanupAudio]);
 
   const prevSentence = useCallback(() => {
-    if (!isPlaying) return;
+    if (!isPlayingRef.current) return;
     cleanupAudio();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    speakSentence(Math.max(0, currentSentenceIndex - 1), sentences);
-  }, [isPlaying, currentSentenceIndex, sentences, speakSentence, cleanupAudio]);
+    speakSentence(Math.max(0, currentSentenceIndexRef.current - 1), sentencesRef.current);
+  }, [speakSentence, cleanupAudio]);
 
   const seekSentence = useCallback((index: number) => {
-    if (!isPlaying) return;
+    if (!isPlayingRef.current) return;
     cleanupAudio();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    speakSentence(index, sentences);
-  }, [isPlaying, sentences, speakSentence, cleanupAudio]);
+    speakSentence(index, sentencesRef.current);
+  }, [speakSentence, cleanupAudio]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -578,6 +609,50 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [cleanupAudio]);
+
+  // Automatically switch voice if changed during active playback
+  useEffect(() => {
+    if (isPlayingRef.current && selectedVoiceUri) {
+      // Pause/Cancel the current playing engine
+      if (audioRef.current) {
+        try {
+          audioRef.current.onended = null;
+          audioRef.current.onerror = null;
+          audioRef.current.pause();
+        } catch (e) {}
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      
+      // Revoke any active URL
+      if (activeAudioUrlRef.current) {
+        try {
+          URL.revokeObjectURL(activeAudioUrlRef.current);
+        } catch (e) {}
+        activeAudioUrlRef.current = null;
+      }
+      
+      // Revoke pre-synthesized URL because it was for the old voice!
+      if (nextAudioUrlRef.current) {
+        try {
+          URL.revokeObjectURL(nextAudioUrlRef.current);
+        } catch (e) {}
+        nextAudioUrlRef.current = null;
+        nextAudioIndexRef.current = null;
+      }
+
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = null;
+      }
+
+      // Resume playback at the current sentence with the new voice
+      speakSentence(currentSentenceIndexRef.current, sentencesRef.current);
+    }
+  }, [selectedVoiceUri, speakSentence]);
 
   return (
     <TtsContext.Provider
