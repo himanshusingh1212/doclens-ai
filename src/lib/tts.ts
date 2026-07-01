@@ -5,107 +5,85 @@
 export function splitSentences(text: string): string[] {
   if (!text) return [];
 
-  const isEastAsian = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(text);
-
-  // Split by newlines, keeping the newlines in the tokens array
-  const tokens = text.split(/(\r?\n+)/);
+  // Split by newlines first to preserve paragraph boundaries
+  const lines = text.split(/(\r?\n+)/);
   const chunks: string[] = [];
-  let currentChunk = "";
 
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (!token) continue;
+  for (const line of lines) {
+    if (!line) continue;
 
-    // If it's a newline token, append to current chunk and flush
-    if (/^\r?\n+$/.test(token)) {
-      currentChunk += token;
-      chunks.push(currentChunk);
-      currentChunk = "";
+    // If it's a newline token, push it directly
+    if (/^\r?\n+$/.test(line)) {
+      chunks.push(line);
       continue;
     }
 
-    // Otherwise, it is a text line.
-    if (token.length <= 200) {
-      currentChunk += token;
-      continue;
-    }
-
-    // If the token is > 200 characters, losslessly split it.
-    const subChunks = losslessSplit(token, 200, isEastAsian);
-    for (let j = 0; j < subChunks.length; j++) {
-      if (j === subChunks.length - 1) {
-        currentChunk += subChunks[j];
-      } else {
-        chunks.push(subChunks[j]);
-      }
-    }
+    // Split the line into segments using punctuation delimiters (comma, full stops, poorna viram, ?, !, ;, :)
+    const lineChunks = splitLineByPunctuation(line);
+    chunks.push(...lineChunks);
   }
 
-  if (currentChunk) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
+  return chunks.map(c => c.trim()).filter(Boolean);
 }
 
-function losslessSplit(text: string, limit: number, isEastAsian: boolean, level = 0): string[] {
-  if (text.length <= limit) {
-    return [text];
-  }
+function splitLineByPunctuation(text: string): string[] {
+  // Matches punctuation marks followed by space or end of string
+  const delimiterRegex = /([.,|!?;:，；：\u0964\u0965]+(?:\s+|$))/;
+  const tokens = text.split(delimiterRegex);
+  
+  const chunks: string[] = [];
+  const nonSentenceEndingAbbrev = /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fig|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/;
 
-  let tokens: string[] = [];
-  if (level === 0) {
-    if (isEastAsian) {
-      tokens = text.split(/([\u3002\uff01\uff1f]+)/);
-    } else {
-      const nonSentenceEndingAbbrev = /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/;
-      const rawTokens = text.split(/([.!?]+[\s\u200b]+)/);
-      for (let i = 0; i < rawTokens.length; i += 2) {
-        const part = rawTokens[i];
-        const sep = rawTokens[i + 1] || "";
-        if (part) {
-          if (tokens.length && nonSentenceEndingAbbrev.test(tokens[tokens.length - 1])) {
-            tokens[tokens.length - 1] += part + sep;
-          } else {
-            tokens.push(part + sep);
-          }
-        }
+  for (let i = 0; i < tokens.length; i += 2) {
+    const part = tokens[i];
+    const sep = tokens[i + 1] || "";
+    
+    if (part) {
+      const fullPart = part + sep;
+      // If the previous chunk ended with an abbreviation, merge them
+      if (chunks.length && nonSentenceEndingAbbrev.test(chunks[chunks.length - 1].trim())) {
+        chunks[chunks.length - 1] += " " + fullPart;
+      } else {
+        chunks.push(fullPart);
+      }
+    } else if (sep) {
+      if (chunks.length) {
+        chunks[chunks.length - 1] += sep;
+      } else {
+        chunks.push(sep);
       }
     }
-  } else if (level === 1) {
-    tokens = text.split(/([,;:，；：]+[\s\u200b]*)/);
-  } else if (level === 2) {
-    tokens = text.split(/(\s+)/);
-  } else {
-    tokens = text.split("");
   }
 
+  // Safety fallback: only if a chunk has no punctuation and is extremely long (> 500 chars),
+  // split it by space. Otherwise, keep it intact to avoid arbitrary boundaries.
+  const finalChunks: string[] = [];
+  for (const chunk of chunks) {
+    if (chunk.length > 500) {
+      finalChunks.push(...splitByLength(chunk, 500));
+    } else {
+      finalChunks.push(chunk);
+    }
+  }
+
+  return finalChunks;
+}
+
+function splitByLength(text: string, limit: number): string[] {
+  const words = text.split(/(\s+)/);
   const chunks: string[] = [];
   let current = "";
 
-  for (const token of tokens) {
-    if (!token) continue;
-    
-    if (token.length > limit) {
-      if (current) {
-        chunks.push(current);
-        current = "";
-      }
-      const subChunks = losslessSplit(token, limit, isEastAsian, level + 1);
-      chunks.push(...subChunks);
-    } else if (current.length + token.length <= limit) {
-      current += token;
+  for (const word of words) {
+    if (current.length + word.length <= limit) {
+      current += word;
     } else {
-      if (current) chunks.push(current);
-      current = token;
+      if (current) chunks.push(current.trim());
+      current = word;
     }
   }
-
-  if (current) {
-    chunks.push(current);
-  }
-
-  return chunks;
+  if (current) chunks.push(current.trim());
+  return chunks.filter(Boolean);
 }
 
 /**

@@ -106,7 +106,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const speakSentence = useCallback((index: number, sentenceList: string[]) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
 
-    window.speechSynthesis.cancel();
     isTransitioningRef.current = false;
 
     if (index < 0 || index >= sentenceList.length) {
@@ -169,6 +168,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   // Public controls
   const play = useCallback((text: string, source: TtsSource, pageNumber: number, startIndex: number = 0) => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     const list = splitSentences(text);
     if (list.length === 0) return;
     
@@ -206,16 +208,25 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   const nextSentence = useCallback(() => {
     if (!isPlaying) return;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     speakSentence(currentSentenceIndex + 1, sentences);
   }, [isPlaying, currentSentenceIndex, sentences, speakSentence]);
 
   const prevSentence = useCallback(() => {
     if (!isPlaying) return;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     speakSentence(Math.max(0, currentSentenceIndex - 1), sentences);
   }, [isPlaying, currentSentenceIndex, sentences, speakSentence]);
 
   const seekSentence = useCallback((index: number) => {
     if (!isPlaying) return;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     speakSentence(index, sentences);
   }, [isPlaying, sentences, speakSentence]);
 
