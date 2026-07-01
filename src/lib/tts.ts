@@ -41,8 +41,9 @@ export function splitSentences(text: string): string[] {
 }
 
 function splitLineByPunctuation(text: string): string[] {
-  // Matches punctuation marks followed by space or end of string
-  const delimiterRegex = /([.,|!?;:，；：\u0964\u0965]+(?:\s+|$))/;
+  // Matches sentence-terminating punctuation marks (. | ! ? etc.) followed by space or end of string.
+  // We exclude commas (,) to let the native TTS engine handle them continuously with a natural micro-pause.
+  const delimiterRegex = /([.|!?\u0964\u0965]+(?:\s+|$))/;
   const tokens = text.split(delimiterRegex);
   
   const chunks: string[] = [];
