@@ -5,25 +5,39 @@
 export function splitSentences(text: string): string[] {
   if (!text) return [];
 
-  // Split by newlines first to preserve paragraph boundaries
-  const lines = text.split(/(\r?\n+)/);
+  // Split by newlines, keeping the newlines in the tokens array
+  const tokens = text.split(/(\r?\n+)/);
   const chunks: string[] = [];
+  let currentChunk = "";
 
-  for (const line of lines) {
-    if (!line) continue;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token) continue;
 
-    // If it's a newline token, push it directly
-    if (/^\r?\n+$/.test(line)) {
-      chunks.push(line);
+    // If it's a newline token, append to current chunk and flush
+    if (/^\r?\n+$/.test(token)) {
+      currentChunk += token;
+      chunks.push(currentChunk);
+      currentChunk = "";
       continue;
     }
 
-    // Split the line into segments using punctuation delimiters (comma, full stops, poorna viram, ?, !, ;, :)
-    const lineChunks = splitLineByPunctuation(line);
-    chunks.push(...lineChunks);
+    // Split the text line by punctuation/special characters
+    const subChunks = splitLineByPunctuation(token);
+    for (let j = 0; j < subChunks.length; j++) {
+      if (j === subChunks.length - 1) {
+        currentChunk += subChunks[j];
+      } else {
+        chunks.push(subChunks[j]);
+      }
+    }
   }
 
-  return chunks.map(c => c.trim()).filter(Boolean);
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
 }
 
 function splitLineByPunctuation(text: string): string[] {
