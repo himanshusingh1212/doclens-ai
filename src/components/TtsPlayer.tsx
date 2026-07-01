@@ -8,6 +8,7 @@ import {
   SkipBack,
   Settings,
   Volume2,
+  Loader2,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -29,6 +30,7 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
     selectedVoiceUri,
     availableVoices,
     continuousPlay,
+    isNeuralLoading,
     play,
     pause,
     resume,
@@ -132,10 +134,13 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
 
             <button
               onClick={handlePlayToggle}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:scale-105 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-80"
               title={isCurrentActive && !isPaused ? "Pause" : "Play"}
+              disabled={isCurrentActive && isNeuralLoading}
             >
-              {isCurrentActive && !isPaused ? (
+              {isCurrentActive && isNeuralLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isCurrentActive && !isPaused ? (
                 <Pause className="h-4 w-4 fill-current" />
               ) : (
                 <Play className="h-4 w-4 fill-current ml-0.5" />
