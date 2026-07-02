@@ -30,6 +30,14 @@ import {
 } from "@/lib/openrouter";
 import { estimateStorage, clearAllAiResults, createDoc, StorageError } from "@/lib/storage";
 import { toast } from "sonner";
+import {
+  getCachedVoiceIds,
+  downloadVoice,
+  deleteCachedVoice,
+  clearAllVoiceCache,
+  isOpfsSupported,
+  NEURAL_VOICES,
+} from "@/lib/voiceCache";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -100,6 +108,59 @@ function SettingsPage() {
     pctNum: number;
   } | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [cachedVoices, setCachedVoices] = useState<string[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+  const isOpfs = useMemo(() => isOpfsSupported(), []);
+
+  const refreshVoiceCache = async () => {
+    try {
+      const ids = await getCachedVoiceIds();
+      setCachedVoices(ids);
+    } catch (err) {
+      console.error("Failed to load cached voice IDs", err);
+    }
+  };
+
+  const handleDownloadVoice = async (voiceId: string) => {
+    setDownloadProgress((prev) => ({ ...prev, [voiceId]: 0 }));
+    try {
+      await downloadVoice(voiceId, (progress) => {
+        setDownloadProgress((prev) => ({ ...prev, [voiceId]: progress }));
+      });
+      toast.success(`Voice "${voiceId}" downloaded and cached successfully!`);
+      void refreshVoiceCache();
+    } catch (err) {
+      toast.error(`Download failed: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setDownloadProgress((prev) => {
+        const next = { ...prev };
+        delete next[voiceId];
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteVoice = async (voiceId: string) => {
+    if (!confirm(`Are you sure you want to delete voice "${voiceId}" from cache?`)) return;
+    try {
+      await deleteCachedVoice(voiceId);
+      toast.success(`Voice "${voiceId}" deleted from cache.`);
+      void refreshVoiceCache();
+    } catch (err) {
+      toast.error(`Delete failed: ${err instanceof Error ? err.message : "unknown"}`);
+    }
+  };
+
+  const handleClearVoiceCache = async () => {
+    if (!confirm("Are you sure you want to delete all cached neural voice packs? This will require re-downloading them next time they are used.")) return;
+    try {
+      await clearAllVoiceCache();
+      toast.success("Voice cache cleared successfully!");
+      void refreshVoiceCache();
+    } catch (err) {
+      toast.error(`Clear failed: ${err instanceof Error ? err.message : "unknown"}`);
+    }
+  };
 
   const updateStorageStats = async () => {
     const est = await estimateStorage();
@@ -151,6 +212,7 @@ function SettingsPage() {
     setCustomKeyInput(savedKey);
     void handleValidate(savedKey);
     void updateStorageStats();
+    void refreshVoiceCache();
   }, []);
 
   const loadModels = async () => {
@@ -454,6 +516,105 @@ function SettingsPage() {
                 className="h-4 w-4 accent-primary"
               />
             </label>
+          </div>
+        </section>
+
+        {/* Neural Voice Cache Manager */}
+        <section className="glass-panel rounded-[18px] p-6">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xl text-primary">✨</span>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Neural Voice Cache Manager</h3>
+                <p className="text-xs text-muted-foreground">
+                  Pre-download and manage neural speech models locally for instant offline playback.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className={`rounded-full px-3 py-1 text-xs font-bold ${isOpfs ? "bg-primary/10 text-primary" : "bg-yellow-500/10 text-yellow-500"}`}>
+                📁 Storage: {isOpfs ? "OPFS (Primary)" : "IndexedDB (Fallback)"}
+              </span>
+              <button
+                onClick={handleClearVoiceCache}
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95"
+              >
+                🗑️ Clear All Voices
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {NEURAL_VOICES.map((voice) => {
+              const isCached = cachedVoices.includes(voice.id);
+              const progress = downloadProgress[voice.id];
+              const isDownloading = progress !== undefined;
+
+              return (
+                <div
+                  key={voice.id}
+                  className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
+                    isCached
+                      ? "border-primary/20 bg-primary/5"
+                      : "border-border bg-background"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-bold text-foreground">{voice.name}</span>
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
+                        {voice.lang}
+                      </span>
+                    </div>
+                    <span className="block font-mono text-[10px] text-muted-foreground truncate mb-3">
+                      {voice.id}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 mt-auto">
+                    <span className="text-xs font-semibold">
+                      {isDownloading ? (
+                        <span className="text-primary font-bold">
+                          ⏳ Downloading {progress}%
+                        </span>
+                      ) : isCached ? (
+                        <span className="text-primary flex items-center gap-1">
+                          🟢 Cached
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">⚪ Not Cached</span>
+                      )}
+                    </span>
+
+                    {isCached ? (
+                      <button
+                        onClick={() => handleDeleteVoice(voice.id)}
+                        className="rounded-full bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/20 active:scale-95 transition-all"
+                      >
+                        Delete
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDownloadVoice(voice.id)}
+                        disabled={isDownloading}
+                        className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/95 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {isDownloading ? "Downloading…" : "Download"}
+                      </button>
+                    )}
+                  </div>
+
+                  {isDownloading && (
+                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-background">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
 

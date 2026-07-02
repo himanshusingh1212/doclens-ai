@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { splitSentences, getBrowserVoices } from "@/lib/tts";
 import { toast } from "sonner";
+import { initVoiceCache } from "@/lib/voiceCache";
 
 export type TtsSource = "original" | "ai";
 
@@ -139,6 +140,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Initialize voice caching interceptor early
+    initVoiceCache();
+
     // Dynamic import to prevent SSR crashes
     import("@diffusionstudio/vits-web").then(async (mod) => {
       ttsRef.current = mod;
@@ -171,19 +175,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       }).catch((err: any) => {
         console.error("Failed to patch onnxruntime-web:", err);
       });
-
-      // Redirect global fetch calls for Hindi/hi_IN to Rhasspy repository
-      const originalFetch = window.fetch;
-      window.fetch = function (input, init) {
-        if (typeof input === "string" && input.includes("/hi/hi_IN/")) {
-          const redirectedUrl = input.replace(
-            "https://huggingface.co/diffusionstudio/piper-voices/resolve/main",
-            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
-          );
-          return originalFetch(redirectedUrl, init);
-        }
-        return originalFetch(input, init);
-      };
 
       try {
         const vitsVoices = await mod.voices();
