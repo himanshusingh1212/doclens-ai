@@ -149,8 +149,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       (mod.PATH_MAP as any)["hi_IN-pratham-medium"] = "hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx";
 
       // Import onnxruntime-web to monkeypatch session creation
-      const ortModule = "onnxruntime-web";
-      import(ortModule).then((ort: any) => {
+      import("onnxruntime-web").then((ort: any) => {
         if (!ort.InferenceSession.originalCreate) {
           ort.InferenceSession.originalCreate = ort.InferenceSession.create;
           const sessionCache = new Map<string, any>();
