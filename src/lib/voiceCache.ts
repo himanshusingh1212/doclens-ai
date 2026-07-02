@@ -31,6 +31,9 @@ export const NEURAL_VOICES = [
 let isInitialized = false;
 let originalFetch: typeof window.fetch | null = null;
 
+// Registry to deduplicate concurrent downloads of the same file
+export const activeModelFetches = new Map<string, Promise<Blob>>();
+
 export function isOpfsSupported(): boolean {
   return (
     typeof navigator !== "undefined" &&
@@ -192,6 +195,28 @@ export async function clearAllVoiceCache(): Promise<void> {
   }
 }
 
+// Downloads the file from network and saves it to cache, deduplicated
+export async function fetchAndCache(filename: string, targetUrl: string, init?: RequestInit): Promise<Blob> {
+  let promise = activeModelFetches.get(filename);
+  if (!promise) {
+    promise = (async () => {
+      const fetchFn = originalFetch || window.fetch;
+      const res = await fetchFn(targetUrl, init);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch model file ${filename}: ${res.statusText}`);
+      }
+      const blob = await res.blob();
+      await saveCachedFile(filename, blob);
+      return blob;
+    })();
+    activeModelFetches.set(filename, promise);
+    promise.finally(() => {
+      activeModelFetches.delete(filename);
+    });
+  }
+  return promise;
+}
+
 export function initVoiceCache() {
   if (typeof window === "undefined" || isInitialized) return;
   isInitialized = true;
@@ -232,18 +257,18 @@ export function initVoiceCache() {
           });
         }
 
-        // Cache MISS -> download and save
-        console.log(`[VoiceCache] Cache MISS for ${filename}. Fetching from network...`);
+        // Cache MISS -> download, write to cache synchronously, then return Response
+        console.log(`[VoiceCache] Cache MISS for ${filename}. Fetching & caching...`);
         try {
-          const response = await originalFetch!(targetUrl, init);
-          if (response.ok) {
-            const clonedResponse = response.clone();
-            const blob = await clonedResponse.blob();
-            void saveCachedFile(filename, blob).catch((err) => {
-              console.error("[VoiceCache] Async cache write failed:", err);
-            });
-            return response;
-          }
+          const blob = await fetchAndCache(filename, targetUrl, init);
+          return new Response(blob, {
+            status: 200,
+            statusText: "OK",
+            headers: {
+              "Content-Type": targetUrl.endsWith(".json") ? "application/json" : "application/octet-stream",
+              "Content-Length": String(blob.size),
+            },
+          });
         } catch (err) {
           console.error(`[VoiceCache] Network request failed for ${filename}:`, err);
         }
@@ -284,34 +309,51 @@ export async function downloadVoice(
   const jsonBlob = await jsonRes.blob();
   await saveCachedFile(jsonFilename, jsonBlob);
 
-  // 2. Download ONNX model file with progress tracking
-  const onnxRes = await fetchFn(onnxUrl);
-  if (!onnxRes.ok) throw new Error(`Failed to download voice model file`);
+  // 2. Download/Cache ONNX model file with progress tracking
+  let onnxPromise = activeModelFetches.get(onnxFilename);
+  if (!onnxPromise) {
+    onnxPromise = (async () => {
+      const onnxRes = await fetchFn(onnxUrl);
+      if (!onnxRes.ok) throw new Error(`Failed to download voice model file`);
 
-  const reader = onnxRes.body?.getReader();
-  const contentLength = +(onnxRes.headers.get("Content-Length") ?? 0);
+      const reader = onnxRes.body?.getReader();
+      const contentLength = +(onnxRes.headers.get("Content-Length") ?? 0);
 
-  if (!reader) {
-    const onnxBlob = await onnxRes.blob();
-    await saveCachedFile(onnxFilename, onnxBlob);
+      if (!reader) {
+        const onnxBlob = await onnxRes.blob();
+        await saveCachedFile(onnxFilename, onnxBlob);
+        onProgress?.(100);
+        return onnxBlob;
+      }
+
+      let receivedLength = 0;
+      const chunks: Uint8Array[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        receivedLength += value.length;
+        if (contentLength > 0) {
+          const pct = Math.round((receivedLength / contentLength) * 100);
+          onProgress?.(pct);
+        }
+      }
+
+      const onnxBlob = new Blob(chunks as any[], { type: "application/octet-stream" });
+      await saveCachedFile(onnxFilename, onnxBlob);
+      onProgress?.(100);
+      return onnxBlob;
+    })();
+
+    activeModelFetches.set(onnxFilename, onnxPromise);
+    onnxPromise.finally(() => {
+      activeModelFetches.delete(onnxFilename);
+    });
+  } else {
+    // Re-use active fetch promise
+    await onnxPromise;
     onProgress?.(100);
-    return;
   }
 
-  let receivedLength = 0;
-  const chunks: Uint8Array[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    receivedLength += value.length;
-    if (contentLength > 0) {
-      const pct = Math.round((receivedLength / contentLength) * 100);
-      onProgress?.(pct);
-    }
-  }
-
-  const onnxBlob = new Blob(chunks as any[], { type: "application/octet-stream" });
-  await saveCachedFile(onnxFilename, onnxBlob);
-  onProgress?.(100);
+  await onnxPromise;
 }

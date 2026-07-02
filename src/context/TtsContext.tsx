@@ -372,6 +372,17 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     const voice = availableVoices.find((v) => v.voiceURI === selectedVoiceUri);
 
     const playNeuralAudio = (audioUrl: string) => {
+      // 1. Clean up any currently playing audio immediately to prevent double audio playback
+      if (audioRef.current) {
+        try {
+          audioRef.current.onended = null;
+          audioRef.current.onerror = null;
+          audioRef.current.pause();
+        } catch (e) {}
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       audio.playbackRate = rate;
@@ -410,9 +421,12 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       // Pre-synthesize the next chunk in the background immediately!
       preSynthesizeNext(index + 1, sentenceList);
 
-      audio.play().catch(e => {
-        console.error("Audio play failed:", e);
-      });
+      // Only play if not paused or stopped
+      if (!isPausedRef.current && isPlayingRef.current) {
+        audio.play().catch(e => {
+          console.error("Audio play failed:", e);
+        });
+      }
     };
 
     if (voice?.isNeural) {
@@ -458,7 +472,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           }
         }).then((wavBlob: Blob) => {
           if (toastId) toast.dismiss(toastId);
-          if (loadingIndexRef.current !== index) {
+          
+          // Discard if the player was stopped or loading index changed
+          if (loadingIndexRef.current !== index || !isPlayingRef.current) {
             setIsNeuralLoading(false);
             return;
           }
@@ -466,7 +482,45 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
           const audioUrl = URL.createObjectURL(wavBlob);
           activeAudioUrlRef.current = audioUrl;
-          playNeuralAudio(audioUrl);
+
+          // If player was paused, initialize audio element but do not play
+          if (isPausedRef.current) {
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+            audio.playbackRate = rate;
+
+            audio.onended = () => {
+              if (isTransitioningRef.current) return;
+              isTransitioningRef.current = true;
+              if (activeAudioUrlRef.current === audioUrl) {
+                URL.revokeObjectURL(audioUrl);
+                activeAudioUrlRef.current = null;
+              }
+              const nextIdx = index + 1;
+              if (nextIdx < sentenceList.length) {
+                setCurrentSentenceIndex(nextIdx);
+              }
+              if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+              transitionTimeoutRef.current = setTimeout(() => {
+                transitionTimeoutRef.current = null;
+                if (isPausedRef.current) return;
+                speakSentence(nextIdx, sentenceList);
+              }, 250);
+            };
+
+            audio.onerror = (err) => {
+              console.error("Neural playback error:", err);
+              if (activeAudioUrlRef.current === audioUrl) {
+                URL.revokeObjectURL(audioUrl);
+                activeAudioUrlRef.current = null;
+              }
+              setIsPlaying(false);
+            };
+
+            preSynthesizeNext(index + 1, sentenceList);
+          } else {
+            playNeuralAudio(audioUrl);
+          }
         }).catch((err: any) => {
           if (toastId) toast.dismiss(toastId);
           if (loadingIndexRef.current !== index) return;
