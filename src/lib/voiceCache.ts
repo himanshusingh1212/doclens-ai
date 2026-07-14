@@ -4,29 +4,20 @@ const DB_NAME = "doclens-voice-cache";
 const DB_VERSION = 1;
 const STORE_NAME = "voice-files";
 
-export const PATH_MAP: Record<string, string> = {
-  "hi_IN-rohan-medium": "hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx",
-  "hi_IN-priyamvada-medium": "hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx",
-  "hi_IN-pratham-medium": "hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx",
-  "en_US-amy-low": "en/en_US/amy/low/en_US-amy-low.onnx",
-  "en_US-amy-medium": "en/en_US/amy/medium/en_US-amy-medium.onnx",
-  "en_US-kristin-medium": "en/en_US/kristin/medium/en_US-kristin-medium.onnx",
-  "en_US-ryan-medium": "en/en_US/ryan/medium/en_US-ryan-medium.onnx",
-  "en_US-joe-medium": "en/en_US/joe/medium/en_US-joe-medium.onnx",
-  "en_US-lessac-medium": "en/en_US/lessac/medium/en_US-lessac-medium.onnx",
-};
+/**
+ * Runtime-extensible path registry for Piper voice models.
+ * Entries are added dynamically when the VITS catalog loads,
+ * plus manually for voices from the rhasspy repository.
+ */
+export const PATH_MAP: Record<string, string> = {};
 
-export const NEURAL_VOICES = [
-  { id: "hi_IN-rohan-medium", name: "Rohan", lang: "hi-IN" },
-  { id: "hi_IN-priyamvada-medium", name: "Priyamvada", lang: "hi-IN" },
-  { id: "hi_IN-pratham-medium", name: "Pratham", lang: "hi-IN" },
-  { id: "en_US-amy-medium", name: "Amy", lang: "en-US" },
-  { id: "en_US-kristin-medium", name: "Kristin", lang: "en-US" },
-  { id: "en_US-ryan-medium", name: "Ryan", lang: "en-US" },
-  { id: "en_US-joe-medium", name: "Joe", lang: "en-US" },
-  { id: "en_US-lessac-medium", name: "Lessac", lang: "en-US" },
-  { id: "en_US-amy-low", name: "Amy (Low)", lang: "en-US" },
-];
+/**
+ * Register a voice path into the runtime PATH_MAP.
+ * Called dynamically as the Piper catalog loads.
+ */
+export function registerVoicePath(voiceId: string, onnxPath: string): void {
+  PATH_MAP[voiceId] = onnxPath;
+}
 
 let isInitialized = false;
 let originalFetch: typeof window.fetch | null = null;
@@ -226,18 +217,19 @@ export function initVoiceCache() {
   window.fetch = async function (input, init) {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : "";
 
-    // 1. Redirect Hindi voices to Rhasspy repository v1.0.0
+    // 1. Redirect diffusionstudio to rhasspy repository
     let targetUrl = url;
-    if (url.includes("/hi/hi_IN/")) {
+    if (url.includes("https://huggingface.co/diffusionstudio/piper-voices/resolve/main/")) {
       targetUrl = url.replace(
-        "https://huggingface.co/diffusionstudio/piper-voices/resolve/main",
-        "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
+        "https://huggingface.co/diffusionstudio/piper-voices/resolve/main/",
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
       );
     }
 
     // 2. Intercept downloads for Piper voice files
     const isPiperModel =
       targetUrl.includes("huggingface.co/diffusionstudio/piper-voices/resolve/main/") ||
+      targetUrl.includes("huggingface.co/rhasspy/piper-voices/resolve/main/") ||
       targetUrl.includes("huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/");
 
     if (isPiperModel && (targetUrl.endsWith(".onnx") || targetUrl.endsWith(".json"))) {
@@ -293,9 +285,7 @@ export async function downloadVoice(
     throw new Error(`Unknown voice ID: ${voiceId}`);
   }
 
-  const baseUrl = voiceId.startsWith("hi_IN-")
-    ? "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
-    : "https://huggingface.co/diffusionstudio/piper-voices/resolve/main";
+  const baseUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main";
 
   const onnxUrl = `${baseUrl}/${onnxPath}`;
   const jsonUrl = `${onnxUrl}.json`;

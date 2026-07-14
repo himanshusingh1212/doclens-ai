@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { splitSentences, getBrowserVoices } from "@/lib/tts";
 import { toast } from "sonner";
-import { initVoiceCache } from "@/lib/voiceCache";
+import { initVoiceCache, registerVoicePath, getCachedVoiceIds, downloadVoice as downloadVoiceFromCache, deleteCachedVoice } from "@/lib/voiceCache";
+import { getOutputLanguage } from "@/lib/openrouter";
+import { filterVoicesByLanguage, getLanguageEnglishName, LANGUAGES, type LanguageInfo } from "@/lib/voiceLanguageMap";
 
 export type TtsSource = "original" | "ai";
 
@@ -12,6 +14,7 @@ export interface TtsVoice {
   localService: boolean;
   default: boolean;
   isNeural?: boolean;
+  isDownloaded?: boolean;
 }
 
 interface TtsContextType {
@@ -24,8 +27,11 @@ interface TtsContextType {
   rate: number;
   selectedVoiceUri: string | null;
   availableVoices: TtsVoice[];
+  filteredVoices: TtsVoice[];
+  allNeuralVoices: TtsVoice[];
   continuousPlay: boolean;
   isNeuralLoading: boolean;
+  outputLanguage: string;
   
   play: (text: string, source: TtsSource, pageNumber: number, startIndex?: number) => void;
   pause: () => void;
@@ -37,6 +43,10 @@ interface TtsContextType {
   setRate: (rate: number) => void;
   setSelectedVoiceUri: (uri: string | null) => void;
   setContinuousPlay: (continuous: boolean) => void;
+  setOutputLanguage: (lang: string) => void;
+  downloadVoice: (voiceUri: string, onProgress?: (p: number) => void) => Promise<void>;
+  deleteVoice: (voiceUri: string) => Promise<void>;
+  refreshVoices: () => Promise<TtsVoice[]>;
 }
 
 const TtsContext = createContext<TtsContextType | undefined>(undefined);
@@ -100,6 +110,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const [availableVoices, setAvailableVoices] = useState<TtsVoice[]>([]);
   const [isNeuralLoading, setIsNeuralLoading] = useState(false);
   const [neuralVoices, setNeuralVoices] = useState<TtsVoice[]>([]);
+  const [outputLanguage, setOutputLanguageState] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return getOutputLanguage();
+    }
+    return "हिंदी";
+  });
+  // Raw Piper catalog entries for dynamic voice registration
+  const rawCatalogRef = useRef<any[]>([]);
   
   // Utterance and Audio refs to prevent garbage collection during playback
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -113,28 +131,42 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   // Track continuous sentence state to avoid race conditions
   const isTransitioningRef = useRef(false);
 
-  // Initialize and merge voices
-  useEffect(() => {
-    getBrowserVoices().then((voices) => {
-      const native: TtsVoice[] = voices.map((v) => ({
-        voiceURI: v.voiceURI,
-        name: v.name,
-        lang: v.lang,
-        localService: v.localService,
-        default: v.default,
-        isNeural: false,
-      }));
+  // Refresh voice list: merge native browser voices with neural catalog voices
+  const refreshVoices = useCallback(async () => {
+    const nativeSpeechVoices = await getBrowserVoices();
+    const native: TtsVoice[] = nativeSpeechVoices.map((v) => ({
+      voiceURI: v.voiceURI,
+      name: v.name,
+      lang: v.lang,
+      localService: v.localService,
+      default: v.default,
+      isNeural: false,
+    }));
 
-      const combined = [...native, ...neuralVoices];
-      setAvailableVoices(combined);
-      
-      // Auto-select default voice if none set
-      if (!selectedVoiceUri && combined.length > 0) {
-        const defaultVoice = combined.find(v => v.lang.startsWith("en") || v.default) || combined[0];
-        setSelectedVoiceUriState(defaultVoice.voiceURI);
-      }
-    });
-  }, [neuralVoices, selectedVoiceUri]);
+    // Build neural voice list from the raw catalog + cached IDs
+    let neural: TtsVoice[] = [];
+    if (rawCatalogRef.current.length > 0) {
+      const cachedIds = await getCachedVoiceIds();
+      neural = rawCatalogRef.current.map((v: any) => {
+        const langTag = v.language.code.replace("_", "-");
+        const englishName = v.language.name_english;
+        return {
+          voiceURI: v.key,
+          name: `✨ Neural ${v.name} (${englishName})`,
+          lang: langTag,
+          localService: true,
+          default: false,
+          isNeural: true,
+          isDownloaded: cachedIds.includes(v.key),
+        };
+      });
+    }
+
+    const combined = [...native, ...neural];
+    setAvailableVoices(combined);
+    setNeuralVoices(neural);
+    return combined;
+  }, []);
 
   // Load neural voices dynamically (Client-side only)
   useEffect(() => {
@@ -147,10 +179,38 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     import("@diffusionstudio/vits-web").then(async (mod) => {
       ttsRef.current = mod;
 
-      // Mutate PATH_MAP to register our Hindi and English neural voices
-      (mod.PATH_MAP as any)["hi_IN-rohan-medium"] = "hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx";
-      (mod.PATH_MAP as any)["hi_IN-priyamvada-medium"] = "hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx";
-      (mod.PATH_MAP as any)["hi_IN-pratham-medium"] = "hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx";
+      // Load the full Piper voice catalog from voices.json
+      let catalog: any[] = [];
+      try {
+        const res = await fetch("/voices.json");
+        if (res.ok) {
+          const json = await res.json();
+          catalog = Object.values(json);
+        }
+      } catch (err) {
+        console.error("Failed to load voices.json catalog:", err);
+      }
+
+      // Fallback to vits-web built-in voices if catalog failed to load
+      if (catalog.length === 0) {
+        try {
+          catalog = await mod.voices();
+        } catch (err) {
+          console.error("Failed to load VITS fallback voices:", err);
+        }
+      }
+
+      // Register all voice paths into PATH_MAP (for cache interceptor + vits-web)
+      for (const v of catalog) {
+        const fileKeys = Object.keys(v.files || {});
+        const onnxKey = fileKeys.find((k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"));
+        if (onnxKey) {
+          (mod.PATH_MAP as any)[v.key] = onnxKey;
+          registerVoicePath(v.key, onnxKey);
+        }
+      }
+
+      rawCatalogRef.current = catalog;
 
       // Import onnxruntime-web to monkeypatch session creation
       import("onnxruntime-web").then((ort: any) => {
@@ -176,56 +236,41 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to patch onnxruntime-web:", err);
       });
 
-      try {
-        const vitsVoices = await mod.voices();
-        
-        // Filter and map voices to include Hindi and English Neural voices
-        const englishNeural = vitsVoices
-          .filter((v: any) => v.key.startsWith("en_US-"))
-          .map((v: any) => ({
-            voiceURI: v.key,
-            name: `✨ Neural ${v.name} (US English - Download & Cache)`,
-            lang: "en-US",
-            localService: true,
-            default: false,
-            isNeural: true
-          }));
+      // Refresh voice list now that catalog is loaded
+      const voices = await refreshVoices();
 
-        const hindiNeural: TtsVoice[] = [
-          {
-            voiceURI: "hi_IN-rohan-medium",
-            name: "✨ Neural Rohan (Hindi - Download & Cache)",
-            lang: "hi-IN",
-            localService: true,
-            default: false,
-            isNeural: true
-          },
-          {
-            voiceURI: "hi_IN-priyamvada-medium",
-            name: "✨ Neural Priyamvada (Hindi - Download & Cache)",
-            lang: "hi-IN",
-            localService: true,
-            default: false,
-            isNeural: true
-          },
-          {
-            voiceURI: "hi_IN-pratham-medium",
-            name: "✨ Neural Pratham (Hindi - Download & Cache)",
-            lang: "hi-IN",
-            localService: true,
-            default: false,
-            isNeural: true
-          }
-        ];
-
-        setNeuralVoices([...hindiNeural, ...englishNeural]);
-      } catch (err) {
-        console.error("Failed to load VITS voices:", err);
+      // Auto-select default voice if none set
+      if (!selectedVoiceUri && voices.length > 0) {
+        const defaultVoice = voices.find(v => v.lang.startsWith("en") || v.default) || voices[0];
+        setSelectedVoiceUriState(defaultVoice.voiceURI);
       }
     }).catch((err) => {
       console.error("Failed to import @diffusionstudio/vits-web:", err);
     });
+  }, [refreshVoices]);
+
+  // Sync outputLanguage when window regains focus or storage changes
+  useEffect(() => {
+    const syncLanguage = () => {
+      const lang = getOutputLanguage();
+      setOutputLanguageState(lang);
+    };
+    window.addEventListener("focus", syncLanguage);
+    window.addEventListener("storage", syncLanguage);
+    return () => {
+      window.removeEventListener("focus", syncLanguage);
+      window.removeEventListener("storage", syncLanguage);
+    };
   }, []);
+
+  const setOutputLanguage = useCallback((lang: string) => {
+    setOutputLanguageState(lang);
+  }, []);
+
+  // Filtered voices by selected language
+  const filteredVoices = useMemo(() => {
+    return filterVoicesByLanguage(availableVoices, outputLanguage);
+  }, [availableVoices, outputLanguage]);
 
   // Setters with localStorage persistence
   const setRate = (newRate: number) => {
@@ -246,6 +291,19 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setContinuousPlayState(val);
     localStorage.setItem("doclens:tts-continuous", val.toString());
   };
+
+  // Auto-switch voice when language filter excludes current selection
+  useEffect(() => {
+    if (!selectedVoiceUri || filteredVoices.length === 0) return;
+    const currentVoiceInFiltered = filteredVoices.some((v) => v.voiceURI === selectedVoiceUri);
+    if (!currentVoiceInFiltered) {
+      const firstNeural = filteredVoices.find((v) => v.isNeural && v.isDownloaded);
+      const fallback = firstNeural || filteredVoices.find(v => v.isNeural) || filteredVoices[0];
+      if (fallback) {
+        setSelectedVoiceUri(fallback.voiceURI);
+      }
+    }
+  }, [filteredVoices, selectedVoiceUri]);
   const cleanupAudio = useCallback(() => {
     if (audioRef.current) {
       try {
@@ -644,6 +702,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     speakSentence(index, sentencesRef.current);
   }, [speakSentence, cleanupAudio]);
 
+  const downloadVoice = useCallback(async (voiceUri: string, onProgress?: (p: number) => void) => {
+    await downloadVoiceFromCache(voiceUri, onProgress);
+    await refreshVoices();
+  }, [refreshVoices]);
+
+  const deleteVoice = useCallback(async (voiceUri: string) => {
+    await deleteCachedVoice(voiceUri);
+    await refreshVoices();
+  }, [refreshVoices]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -710,8 +778,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         rate,
         selectedVoiceUri,
         availableVoices,
+        filteredVoices,
+        allNeuralVoices: neuralVoices,
         continuousPlay,
         isNeuralLoading,
+        outputLanguage,
         play,
         pause,
         resume,
@@ -721,7 +792,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         seekSentence,
         setRate,
         setSelectedVoiceUri,
-        setContinuousPlay
+        setContinuousPlay,
+        setOutputLanguage,
+        downloadVoice,
+        deleteVoice,
+        refreshVoices,
       }}
     >
       {children}

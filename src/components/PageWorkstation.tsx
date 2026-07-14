@@ -61,6 +61,7 @@ const QUICK_LANGS = [
   "বাংলা",
   "తెలుగు",
   "മലയാളം",
+  "தமிழ்",
   "English",
   "Spanish",
   "French",

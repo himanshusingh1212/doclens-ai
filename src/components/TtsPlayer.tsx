@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useMemo } from "react";
+import { getLanguageEnglishName } from "@/lib/voiceLanguageMap";
 
 interface TtsPlayerProps {
   text: string | undefined | null;
@@ -29,6 +30,8 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
     rate,
     selectedVoiceUri,
     availableVoices,
+    filteredVoices,
+    outputLanguage,
     continuousPlay,
     isNeuralLoading,
     play,
@@ -58,8 +61,15 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
   }, [isCurrentActive, currentSentenceIndex, sentences]);
 
   const sortedVoices = useMemo(() => {
-    return [...availableVoices].sort((a, b) => a.name.localeCompare(b.name));
-  }, [availableVoices]);
+    return [...filteredVoices].sort((a, b) => {
+      // Neural voices first
+      if (a.isNeural && !b.isNeural) return -1;
+      if (!a.isNeural && b.isNeural) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredVoices]);
+
+  const languageLabel = useMemo(() => getLanguageEnglishName(outputLanguage), [outputLanguage]);
 
   if (!text) {
     return null;
@@ -201,11 +211,11 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
                 {/* Voice Selection */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-medium text-muted-foreground">
-                    Voice Engine
+                    {languageLabel} Voices
                   </label>
-                  {availableVoices.length === 0 ? (
+                  {sortedVoices.length === 0 ? (
                     <div className="text-[11px] text-muted-foreground bg-surface-2/40 px-2 py-1.5 rounded-lg italic">
-                      No system voices found.
+                      No voices available for {languageLabel}. Install voices in <a href="/settings" className="text-primary underline">Settings</a>.
                     </div>
                   ) : (
                     <select
