@@ -87,7 +87,9 @@ function DocPage() {
         search: { page: p },
         replace: true,
       });
-      void updateDoc(id, { lastReadPage: p });
+      void updateDoc(id, { lastReadPage: p }).catch((e) =>
+        console.error("Failed to persist last-read page:", e),
+      );
     },
     [id, navigate],
   );
@@ -138,8 +140,14 @@ function DocPage() {
       setPageCount(pc);
       // Clamp activePage if the URL had a page beyond the document's range
       if (pc > 0 && activePage > pc) setActivePageRaw(pc);
-      await touchDoc(id);
-      await setLastOpened(id);
+      try {
+        await touchDoc(id);
+        await setLastOpened(id);
+      } catch (e) {
+        // Non-fatal — don't let a "last opened" bookkeeping failure block
+        // restoring the reader below.
+        console.error("Failed to update last-opened bookkeeping:", e);
+      }
 
       // If no page was passed in the URL search params, and there's a saved last read page:
       if (!urlPage && rec.lastReadPage) {
@@ -195,10 +203,12 @@ function DocPage() {
         setStatus(`done · ${collected.length} pages`);
         toast.success(`Extracted ${collected.length} pages successfully.`);
       } catch (e) {
+        console.error("Failed to save extracted pages:", e);
         if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
           toast.error(e.message);
         } else {
-          toast.error("Extraction complete but failed to save. Storage may be full.");
+          const detail = e instanceof Error ? e.message : String(e);
+          toast.error(`Extraction complete but failed to save: ${detail}`);
         }
         setAnalyzing(false);
         return;

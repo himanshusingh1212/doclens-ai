@@ -174,7 +174,7 @@ const api = {
 
   async updateDoc(id: string, patch: any): Promise<void> {
     // Read the document first to merge values
-    const existing = this.getDoc(id);
+    const existing = await this.getDoc(id);
     if (!existing) return;
 
     const merged = { ...existing, ...patch };

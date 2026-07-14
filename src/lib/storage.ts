@@ -249,7 +249,7 @@ class SqliteOpfsBackend implements StorageBackend {
   async getDocBlob(id: string): Promise<Blob | null> {
     const bytes: Uint8Array | null = await this.api.getDocBlob(id);
     if (!bytes) return null;
-    return new Blob([bytes], { type: "application/pdf" });
+    return new Blob([bytes as any], { type: "application/pdf" });
   }
 
   async createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
@@ -346,7 +346,7 @@ class SqliteOpfsBackend implements StorageBackend {
     const data = await this.api.getThumbnail(docId);
     if (!data) return null;
     if (data instanceof Uint8Array) {
-      const blob = new Blob([data]);
+      const blob = new Blob([data as any]);
       return URL.createObjectURL(blob);
     }
     return data; // returns dataurl string
@@ -912,7 +912,7 @@ export async function getPageMetas(
 
 export async function touchDoc(id: string): Promise<void> {
   const backend = await getBackend();
-  await backend.touchDoc?.(id) || await backend.updateDoc(id, { lastOpenedAt: Date.now() });
+  await backend.updateDoc(id, { lastOpenedAt: Date.now() });
   await backend.setLastOpened(id);
 }
 
