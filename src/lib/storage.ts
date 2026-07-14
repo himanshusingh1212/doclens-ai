@@ -212,9 +212,29 @@ export interface StorageBackend {
 // ----------------------------------------------------
 // SQLite WASM + OPFS Storage Backend
 // ----------------------------------------------------
+/**
+ * Max time to wait for any single SQLite/OPFS worker operation (post-init).
+ * OPFS SyncAccessHandles are exclusive per file — a tab that crashed or was
+ * force-closed while holding one can leave the file locked, in which case
+ * every subsequent operation on this backend would otherwise hang forever
+ * with no error, exactly like a broken worker/asset load did before. Bound
+ * it so the caller's existing error-handling UI (e.g. PdfViewer's "Failed to
+ * load PDF" state) kicks in instead of an infinite spinner.
+ */
+const SQLITE_OP_TIMEOUT_MS = 15_000;
+
 class SqliteOpfsBackend implements StorageBackend {
   private worker!: Worker;
   private api: any;
+
+  /** Invoke a method on the worker's API with a bounded timeout. */
+  private call<T>(method: string, ...args: unknown[]): Promise<T> {
+    return withTimeout(
+      this.api[method](...args),
+      SQLITE_OP_TIMEOUT_MS,
+      `Storage operation "${method}" timed out — the local database may be locked by another tab.`,
+    );
+  }
 
   async init(): Promise<void> {
     this.worker = new DBWorker();
@@ -239,15 +259,15 @@ class SqliteOpfsBackend implements StorageBackend {
   }
 
   async listDocs(): Promise<DocSummary[]> {
-    return this.api.listDocs();
+    return this.call("listDocs");
   }
 
   async getDoc(id: string): Promise<DocRecord | undefined> {
-    return this.api.getDoc(id);
+    return this.call("getDoc", id);
   }
 
   async getDocBlob(id: string): Promise<Blob | null> {
-    const bytes: Uint8Array | null = await this.api.getDocBlob(id);
+    const bytes: Uint8Array | null = await this.call("getDocBlob", id);
     if (!bytes) return null;
     return new Blob([bytes as any], { type: "application/pdf" });
   }
@@ -257,8 +277,9 @@ class SqliteOpfsBackend implements StorageBackend {
     const now = Date.now();
     const arrayBuffer = data instanceof Blob ? await data.arrayBuffer() : data;
     const bytes = new Uint8Array(arrayBuffer);
-    
-    await this.api.createDoc(
+
+    await this.call(
+      "createDoc",
       {
         id,
         fileName: file.name,
@@ -283,15 +304,15 @@ class SqliteOpfsBackend implements StorageBackend {
   }
 
   async updateDoc(id: string, patch: Partial<DocRecord>): Promise<void> {
-    await this.api.updateDoc(id, patch);
+    await this.call("updateDoc", id, patch);
   }
 
   async writePages(id: string, pages: PageExtraction[] | StoredPage[]): Promise<void> {
-    await this.api.writePages(id, pages);
+    await this.call("writePages", id, pages);
   }
 
   async getPageData(docId: string, pageNumber: number): Promise<PageDataRecord | undefined> {
-    return this.api.getPageData(docId, pageNumber);
+    return this.call("getPageData", docId, pageNumber);
   }
 
   async updatePageData(
@@ -299,51 +320,51 @@ class SqliteOpfsBackend implements StorageBackend {
     pageNumber: number,
     patch: Partial<Omit<PageDataRecord, "key" | "docId" | "pageNumber">>,
   ): Promise<void> {
-    await this.api.updatePageData(docId, pageNumber, patch);
+    await this.call("updatePageData", docId, pageNumber, patch);
   }
 
   async getAllPages(docId: string): Promise<PageDataRecord[]> {
-    return this.api.getAllPages(docId);
+    return this.call("getAllPages", docId);
   }
 
   async getPageAiSummary(docId: string): Promise<Record<number, PageAiSummaryEntry>> {
-    return this.api.getPageAiSummary(docId);
+    return this.call("getPageAiSummary", docId);
   }
 
   async getPageMetas(docId: string): Promise<{ pageNumber: number; columns: number; garbageRatio: number }[]> {
-    return this.api.getPageMetas(docId);
+    return this.call("getPageMetas", docId);
   }
 
   async deleteDoc(id: string): Promise<void> {
-    await this.api.deleteDoc(id);
+    await this.call("deleteDoc", id);
   }
 
   async appendAiResult(docId: string, result: AiResult): Promise<void> {
-    await this.api.appendAiResult(docId, result);
+    await this.call("appendAiResult", docId, result);
   }
 
   async deleteAiResult(docId: string, resultId: string): Promise<void> {
-    await this.api.deleteAiResult(docId, resultId);
+    await this.call("deleteAiResult", docId, resultId);
   }
 
   async upsertPageAi(docId: string, pageNumber: number, patch: Partial<PageAi>): Promise<void> {
-    await this.api.upsertPageAi(docId, pageNumber, patch);
+    await this.call("upsertPageAi", docId, pageNumber, patch);
   }
 
   async getLastOpened(): Promise<string | null> {
-    return this.api.getLastOpened();
+    return this.call("getLastOpened");
   }
 
   async setLastOpened(id: string | null): Promise<void> {
-    await this.api.setLastOpened(id);
+    await this.call("setLastOpened", id);
   }
 
   async clearAllAiResults(): Promise<void> {
-    await this.api.clearAllAiResults();
+    await this.call("clearAllAiResults");
   }
 
   async getThumbnail(docId: string): Promise<string | null> {
-    const data = await this.api.getThumbnail(docId);
+    const data = await this.call<Uint8Array | string | null>("getThumbnail", docId);
     if (!data) return null;
     if (data instanceof Uint8Array) {
       const blob = new Blob([data as any]);
@@ -355,7 +376,7 @@ class SqliteOpfsBackend implements StorageBackend {
   async saveThumbnailBlob(docId: string, blob: Blob): Promise<void> {
     const buffer = await blob.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    await this.api.saveThumbnailBlob(docId, bytes);
+    await this.call("saveThumbnailBlob", docId, bytes);
   }
 }
 
