@@ -421,7 +421,7 @@ export function PageWorkstation({
           const err = e instanceof Error ? e.message : "Unknown error";
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
-          if (e instanceof OpenRouterError && e.kind === "auth") {
+          if (e instanceof OpenRouterError && (e.kind === "auth" || e.kind === "quota")) {
             toast.error(err);
             openApiKeyModal(err);
           } else if (e instanceof OpenRouterError) {

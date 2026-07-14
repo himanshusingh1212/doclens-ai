@@ -308,6 +308,7 @@ export type OpenRouterErrorKind =
   | "auth"
   | "credits"
   | "rate_limit"
+  | "quota"
   | "server"
   | "network"
   | "unknown";
@@ -323,7 +324,11 @@ export class OpenRouterError extends Error {
   }
 }
 
-function friendlyOpenRouterError(status: number, body: string): OpenRouterError {
+function friendlyOpenRouterError(
+  status: number,
+  body: string,
+  isServerManagedKey: boolean,
+): OpenRouterError {
   if (status === 401 && body.includes("OPENROUTER_API_KEY"))
     return new OpenRouterError("OPENROUTER_API_KEY is not configured on the server.", 401, "auth");
   if (status === 401)
@@ -343,6 +348,15 @@ function friendlyOpenRouterError(status: number, body: string): OpenRouterError 
       "Your OpenRouter account is out of credits. Add credits or switch to a free model.",
       402,
       "credits",
+    );
+  if (status === 429 && isServerManagedKey)
+    return new OpenRouterError(
+      "The global free quota has been exhausted, so this service is temporarily unavailable. " +
+        "You can continue using the app by creating your own free OpenRouter API key, then paste " +
+        "it into the settings. This will use your personal free quota instead of the shared global " +
+        "quota, allowing you to keep using the service without waiting for the global limit to reset.",
+      429,
+      "quota",
     );
   if (status === 429)
     return new OpenRouterError(
@@ -483,6 +497,8 @@ async function readSseStream(
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
   let lastError: Error | null = null;
+  const resolvedUserKey = opts.key || getCustomKey();
+  const isServerManagedKey = !resolvedUserKey || resolvedUserKey === SERVER_KEY_SENTINEL;
 
   try {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -496,18 +512,20 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
 
       const body = { ...opts.payload, stream: true };
       const response = await completeWithServerOpenRouter({
-        data: { payload: body, userKey: opts.key || getCustomKey() },
+        data: { payload: body, userKey: resolvedUserKey },
         signal,
       });
 
       if (!response.ok) {
         const bodyText = await response.text();
-        const friendly = friendlyOpenRouterError(response.status, bodyText);
+        const friendly = friendlyOpenRouterError(response.status, bodyText, isServerManagedKey);
         if (friendly.kind === "auth") {
           setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
         }
         lastError = friendly;
-        if (isRetryable(response.status) && attempt < MAX_RETRIES) continue;
+        // A daily quota exhaustion won't clear within a short backoff — retrying wastes time.
+        if (friendly.kind !== "quota" && isRetryable(response.status) && attempt < MAX_RETRIES)
+          continue;
         throw friendly;
       }
 
