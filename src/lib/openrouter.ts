@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 
 export interface ORModel {
   id: string;
@@ -236,46 +237,52 @@ const fetchServerOpenRouterModels = createServerFn({ method: "POST" })
     return (json.data ?? []) as ORModel[];
   });
 
-interface CompletionResult {
-  ok: boolean;
-  status: number;
-  text?: string;
-  body?: string;
-}
-
+/**
+ * Proxies the OpenRouter chat-completions endpoint as a live SSE stream instead of
+ * buffering the full response. Returning a raw `Response` here (rather than a plain
+ * object) makes the TanStack Start client RPC hand back the real fetch `Response`
+ * un-deserialized, so the caller can read `response.body` as it arrives.
+ */
 const completeWithServerOpenRouter = createServerFn({ method: "POST" })
   .validator((input: { payload: Record<string, unknown>; userKey?: string }) => input)
-  .handler(async ({ data }): Promise<CompletionResult> => {
+  .handler(async ({ data }): Promise<Response> => {
     "use server";
     const key = getEffectiveKey(data.userKey);
     if (!key) {
-      return {
-        ok: false,
+      return new Response(JSON.stringify({ error: "No OpenRouter API key provided." }), {
         status: 401,
-        body: "No OpenRouter API key provided.",
-      };
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // Tie the upstream request to the incoming client connection so an aborted
+    // client request (page cancel/navigation) also cancels the OpenRouter call.
+    const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
         ...HEADERS_BASE,
       },
-      body: JSON.stringify({ ...data.payload, stream: false }),
+      body: JSON.stringify({ ...data.payload, stream: true }),
+      signal: getRequest().signal,
     });
 
-    const body = await res.text();
-    if (!res.ok) return { ok: false, status: res.status, body };
-
-    try {
-      const parsed = JSON.parse(body);
-      const text = parsed.choices?.[0]?.message?.content;
-      return { ok: true, status: res.status, text: typeof text === "string" ? text : "" };
-    } catch {
-      return { ok: false, status: 502, body: "OpenRouter returned an invalid JSON response." };
+    if (!upstream.ok || !upstream.body) {
+      const body = await upstream.text();
+      return new Response(body, {
+        status: upstream.status,
+        headers: { "Content-Type": "application/json" },
+      });
     }
+
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+      },
+    });
   });
 
 export async function validateKey(key?: string): Promise<boolean> {
@@ -423,6 +430,56 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/**
+ * Reads an OpenAI/OpenRouter-style SSE stream (`data: {...}\n\n`, terminated by
+ * `data: [DONE]`), invoking `onDelta` once per content chunk as it arrives — this
+ * is what makes the UI feel like it's flowing in real time instead of jumping from
+ * empty to complete.
+ */
+async function readSseStream(
+  body: ReadableStream<Uint8Array>,
+  onDelta: (text: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const onAbort = () => {
+    reader.cancel().catch(() => {});
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const rawEvent = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        for (const line of rawEvent.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === "[DONE]") return;
+          try {
+            const parsed = JSON.parse(payload);
+            const delta: unknown = parsed?.choices?.[0]?.delta?.content;
+            if (typeof delta === "string" && delta) onDelta(delta);
+          } catch {
+            // Ignore malformed/partial SSE chunks (e.g. OpenRouter keep-alive comments).
+          }
+        }
+      }
+    }
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
   let lastError: Error | null = null;
@@ -437,23 +494,31 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         await abortableDelay(delay, signal);
       }
 
-      const body = { ...opts.payload, stream: false };
-      const result: CompletionResult = await completeWithServerOpenRouter({
+      const body = { ...opts.payload, stream: true };
+      const response = await completeWithServerOpenRouter({
         data: { payload: body, userKey: opts.key || getCustomKey() },
         signal,
       });
 
-      if (!result.ok) {
-        const friendly = friendlyOpenRouterError(result.status, result.body ?? "");
+      if (!response.ok) {
+        const bodyText = await response.text();
+        const friendly = friendlyOpenRouterError(response.status, bodyText);
         if (friendly.kind === "auth") {
           setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
         }
         lastError = friendly;
-        if (isRetryable(result.status) && attempt < MAX_RETRIES) continue;
+        if (isRetryable(response.status) && attempt < MAX_RETRIES) continue;
         throw friendly;
       }
 
-      if (result.text) opts.onDelta(result.text);
+      if (!response.body) {
+        throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
+      }
+
+      // Once the stream has started, a mid-stream failure is surfaced as an error
+      // rather than retried — retrying here would re-run the whole prompt and
+      // duplicate whatever partial text has already reached the UI.
+      await readSseStream(response.body, opts.onDelta, signal);
       return; // Success
     }
 

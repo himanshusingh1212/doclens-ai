@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob } from "@/lib/storage";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
+import { LoadingLogo } from "@/components/LoadingLogo";
 
 interface Props {
   /** Document ID — binary is loaded on-demand from IndexedDB */
@@ -45,6 +46,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  /** Pages whose canvas has finished rendering — drives the per-page loading overlay. */
+  const [loadedPageNumbers, setLoadedPageNumbers] = useState<Set<number>>(new Set());
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
@@ -63,6 +66,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     setError(null);
     setDoc(null);
     setPageMetas([]);
+    setLoadedPageNumbers(new Set());
 
     (async () => {
       try {
@@ -134,6 +138,12 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     const tl = textLayerRefs.current.get(pageNumber);
     if (tl) tl.innerHTML = "";
     renderedPages.current.delete(pageNumber);
+    setLoadedPageNumbers((prev) => {
+      if (!prev.has(pageNumber)) return prev;
+      const next = new Set(prev);
+      next.delete(pageNumber);
+      return next;
+    });
     // Note: We intentionally do NOT call doc.getPage(n).cleanup() here.
     // That call re-fetches the page proxy into pdf.js's internal cache,
     // counterproductively increasing memory. doc.destroy() on unmount
@@ -194,6 +204,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
         }
 
         renderedPages.current.add(pageNumber);
+        setLoadedPageNumbers((prev) => new Set(prev).add(pageNumber));
 
         // Cap rendered set: drop oldest entries past MAX_RENDERED.
         const order = recentlyVisibleOrder.current;
@@ -395,11 +406,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest">
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          loading pdf…
-        </div>
+      <div className="flex h-full items-center justify-center pdf-viewer-bg">
+        <LoadingLogo size={96} label="Loading PDF…" />
       </div>
     );
   }
@@ -446,6 +454,11 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
               style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
               className={`relative flex-shrink-0 pdf-page-container ${activePage === meta.pageNumber ? "pdf-page-active" : ""}`}
             >
+              {!loadedPageNumbers.has(meta.pageNumber) && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface">
+                  <LoadingLogo size={64} />
+                </div>
+              )}
               <canvas
                 data-page-number={meta.pageNumber}
                 ref={(el) => {

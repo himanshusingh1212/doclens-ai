@@ -45,6 +45,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Info } from "lucide-react";
 import { HighlightableText } from "./HighlightableText";
+import { LoadingLogo } from "@/components/LoadingLogo";
 
 interface Props {
   docId: string;
@@ -967,9 +968,8 @@ function PageCardLoader(props: CardLoaderProps) {
 
   if (text === null) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/30 px-4 py-4 text-sm text-muted-foreground">
-        <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
-        Loading page {pageNumber}…
+      <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-border bg-surface/30">
+        <LoadingLogo size={72} label={`Loading page ${pageNumber}…`} />
       </div>
     );
   }
@@ -1214,13 +1214,13 @@ function PageCard({
       {/* ─── Result / Streaming content ─── */}
       <div className="reader-text">
         {isRunning ? (
-          <div className="whitespace-pre-wrap break-words">
-            {streamBuf || (
-              <span className="text-muted-foreground italic">
-                A bit longer, thanks for your patience... it might take up to 1 min
-              </span>
-            )}
-          </div>
+          streamBuf ? (
+            <div className="whitespace-pre-wrap break-words">{streamBuf}</div>
+          ) : (
+            <div className="flex items-center justify-center py-8">
+              <LoadingLogo size={56} label={`${modeLabel === "Translate" ? "Translating" : "Generating"}…`} />
+            </div>
+          )
         ) : state.result ? (
           <ReadableResult text={state.result} pageNumber={pageNumber} />
         ) : (

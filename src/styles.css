@@ -404,6 +404,77 @@
     }
   }
 
+  /* ─── Reusable loading logo (compact version of the startup preloader) ─── */
+  .loading-logo-ring {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .loading-logo-ring-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--foreground);
+    opacity: 0.15;
+    animation: loading-logo-ring-pulse 2s infinite ease-in-out;
+  }
+  .loading-logo-img {
+    position: relative;
+    z-index: 1;
+    object-fit: contain;
+    animation: loading-logo-pulse 2s infinite ease-in-out;
+  }
+  .loading-logo-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    opacity: 0.9;
+    animation: loading-logo-text-pulse 2s infinite ease-in-out;
+  }
+  @keyframes loading-logo-ring-pulse {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.1;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.25;
+    }
+    100% {
+      transform: scale(0.9);
+      opacity: 0.1;
+    }
+  }
+  @keyframes loading-logo-pulse {
+    0% {
+      transform: scale(0.96);
+      filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0));
+    }
+    50% {
+      transform: scale(1.04);
+      filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.25));
+    }
+    100% {
+      transform: scale(0.96);
+      filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0));
+    }
+  }
+  @keyframes loading-logo-text-pulse {
+    0% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 0.95;
+    }
+    100% {
+      opacity: 0.6;
+    }
+  }
+
   /* ─── Collapsible section ─── */
   .collapsible-content {
     display: grid;
