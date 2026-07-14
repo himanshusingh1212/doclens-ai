@@ -302,119 +302,7 @@ function SettingsPage() {
           </p>
         </header>
 
-        {/* Row 1: Output Language + Storage & Database */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Output Language */}
-          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6">
-            <div className="flex items-center gap-3">
-              <span className="text-xl text-primary">🌐</span>
-              <h3 className="text-lg font-semibold text-foreground">Output Language</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Default language for AI-generated summaries, translations, and text-to-speech.
-            </p>
-            <div className="relative">
-              <input
-                value={customLang}
-                onChange={(e) => setCustomLang(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCustomLang()}
-                placeholder="Search or type a custom language..."
-                className="w-full rounded-[10px] border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
-              />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                🔍
-              </span>
-            </div>
-            {/* Language Cards Grid */}
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
-              {LANGUAGES
-                .filter((l) => {
-                  if (!customLang.trim()) return true;
-                  const q = customLang.trim().toLowerCase();
-                  return (
-                    l.native.toLowerCase().includes(q) ||
-                    l.english.toLowerCase().includes(q) ||
-                    l.id.toLowerCase().includes(q)
-                  );
-                })
-                .map((l) => {
-                  const isSelected = language === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => handleLangSelect(l.id)}
-                      className={`group relative flex flex-col items-center justify-center gap-1 rounded-[16px] border px-3 py-4 text-center transition-all duration-300 active:scale-[0.97] hover:shadow-lg ${
-                        isSelected
-                          ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30 shadow-[0_0_20px_-4px] shadow-primary/25"
-                          : "border-border bg-surface/30 hover:border-border-strong hover:bg-surface/60"
-                      }`}
-                    >
-                      <span
-                        className={`text-lg font-bold leading-tight transition-transform duration-300 group-hover:scale-105 ${
-                          isSelected ? "text-primary" : "text-foreground"
-                        }`}
-                      >
-                        {l.native}
-                      </span>
-                      <span
-                        className={`text-[10px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
-                          isSelected ? "text-primary/80" : "text-muted-foreground group-hover:text-foreground/75"
-                        }`}
-                      >
-                        {l.english}
-                      </span>
-                      {isSelected && (
-                        <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground shadow-md font-bold">✓</span>
-                      )}
-                    </button>
-                  );
-                })}
-            </div>
-          </section>
-
-          {/* Storage & Memory Diagnostics */}
-          <section className="glass-panel flex flex-col rounded-[18px] p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-xl text-yellow-500">💾</span>
-              <h3 className="text-lg font-semibold text-foreground">
-                Storage & Memory Diagnostics
-              </h3>
-            </div>
-
-            {/* IDB Storage Bar */}
-            {storageStats && (
-              <div className="mb-5">
-                <div className="mb-2 flex justify-between text-xs font-bold text-muted-foreground">
-                  <span>IndexedDB Usage</span>
-                  <span className="text-foreground">
-                    {storageStats.usage} / {storageStats.quota}
-                  </span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-background">
-                  <div
-                    className="h-full rounded-full bg-yellow-500 transition-all"
-                    style={{ width: `${Math.min(storageStats.pctNum, 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Runtime Memory Diagnostics */}
-            <MemoryDiagnostics />
-
-            <div className="mt-5 flex justify-end">
-              <button
-                onClick={handleClearCache}
-                disabled={clearing}
-                className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50"
-              >
-                🗑️ {clearing ? "Clearing…" : "Clear AI Cache"}
-              </button>
-            </div>
-          </section>
-        </div>
-
-        {/* Row 2: AI Pipeline Defaults (full width) */}
+        {/* Row 1: AI Pipeline Defaults (full width) at the top */}
         <section className="glass-panel rounded-[18px] p-6">
           <div className="mb-6 flex items-center gap-3">
             <span className="text-xl text-accent">⚡</span>
@@ -538,125 +426,196 @@ function SettingsPage() {
           </div>
         </section>
 
-        {/* Neural Voice Cache Manager — Language-Aware */}
-        <section className="glass-panel rounded-[18px] p-6">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        {/* Row 2: Two-column layout (Output Language on left, Natural Voice Cache Manager on right) */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Output Language */}
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6">
             <div className="flex items-center gap-3">
-              <span className="text-xl text-primary">✨</span>
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Neural Voice Cache Manager</h3>
-                <p className="text-xs text-muted-foreground">
-                  Showing voices for <span className="font-semibold text-primary">{getLanguageEnglishName(language)}</span>. Pre-download and manage neural speech models for instant offline playback.
-                </p>
+              <span className="text-xl text-primary">🌐</span>
+              <h3 className="text-lg font-semibold text-foreground">Output Language</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Default language for AI-generated summaries, translations, and text-to-speech.
+            </p>
+            <div className="relative">
+              <input
+                value={customLang}
+                onChange={(e) => setCustomLang(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCustomLang()}
+                placeholder="Search or type a custom language..."
+                className="w-full rounded-[10px] border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                🔍
+              </span>
+            </div>
+            {/* Language Cards Grid */}
+            <div className="grid gap-3 overflow-y-auto max-h-[480px] pr-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
+              {LANGUAGES
+                .filter((l) => {
+                  if (!customLang.trim()) return true;
+                  const q = customLang.trim().toLowerCase();
+                  return (
+                    l.native.toLowerCase().includes(q) ||
+                    l.english.toLowerCase().includes(q) ||
+                    l.id.toLowerCase().includes(q)
+                  );
+                })
+                .map((l) => {
+                  const isSelected = language === l.id;
+                  return (
+                    <button
+                      key={l.id}
+                      onClick={() => handleLangSelect(l.id)}
+                      className={`group relative flex flex-col items-center justify-center gap-1 rounded-[16px] border px-3 py-4 text-center transition-all duration-300 active:scale-[0.97] hover:shadow-lg ${
+                        isSelected
+                          ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30 shadow-[0_0_20px_-4px] shadow-primary/25"
+                          : "border-border bg-surface/30 hover:border-border-strong hover:bg-surface/60"
+                      }`}
+                    >
+                      <span
+                        className={`text-lg font-bold leading-tight transition-transform duration-300 group-hover:scale-105 ${
+                          isSelected ? "text-primary" : "text-foreground"
+                        }`}
+                      >
+                        {l.native}
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                          isSelected ? "text-primary/80" : "text-muted-foreground group-hover:text-foreground/75"
+                        }`}
+                      >
+                        {l.english}
+                      </span>
+                      {isSelected && (
+                        <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground shadow-md font-bold">✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+          </section>
+
+          {/* Natural Voice Cache Manager — Language-Aware */}
+          <section className="glass-panel flex flex-col rounded-[18px] p-6">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xl text-primary">✨</span>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Natural Voice Cache Manager</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Showing voices for <span className="font-semibold text-primary">{getLanguageEnglishName(language)}</span>. Pre-download and manage neural speech models for instant offline playback.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${isOpfs ? "bg-primary/10 text-primary" : "bg-yellow-500/10 text-yellow-500"}`}>
+                  📁 Storage: {isOpfs ? "OPFS (Primary)" : "IndexedDB (Fallback)"}
+                </span>
+                <button
+                  onClick={handleClearVoiceCache}
+                  className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95"
+                >
+                  🗑️ Clear All Voices
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <span className={`rounded-full px-3 py-1 text-xs font-bold ${isOpfs ? "bg-primary/10 text-primary" : "bg-yellow-500/10 text-yellow-500"}`}>
-                📁 Storage: {isOpfs ? "OPFS (Primary)" : "IndexedDB (Fallback)"}
-              </span>
-              <button
-                onClick={handleClearVoiceCache}
-                className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95"
-              >
-                🗑️ Clear All Voices
-              </button>
-            </div>
-          </div>
 
-          {languageFilteredNeuralVoices.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface/30 px-6 py-10 text-center">
-              <span className="text-3xl mb-3">🔇</span>
-              <p className="text-sm font-medium text-muted-foreground">
-                No neural voices available for <span className="text-foreground font-semibold">{getLanguageEnglishName(language)}</span>.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Neural TTS voices are available for languages like Hindi, English, French, German, Spanish, and many more.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {languageFilteredNeuralVoices.map((voice) => {
-                const voiceId = voice.voiceURI;
-                const isCached = voice.isDownloaded;
-                const progress = downloadProgress[voiceId];
-                const isDownloading = progress !== undefined;
+            {languageFilteredNeuralVoices.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface/30 px-6 py-10 text-center my-auto">
+                <span className="text-3xl mb-3">🔇</span>
+                <p className="text-sm font-medium text-muted-foreground">
+                  No neural voices available for <span className="text-foreground font-semibold">{getLanguageEnglishName(language)}</span>.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Neural TTS voices are available for languages like Hindi, English, French, German, Spanish, and many more.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 overflow-y-auto max-h-[480px] pr-1">
+                {languageFilteredNeuralVoices.map((voice) => {
+                  const voiceId = voice.voiceURI;
+                  const isCached = voice.isDownloaded;
+                  const progress = downloadProgress[voiceId];
+                  const isDownloading = progress !== undefined;
 
-                return (
-                  <div
-                    key={voiceId}
-                    className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
-                      isCached
-                        ? "border-primary/20 bg-primary/5"
-                        : "border-border bg-background"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-bold text-foreground">{voice.name.replace(/^✨ Neural /, '')}</span>
-                        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
-                           {voice.lang}
+                  return (
+                    <div
+                      key={voiceId}
+                      className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
+                        isCached
+                          ? "border-primary/20 bg-primary/5"
+                          : "border-border bg-background"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-bold text-foreground">{voice.name.replace(/^✨ Neural /, '')}</span>
+                          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
+                             {voice.lang}
+                          </span>
+                        </div>
+                        <span className="block font-mono text-[10px] text-muted-foreground truncate mb-3">
+                          {voiceId}
                         </span>
                       </div>
-                      <span className="block font-mono text-[10px] text-muted-foreground truncate mb-3">
-                        {voiceId}
-                      </span>
-                    </div>
 
-                    <div className="flex items-center justify-between gap-4 mt-auto">
-                      <span className="text-xs font-semibold">
-                        {isDownloading ? (
-                          <span className="text-primary font-bold">
-                            ⏳ Downloading {progress}%
-                          </span>
-                        ) : isCached ? (
-                          <span className="text-primary flex items-center gap-1">
-                            🟢 Cached
-                          </span>
+                      <div className="flex items-center justify-between gap-4 mt-auto">
+                        <span className="text-xs font-semibold">
+                          {isDownloading ? (
+                            <span className="text-primary font-bold">
+                              ⏳ Downloading {progress}%
+                            </span>
+                          ) : isCached ? (
+                            <span className="text-primary flex items-center gap-1">
+                              🟢 Cached
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">⚪ Not Cached</span>
+                          )}
+                        </span>
+
+                        {isCached ? (
+                          <button
+                            onClick={() => handleDeleteVoice(voiceId)}
+                            className="rounded-full bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/20 active:scale-95 transition-all"
+                          >
+                            Delete
+                          </button>
                         ) : (
-                          <span className="text-muted-foreground">⚪ Not Cached</span>
+                          <button
+                            onClick={() => handleDownloadVoice(voiceId)}
+                            disabled={isDownloading}
+                            className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/95 active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            {isDownloading ? "Downloading…" : "Download"}
+                          </button>
                         )}
-                      </span>
+                      </div>
 
-                      {isCached ? (
-                        <button
-                          onClick={() => handleDeleteVoice(voiceId)}
-                          className="rounded-full bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/20 active:scale-95 transition-all"
-                        >
-                          Delete
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleDownloadVoice(voiceId)}
-                          disabled={isDownloading}
-                          className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/95 active:scale-95 transition-all disabled:opacity-50"
-                        >
-                          {isDownloading ? "Downloading…" : "Download"}
-                        </button>
+                      {isDownloading && (
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-background">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
 
-                    {isDownloading && (
-                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-background">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all duration-300"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Row 3: API Management + Model Selection */}
+        {/* Row 3: API Key Management + Model Selection */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          {/* API Management */}
+          {/* API Key Management */}
           <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6 md:col-span-5">
             <div className="flex items-center gap-3">
               <span className="text-xl text-primary">🔑</span>
-              <h3 className="text-lg font-semibold text-foreground">API Management</h3>
+              <h3 className="text-lg font-semibold text-foreground">API Key Management</h3>
             </div>
             <p className="text-sm text-muted-foreground">
               DocLens uses the server-managed key by default, but you can enter your own key here to
