@@ -214,6 +214,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       // Import onnxruntime-web to monkeypatch session creation
       import("onnxruntime-web").then((ort: any) => {
+        // Disable multi-threading to prevent memory issues without COOP/COEP headers
+        if (ort.env && ort.env.wasm) {
+          ort.env.wasm.numThreads = 1;
+        }
+
         if (!ort.InferenceSession.originalCreate) {
           ort.InferenceSession.originalCreate = ort.InferenceSession.create;
           const sessionCache = new Map<string, any>();
@@ -522,15 +527,23 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           voiceId: selectedVoiceUri
         }, (progress: any) => {
           if (loadingIndexRef.current !== index) return;
-          const pct = Math.round(progress.loaded * 100 / progress.total);
-          if (!toastId) {
-            toastId = toast.loading(`Downloading Voice Model: ${pct}%`);
-          } else {
-            toast.loading(`Downloading Voice Model: ${pct}%`, { id: toastId });
+          // Only show download toast if the voice model is not already downloaded
+          if (voice && !voice.isDownloaded) {
+            const pct = Math.round(progress.loaded * 100 / progress.total);
+            if (!toastId) {
+              toastId = toast.loading(`Downloading Voice Model: ${pct}%`);
+            } else {
+              toast.loading(`Downloading Voice Model: ${pct}%`, { id: toastId });
+            }
           }
         }).then((wavBlob: Blob) => {
           if (toastId) toast.dismiss(toastId);
           
+          // Trigger refresh of voices list to mark the voice as downloaded
+          if (voice && !voice.isDownloaded) {
+            void refreshVoices();
+          }
+
           // Discard if the player was stopped or loading index changed
           if (loadingIndexRef.current !== index || !isPlayingRef.current) {
             setIsNeuralLoading(false);
@@ -722,47 +735,55 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [cleanupAudio]);
 
+  // Track the last actual voice URI to detect voice changes
+  const lastVoiceUriRef = useRef<string | null>(selectedVoiceUri);
+
   // Automatically switch voice if changed during active playback
   useEffect(() => {
-    if (isPlayingRef.current && selectedVoiceUri) {
-      // Pause/Cancel the current playing engine
-      if (audioRef.current) {
-        try {
-          audioRef.current.onended = null;
-          audioRef.current.onerror = null;
-          audioRef.current.pause();
-        } catch (e) {}
-        audioRef.current.src = "";
-        audioRef.current = null;
-      }
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      
-      // Revoke any active URL
-      if (activeAudioUrlRef.current) {
-        try {
-          URL.revokeObjectURL(activeAudioUrlRef.current);
-        } catch (e) {}
-        activeAudioUrlRef.current = null;
-      }
-      
-      // Revoke pre-synthesized URL because it was for the old voice!
-      if (nextAudioUrlRef.current) {
-        try {
-          URL.revokeObjectURL(nextAudioUrlRef.current);
-        } catch (e) {}
-        nextAudioUrlRef.current = null;
-        nextAudioIndexRef.current = null;
-      }
+    if (selectedVoiceUri !== lastVoiceUriRef.current) {
+      const oldVoice = lastVoiceUriRef.current;
+      lastVoiceUriRef.current = selectedVoiceUri;
 
-      if (transitionTimeoutRef.current) {
-        clearTimeout(transitionTimeoutRef.current);
-        transitionTimeoutRef.current = null;
-      }
+      if (isPlayingRef.current && oldVoice && selectedVoiceUri) {
+        // Pause/Cancel the current playing engine
+        if (audioRef.current) {
+          try {
+            audioRef.current.onended = null;
+            audioRef.current.onerror = null;
+            audioRef.current.pause();
+          } catch (e) {}
+          audioRef.current.src = "";
+          audioRef.current = null;
+        }
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
+        
+        // Revoke any active URL
+        if (activeAudioUrlRef.current) {
+          try {
+            URL.revokeObjectURL(activeAudioUrlRef.current);
+          } catch (e) {}
+          activeAudioUrlRef.current = null;
+        }
+        
+        // Revoke pre-synthesized URL because it was for the old voice!
+        if (nextAudioUrlRef.current) {
+          try {
+            URL.revokeObjectURL(nextAudioUrlRef.current);
+          } catch (e) {}
+          nextAudioUrlRef.current = null;
+          nextAudioIndexRef.current = null;
+        }
 
-      // Resume playback at the current sentence with the new voice
-      speakSentence(currentSentenceIndexRef.current, sentencesRef.current);
+        if (transitionTimeoutRef.current) {
+          clearTimeout(transitionTimeoutRef.current);
+          transitionTimeoutRef.current = null;
+        }
+
+        // Resume playback at the current sentence with the new voice
+        speakSentence(currentSentenceIndexRef.current, sentencesRef.current);
+      }
     }
   }, [selectedVoiceUri, speakSentence]);
 

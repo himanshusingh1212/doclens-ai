@@ -18,6 +18,15 @@ export default defineConfig({
     },
   },
   vite: {
+    server: {
+      headers: {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
+      },
+    },
+    optimizeDeps: {
+      exclude: ["@sqlite.org/sqlite-wasm"],
+    },
     ssr: {
       external: ["pdfjs-dist"],
     },
