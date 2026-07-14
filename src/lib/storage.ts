@@ -218,8 +218,24 @@ class SqliteOpfsBackend implements StorageBackend {
 
   async init(): Promise<void> {
     this.worker = new DBWorker();
+    // If the worker script/wasm asset fails to load (e.g. a bad asset path in a
+    // production build), Comlink's proxy call below never receives a reply and
+    // hangs forever with no error — surface that as a rejection instead so the
+    // caller's timeout/fallback logic can kick in.
+    const workerFailure = new Promise<never>((_, reject) => {
+      this.worker.addEventListener(
+        "error",
+        (e) => reject(new Error(`Storage worker failed to load: ${e.message || "unknown error"}`)),
+        { once: true },
+      );
+      this.worker.addEventListener(
+        "messageerror",
+        () => reject(new Error("Storage worker sent an unreadable message.")),
+        { once: true },
+      );
+    });
     this.api = Comlink.wrap(this.worker);
-    await this.api.init();
+    await Promise.race([this.api.init(), workerFailure]);
   }
 
   async listDocs(): Promise<DocSummary[]> {
@@ -779,13 +795,39 @@ class IndexedDbBackend implements StorageBackend {
 // ----------------------------------------------------
 let backendPromise: Promise<StorageBackend> | null = null;
 
+/** Max time to wait for the SQLite/OPFS backend before giving up and falling back. */
+const SQLITE_INIT_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function getBackend(): Promise<StorageBackend> {
   if (!backendPromise) {
     backendPromise = (async () => {
       if (isOpfsSupported()) {
         try {
           const sqliteBackend = new SqliteOpfsBackend();
-          await sqliteBackend.init();
+          // Never let a broken worker/wasm asset (e.g. a production build/deploy
+          // issue) hang the whole app on "loading…" forever — bound the wait and
+          // fall back to plain IndexedDB if it doesn't come up in time.
+          await withTimeout(
+            sqliteBackend.init(),
+            SQLITE_INIT_TIMEOUT_MS,
+            "SQLite OPFS backend init timed out.",
+          );
           console.log("[Storage] Using high-performance SQLite WASM + OPFS backend.");
           return sqliteBackend;
         } catch (err) {

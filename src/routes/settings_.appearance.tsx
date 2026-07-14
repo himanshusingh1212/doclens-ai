@@ -108,7 +108,8 @@ function AppearanceSettingsPage() {
               <div>
                 <span className="text-base font-bold text-foreground">System Default</span>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Automatically match your operating system theme
+                  Automatically switches to light mode during the day and dark mode in the
+                  evening/night, based on your device's clock
                 </p>
               </div>
             </div>

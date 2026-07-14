@@ -110,7 +110,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
               var theme = localStorage.getItem('doclens-theme') || 'system';
               var isDark = false;
               if (theme === 'system') {
-                isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var hour = new Date().getHours();
+                isDark = !(hour >= 6 && hour < 18);
               } else {
                 var darkThemes = ['apple-dark', 'dark', 'ocean', 'forest', 'sunset', 'sea', 'mint'];
                 isDark = darkThemes.indexOf(theme) !== -1;

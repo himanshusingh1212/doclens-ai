@@ -535,20 +535,31 @@ export function findTheme(id: string): ThemeDefinition | undefined {
   return ALL_THEMES.find((t) => t.id === id);
 }
 
+/** Morning through late afternoon counts as "daytime" → light mode. */
+const DAY_START_HOUR = 6;
+/** From this hour onward (inclusive) counts as evening/night → dark mode. */
+const DAY_END_HOUR = 18;
+
+/** True if the system clock's current local hour falls within the daytime window. */
+export function isDaytimeNow(): boolean {
+  const hour = new Date().getHours();
+  return hour >= DAY_START_HOUR && hour < DAY_END_HOUR;
+}
+
 /**
  * Resolve which concrete theme should be used.
- * If "system", picks "apple-dark" or "apple" based on OS preference.
+ * If "system", picks light mode during the day and dark mode in the evening/night,
+ * based on the device's current system clock time (not the OS dark-mode setting).
  */
 export function resolveTheme(id: string): ThemeDefinition {
   if (id !== "system") {
     const t = findTheme(id);
     if (t) return t;
   }
-  // system / fallback
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return prefersDark
-    ? (findTheme("apple-dark") as ThemeDefinition) || (findTheme("dark") as ThemeDefinition)
-    : (findTheme("apple") as ThemeDefinition) || (findTheme("light") as ThemeDefinition);
+  // system / fallback — driven by time of day
+  return isDaytimeNow()
+    ? (findTheme("apple") as ThemeDefinition) || (findTheme("light") as ThemeDefinition)
+    : (findTheme("apple-dark") as ThemeDefinition) || (findTheme("dark") as ThemeDefinition);
 }
 
 /**
@@ -577,19 +588,21 @@ export function applyTheme(id: string): void {
   root.dataset.themeId = theme.id;
 }
 
+/** How often to re-check the clock for a light/dark boundary crossing. */
+const TIME_CHECK_INTERVAL_MS = 60_000;
+
 /**
- * Initialise the theme on app boot + listen for OS preference changes
- * when "system" is selected.
+ * Initialise the theme on app boot + keep re-checking the system clock so
+ * "system" mode flips between light and dark as the time of day crosses the
+ * morning/evening boundary while the app stays open (no page reload needed).
  */
 export function initTheme(): void {
   const id = getTheme();
   applyTheme(id);
 
-  // Re-apply when OS preference changes (only matters for "system")
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  mql.addEventListener("change", () => {
+  setInterval(() => {
     if (getTheme() === "system") {
       applyTheme("system");
     }
-  });
+  }, TIME_CHECK_INTERVAL_MS);
 }
