@@ -17,8 +17,16 @@
 
 The system routes requests based on the selected engine preference:
 
-1. **Neural (Piper):** WebAssembly-based local TTS engine. Used for high-quality, offline speech synthesis.
+1. **Neural (Piper):** WebAssembly-based local TTS engine. Used for high-quality, offline speech synthesis. Models are cached via the [[Voice Cache Layer]].
 2. **Browser (Web Speech API):** Standard browser synthesis engine. Used as a fallback or for unsupported languages.
+
+---
+
+## Playback Stability
+
+- **Voice Change Safeguard:** A `lastVoiceUriRef` mechanism prevents redundant model downloads and mid-playback restarts when rapidly switching voices.
+- **Single-Thread WASM:** The ONNX runtime is configured with `numThreads = 1` to minimize memory usage and avoid concurrency issues.
+- **Direct Synthesis:** Text chunks are synthesized directly (not buffered through an intermediate pipeline), reducing memory overhead and latency.
 
 ---
 
@@ -32,6 +40,7 @@ The system routes requests based on the selected engine preference:
 ## Relationships
 
 - **Engine detail:** [[Piper Neural TTS]], [[Web Speech API]].
+- **Caching:** [[Voice Cache Layer]].
 - **Team Owner:** [[Squad C — TTS]].
 - **Workflow:** [[Translation to TTS Workflow]].
 

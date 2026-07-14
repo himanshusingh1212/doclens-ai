@@ -20,6 +20,8 @@ Handles parsing, visual canvas generation, transparent text overlay layering, pa
    - Positioned over page canvases. Contains transparent text elements matching PDF text layout nodes to support cursor highlighting.
 3. **Floating Contextual Toolbar:**
    - Positioned dynamically above selection coordinates. Offers Copy, Translate, and Speak actions. See [[Text Selection Toolbar]].
+4. **Loading States:**
+   - Uses the [[LoadingLogo]] component for both the initial document loading state and individual canvas overlay placeholders while pages render.
 
 ---
 
@@ -36,6 +38,7 @@ Handles parsing, visual canvas generation, transparent text overlay layering, pa
 - **Used In:** [[Workspace Page]].
 - **Feature powered:** [[PDF Viewer]], [[Text Selection Toolbar]].
 - **APIs:** [[PDF.js]].
+- **Components:** [[LoadingLogo]].
 
 ---
 

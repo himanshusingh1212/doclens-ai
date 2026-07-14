@@ -244,6 +244,9 @@
   },
   "active": "c6d2d0aac5feb4b5",
   "lastOpenFiles": [
+    "Components/LoadingLogo.md",
+    "APIs/Voice Cache Layer.md",
+    "APIs/SQLite WASM + OPFS.md",
     "Teams/Squad C — TTS.md",
     "User Flows/End-to-End Pipeline.md",
     "Product/What is DocLens AI.md",
@@ -266,9 +269,6 @@
     "Components/Dropzone.md",
     "Components/DocumentCard.md",
     "Components/ApiKeyModal.md",
-    "APIs/MOC — APIs.md",
-    "APIs/IndexedDB Storage.md",
-    "_sources/04_voice_settings_page_design.md",
-    "_sources/03_settings_page_design.md"
+    "APIs/MOC — APIs.md"
   ]
 }

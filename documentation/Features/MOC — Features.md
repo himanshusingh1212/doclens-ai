@@ -9,12 +9,12 @@
 ### Reading & Ingestion
 
 - [[PDF Viewer]] — Lazy-rendering PDF view engine, canvas rendering, memory manager.
-- [[Document Management]] — Upload, metadata processing, thumbnails, IndexedDB storage, delete confirmation.
+- [[Document Management]] — Upload, metadata processing, thumbnails, storage, delete confirmation.
 - [[Text Selection Toolbar]] — Floating contextual menu providing Copy, Translate, and Speak actions.
 
 ### AI Processing
 
-- [[AI Translation]] — Output language settings, tone profiles, OpenRouter endpoint connections, streaming token parsing.
+- [[AI Translation]] — Output language settings, tone profiles, OpenRouter endpoint connections, SSE streaming token parsing.
 - [[Auto-Translate]] — Background execution parsing 3 pages ahead of current reading position.
 - [[Per-Page Overrides]] — Custom configurations (model, tone, temperature, custom prompt payload editor) per page.
 - [[API Key Management]] — Server key environment checks, client status badges, verification modal.
@@ -22,13 +22,12 @@
 ### Speech Synthesis
 
 - [[Text-to-Speech]] — Dynamic TTS orchestration, sentence splitting, voice preferences.
-- [[Piper Neural TTS]] — Local WASM-based neural engine, catalog downloads, ONNX caching.
+- [[Piper Neural TTS]] — Local WASM-based neural engine, dual-storage voice caching, direct synthesis pipeline.
 
-### Diagnostics & Integration
+### Export & Diagnostics
 
-- [[Memory Diagnostics]] — Real-time memory footprint diagnostics (Heap, Canvases, LocalStorage).
-- [[Memory & Storage Audit]] — Comprehensive audit of memory hotspots and optimization strategies.
 - [[Export System]] — Document and translation data exporter supporting Markdown and structured JSON.
+- [[Memory & Storage Audit]] — Comprehensive audit of memory hotspots and optimization strategies.
 
 ---
 

@@ -1,19 +1,20 @@
 # IndexedDB Storage
 
 > **Category:** Browser Native Database  
-> **W3C Standard:** [IndexedDB API](https://www.w3.org/TR/IndexedDatabase-2/)
+> **W3C Standard:** [IndexedDB API](https://www.w3.org/TR/IndexedDatabase-2/)  
+> **Status:** Fallback backend (since v6 migration to SQLite WASM + OPFS)
 
 ---
 
 ## Purpose
 
-**IndexedDB** is a local database built into the browser. DocLens uses it to store documents, metadata, cached AI results, and downloaded neural voice models.
+**IndexedDB** is a local database built into the browser. DocLens previously used it as the sole document storage backend. As of the SQLite WASM + OPFS migration, IndexedDB now serves as the **automatic fallback** when OPFS is unavailable (e.g., browsers lacking `SharedArrayBuffer` support or private/incognito windows).
 
 ---
 
 ## Database Schemas
 
-### 1. Documents Database (`doclens-store`)
+### 1. Documents Database (`doclens-store`) — Fallback
 
 - `document_blobs`: Stores raw PDF file binary data as Blob assets.
 - `document_metadata`: Stores metadata details (filename, page count, file size, extraction status).
@@ -21,22 +22,27 @@
 - `document_extractions`: Stores extracted text blocks, coordinate arrays, and garbage metrics per page.
 - `document_ai`: Stores cached AI results (translations, summaries, explanations) mapped to settings hashes.
 
-### 2. Neural Voices Database (`piper-voices`)
+### 2. Neural Voice Cache (`doclens-voice-cache`)
 
-- `voice_models`: Caches downloaded Piper voice ONNX files to enable offline TTS.
+- `voice-files`: Caches downloaded Piper voice ONNX model files and JSON configs for offline neural TTS. Used as a fallback when OPFS voice cache is unavailable.
 
 ---
 
-## Diagnostics & Management
+## Current Role in the Architecture
 
-- **Storage Statistics:** Uses `navigator.storage.estimate()` to show total storage usage on the [[General Settings Page]].
-- **Cache Clearing:** The settings page provides a clear cache option to drop the `document_ai` table, allowing users to free up space.
+The storage layer (`src/lib/storage.ts`) implements a **dual-backend dispatcher** pattern:
+
+1. **Primary:** `SqliteOpfsBackend` — SQLite WASM running in a Web Worker, accessed via Comlink RPC. Uses OPFS for persistent file storage.
+2. **Fallback:** `IdbBackend` — The original IndexedDB implementation. Activated automatically if OPFS/SharedArrayBuffer is not available.
+
+Both backends implement the same `StorageBackend` interface, making the switch transparent to the rest of the application.
 
 ---
 
 ## Relationships
 
-- **Feature powered:** [[Document Management]], [[Memory Diagnostics]], [[Piper Neural TTS]].
+- **Primary successor:** [[SQLite WASM + OPFS]].
+- **Feature powered:** [[Document Management]], [[Piper Neural TTS]] (voice cache fallback).
 - **Team Owner:** Jointly managed by all squads.
 
 ---

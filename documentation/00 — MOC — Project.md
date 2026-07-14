@@ -16,7 +16,7 @@
 ## User Experience
 
 - [[MOC — User Flows]] — How users accomplish tasks
-- [[MOC — Pages]] — The four application screens
+- [[MOC — Pages]] — The application screens
 - [[MOC — Features]] — Individual features and capabilities
 - [[MOC — Components]] — Reusable UI building blocks
 
@@ -27,6 +27,8 @@
 - [[MOC — Pipelines]] — PDF Extraction → Translation → TTS
 - [[MOC — APIs]] — External and browser API integrations
 - [[End-to-End Pipeline]] — Complete data flow diagram
+- [[SQLite WASM + OPFS]] — Primary storage backend architecture
+- [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
 
 ---
@@ -66,3 +68,5 @@ graph LR
 
     APIs --> Pipelines
 ```
+
+---

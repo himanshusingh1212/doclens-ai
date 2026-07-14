@@ -23,14 +23,17 @@ The workstation component acts as the main controller for the translation worksp
    - Provides reset buttons and a JSON payload editor.
 4. **Floating Background Batch Progress Pill:**
    - Renders in the bottom-right corner when auto-translate processes are running in the background.
+5. **Loading States:**
+   - Uses [[LoadingLogo]] as a branded placeholder during page rendering and processing.
 
 ---
 
 ## State & Engine Integration
 
-- **API Request Assembly:** Assembles query inputs (`buildPagePayload()`) and handles text streaming.
+- **SSE Streaming:** Uses real-time Server-Sent Events via `streamCompletion()` from [[OpenRouter API]] to pipe translation tokens to the UI progressively, updating `streamBufs` state every 150ms.
 - **Audio Playback Synchronization:** Uses the TTS manager to coordinate sentence highlights with speech.
 - **`localStorage` State Persistence:** Persists auto-translate preferences per document.
+- **Error Handling:** Granular error handling with descriptive toast messages for extraction failures, storage quota exhaustion, and API errors.
 
 ---
 
@@ -38,6 +41,7 @@ The workstation component acts as the main controller for the translation worksp
 
 - **Used In:** [[Workspace Page]].
 - **Feature powered:** [[AI Translation]], [[Auto-Translate]], [[Per-Page Overrides]], [[Text-to-Speech]].
+- **Components:** [[LoadingLogo]].
 
 ---
 

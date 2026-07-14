@@ -39,6 +39,7 @@ Uses a 50/50 vertical split layout on desktop, stacking into a single column on 
    - **Analyze Button / Re-Extract Icon:** Initiates text extraction on the PDF pages using the [[PDF Extraction Pipeline]].
 2. **PDF Viewer Canvas (Left):**
    - Renders PDF pages as high-resolution images overlaid with transparent text layers to support selections.
+   - Uses [[LoadingLogo]] for branded loading states while pages render.
    - Component details: [[PdfViewer]].
 3. **Floating Selection Toolbar:**
    - Appears contextually when text is highlighted in the PDF. Offers Copy, Translate, and Speak options.
@@ -47,7 +48,7 @@ Uses a 50/50 vertical split layout on desktop, stacking into a single column on 
    - Contains two tabs: "AI Assistant" (the workstation) and "Original Text" (raw extracted text view).
    - Component details: [[RightPanel]].
 5. **Page Workstation:**
-   - Handles the actual translation execution, sequential memory context, custom JSON parameter modifications, and TTS audio play controls.
+   - Handles the actual translation execution via SSE streaming, sequential memory context, custom JSON parameter modifications, and TTS audio play controls.
    - Component details: [[PageWorkstation]].
 
 ---
@@ -57,6 +58,8 @@ Uses a 50/50 vertical split layout on desktop, stacking into a single column on 
 - **Lazy Canvas Rendering & Eviction:** Only visible pages are drawn to canvas. When more than 5 canvases are rendered, the system evicts older canvases from GPU memory to prevent runtime crashes.
 - **Background Auto-Translation:** Ingests the next 3 pages in advance to ensure instant transitions when reading. See [[Auto-Translate]].
 - **Sentence-Level TTS Synced Highlighting:** Splices the AI results and guides playback by highlighting active speech blocks.
+- **Robust Error Handling:** Granular `.catch()` and `try/catch` blocks for bookkeeping operations (`touchDoc`, `setLastOpened`, `updateDoc`). Storage failures are logged but don't block the reader from functioning.
+- **SQLite WASM Storage:** All document data, extracted text, and AI results are persisted via [[SQLite WASM + OPFS]] (with [[IndexedDB Storage|IndexedDB]] fallback).
 
 ---
 

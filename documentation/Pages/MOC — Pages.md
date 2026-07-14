@@ -1,17 +1,17 @@
 # 📄 MOC — Pages
 
-> The four primary user-facing views of the DocLens AI application.
+> The primary user-facing views of the DocLens AI application.
 
 ---
 
 ## Application Routes & Pages
 
-| Page                      | Route             | Source File           | Purpose                                                  |
-| ------------------------- | ----------------- | --------------------- | -------------------------------------------------------- |
-| [[Library Page]]          | `/`               | `index.tsx`           | Landing experience, document upload, storage browsing    |
-| [[Workspace Page]]        | `/doc/$id`        | `doc.$id.tsx`         | Main split-panel reader, AI translation, TTS playback    |
-| [[General Settings Page]] | `/settings`       | `settings.tsx`        | Global AI configs, connection status, memory diagnostics |
-| [[Voice Settings Page]]   | `/settings/voice` | `settings_.voice.tsx` | TTS engine toggle, Piper catalog, browser voice selector |
+| Page                      | Route                   | Source File                | Purpose                                                       |
+| ------------------------- | ----------------------- | -------------------------- | ------------------------------------------------------------- |
+| [[Library Page]]          | `/`                     | `index.tsx`                | Landing experience, document upload, storage browsing          |
+| [[Workspace Page]]        | `/doc/$id`              | `doc.$id.tsx`              | Main split-panel reader, AI translation, TTS playback         |
+| [[General Settings Page]] | `/settings`             | `settings.tsx`             | AI pipeline config, output language, voice cache, API & model |
+| Appearance Settings       | `/settings/appearance`  | `settings_.appearance.tsx` | Visual theme and display preferences                          |
 
 ---
 
@@ -19,14 +19,14 @@
 
 All pages (except the Workspace) are wrapped in the shared navigation shell:
 
-- [[SidebarLayout]] — persistent navigation sidebar (Library, Settings, Voice Settings) and mobile drawer.
+- [[SidebarLayout]] — persistent navigation sidebar (Library, Settings) and mobile drawer.
 
 ```mermaid
 graph TD
     App[Root Layout] --> SL[SidebarLayout]
     SL --> Library[Library Page]
     SL --> GenSet[General Settings Page]
-    SL --> VoiceSet[Voice Settings Page]
+    SL --> Appearance[Appearance Settings]
     App --> Workspace[Workspace Page]
 ```
 

@@ -11,7 +11,7 @@
 | -------------------- | ---------------------------------------------------------------- |
 | [[MOC — Product]]    | What DocLens is, why it exists, design system, tech stack        |
 | [[MOC — User Flows]] | How users interact with the product end-to-end                   |
-| [[MOC — Pages]]      | The four application pages and their UI/UX design                |
+| [[MOC — Pages]]      | The application pages and their UI/UX design                     |
 | [[MOC — Features]]   | Every feature in detail — PDF viewer, AI translation, TTS, etc.  |
 | [[MOC — Components]] | Reusable React components powering the UI                        |
 | [[MOC — Pipelines]]  | The three core data pipelines: Extract → Translate → Speak       |
@@ -26,6 +26,8 @@
 - [[What is DocLens AI]] — Product overview in 60 seconds
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
+- [[SQLite WASM + OPFS]] — Primary high-performance storage backend
+- [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
 - [[Escalation Matrix]] — Who to contact for what
 - [[Glossary]] — Key terms and abbreviations
@@ -38,4 +40,4 @@ Original design documents and external reference logs/SOPs are archived in `_sou
 
 ---
 
-_Last updated: 2026-06-04_
+_Last updated: 2026-07-15_

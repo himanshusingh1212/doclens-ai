@@ -16,6 +16,7 @@
 | [[DocumentCard]]       | `DocumentCard.tsx`       | File cards containing thumbnails, sizes, and actions              |
 | [[ApiKeyModal]]        | `ApiKeyModal.tsx`        | Connection testing and key status dialog                          |
 | [[ExplainSetupDialog]] | `ExplainSetupDialog.tsx` | Configures mode, tone language and style default overrides        |
+| [[LoadingLogo]]        | `LoadingLogo.tsx`        | Branded pulsing logo animation for loading states                 |
 
 ---
 

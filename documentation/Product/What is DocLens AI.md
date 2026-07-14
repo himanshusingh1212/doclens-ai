@@ -23,10 +23,12 @@
 ## Key Differentiators
 
 1. **Privacy-first** — PDF processing happens entirely in the browser. Documents never leave the user's device.
-2. **Offline TTS** — Piper neural voices are downloaded once and cached locally via IndexedDB. No internet needed for playback.
+2. **Offline TTS** — Piper neural voices are downloaded once and cached locally via the [[Voice Cache Layer]] (OPFS + IndexedDB dual storage). No internet needed for playback.
 3. **Multi-language focus** — First-class support for Indian languages (Hindi, Bengali, Telugu, Malayalam) alongside global languages.
 4. **Per-page control** — Users can override AI settings (model, language, temperature, tone) on individual pages without changing global defaults.
 5. **Auto-translate** — Background pre-translation of upcoming pages creates a seamless ebook-like reading experience.
+6. **High-performance storage** — [[SQLite WASM + OPFS]] provides fast, reliable document persistence via a Web Worker, with automatic [[IndexedDB Storage|IndexedDB]] fallback.
+7. **Real-time streaming** — AI translations stream to the UI token-by-token via SSE, reducing perceived latency.
 
 ---
 
@@ -44,12 +46,11 @@
 
 ## Application Structure
 
-DocLens has four main pages:
+DocLens has three main pages plus a settings sub-route:
 
 1. [[Library Page]] — Upload and manage documents
 2. [[Workspace Page]] — View PDFs, translate, and listen
-3. [[General Settings Page]] — Configure AI pipeline defaults
-4. [[Voice Settings Page]] — Manage TTS voices and playback
+3. [[General Settings Page]] — Configure AI pipeline defaults, output language, voice cache, API keys, and model selection
 
 ---
 

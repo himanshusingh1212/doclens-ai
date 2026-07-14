@@ -9,60 +9,67 @@
 
 ## Purpose
 
-The **General Settings Page** configures global variables, manages IndexedDB storage quotas, hosts system connection checks, and monitors client runtime memory statistics.
+The **General Settings Page** is the unified configuration hub for the DocLens AI application. It combines AI pipeline configuration, output language selection, neural voice management, API connectivity, and model browsing into a single streamlined interface.
 
 ---
 
 ## Layout Structure
 
-Uses a `max-w-7xl` layout divided into three sections: configuration, diagnostics, and model browsing.
+Uses a `max-w-7xl` layout organized into three rows with a clean visual hierarchy:
 
 ```
-┌─── Row 1 ─────────────────────────┐
-│ 🌐 Output Language │ 💾 Storage & │
-│                    │  Memory Diag │
-├─── Row 2 ─────────────────────────┤
-│ ⚡ AI Pipeline Defaults            │
-├─── Row 3 ─────────────────────────┤
-│ 🔑 API Mgmt        │ 🧠 Model     │
-│                    │   Selection  │
-└────────────────────┴──────────────┘
+┌─── Row 1 (Full Width) ────────────────────┐
+│ ⚡ AI Pipeline Defaults                     │
+│ (Mode, Style, Temperature, Memory, Seq.)   │
+├─── Row 2 (Two Columns) ──────────────────┤
+│ 🌐 Output Language  │ 🎙️ Natural Voice   │
+│                      │    Cache Manager   │
+├─── Row 3 (Two Columns) ──────────────────┤
+│ 🔑 API Key Mgmt     │ 🧠 Model Selection │
+└──────────────────────┴────────────────────┘
 ```
 
 ---
 
 ## UI Components & Interactive Elements
 
-1. **Output Language Card:**
-   - Quick preset chips for regional and international languages (हिंदी, বাংলা, English, Spanish, etc.) plus a search bar for custom language parameters.
-2. **Storage & Memory Diagnostics Card:**
-   - Renders progress bars detailing [[IndexedDB Storage]] capacity.
-   - Hosts the **Memory Diagnostics Widget** tracking live JS Heap, Canvas Buffers, Image allocations, and LocalStorage footprint.
-   - **Clear AI Cache Button:** Drops all cached translations, leaving document models clean.
-3. **AI Pipeline Defaults:**
+1. **AI Pipeline Defaults (Row 1 — Full Width):**
    - Configures default parameters: Mode (Translate, Explain, Summarize, Custom), Tone Style (Standard, Academic, Simplified), LLM Temperature (Precise to Creative), Memory toggle, and Sequential execution.
-4. **API Management:**
-   - Displays connectivity status and handles connection verification.
-5. **Model Selection:**
-   - Displays compatible models fetched from the server. Filterable by tabs: `free`, `popular`, and `all`.
-   - Component details: [[AI Translation]].
+   - Positioned at the top for quick access since it's the most frequently adjusted section.
+
+2. **Output Language (Row 2 — Left Column):**
+   - Quick preset chips for regional and international languages (हिंदी, বাংলা, English, Spanish, etc.).
+   - Search bar for finding or typing a custom language.
+
+3. **Natural Voice Cache Manager (Row 2 — Right Column):**
+   - Displays neural voices available for the currently selected output language.
+   - Pre-download voices for offline use with real-time progress indicators.
+   - Delete individual cached voices to reclaim storage space.
+   - Powered by [[Voice Cache Layer]] (OPFS primary, IndexedDB fallback).
+
+4. **API Key Management (Row 3 — Left Column):**
+   - Displays server API key connectivity status.
+   - Optional custom API key input with connection verification.
+
+5. **Model Selection (Row 3 — Right Column):**
+   - Displays compatible LLM models fetched from the server via [[OpenRouter API]].
+   - Filterable by tabs: `free`, `popular`, and `all`.
 
 ---
 
-## Diagnostics Detail
+## Removed Sections
 
-The **Memory Diagnostics Widget** refreshes every 3 seconds, visualizing memory allocations to identify memory leaks. It highlights:
+The following sections were **removed** from the settings page UI to reduce clutter:
 
-- **JS Heap:** Dynamic JavaScript memory footprint.
-- **Canvas Buffers:** Raw pixel memory allocated to active PDF canvases.
-- **Data URL Images:** Decoded base64 thumbnail images in memory.
+- **Storage & Memory Diagnostics:** Previously showed IndexedDB capacity bars and JS Heap / Canvas buffer metrics. The `MemoryDiagnostics` component still exists in the source for debugging but is no longer rendered.
+- **Clear AI Cache Button:** Previously offered one-click purge of cached AI translations.
 
 ---
 
 ## Relationships
 
 - **Workflow:** Sets the configuration variables used by the [[PDF to Translation Workflow]].
-- **Team Ownership:** Core layout by [[Squad B — Translation]]; Diagnostics card co-owned by [[Shared Services]] DevOps and QA leads.
+- **Team Ownership:** Core layout by [[Squad B — Translation]]; Voice Cache managed by [[Squad C — TTS]].
 
 ---
 
