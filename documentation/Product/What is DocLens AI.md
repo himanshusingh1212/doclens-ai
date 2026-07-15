@@ -27,8 +27,7 @@
 3. **Multi-language focus** — First-class support for Indian languages (Hindi, Bengali, Telugu, Malayalam) alongside global languages.
 4. **Per-page control** — Users can override AI settings (model, language, temperature, tone) on individual pages without changing global defaults.
 5. **Auto-translate** — Background pre-translation of upcoming pages creates a seamless ebook-like reading experience.
-6. **High-performance storage** — [[SQLite WASM + OPFS]] provides fast, reliable document persistence via a Web Worker, with automatic [[IndexedDB Storage|IndexedDB]] fallback.
-7. **Real-time streaming** — AI translations stream to the UI token-by-token via SSE, reducing perceived latency.
+6. **Real-time streaming** — AI translations stream to the UI token-by-token via SSE, reducing perceived latency.
 
 ---
 

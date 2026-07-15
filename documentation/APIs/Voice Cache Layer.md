@@ -60,7 +60,7 @@ The [[General Settings Page]] hosts the **Natural Voice Cache Manager** section,
 ## Relationships
 
 - **Feature powered:** [[Piper Neural TTS]], [[Text-to-Speech]].
-- **APIs used:** [[SQLite WASM + OPFS]], [[IndexedDB Storage]].
+- **APIs used:** [[IndexedDB Storage]].
 - **Page integration:** [[General Settings Page]].
 - **Team Owner:** [[Squad C — TTS]].
 

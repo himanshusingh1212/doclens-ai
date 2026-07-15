@@ -59,7 +59,6 @@ Uses a 50/50 vertical split layout on desktop, stacking into a single column on 
 - **Background Auto-Translation:** Ingests the next 3 pages in advance to ensure instant transitions when reading. See [[Auto-Translate]].
 - **Sentence-Level TTS Synced Highlighting:** Splices the AI results and guides playback by highlighting active speech blocks.
 - **Robust Error Handling:** Granular `.catch()` and `try/catch` blocks for bookkeeping operations (`touchDoc`, `setLastOpened`, `updateDoc`). Storage failures are logged but don't block the reader from functioning.
-- **SQLite WASM Storage:** All document data, extracted text, and AI results are persisted via [[SQLite WASM + OPFS]] (with [[IndexedDB Storage|IndexedDB]] fallback).
 
 ---
 

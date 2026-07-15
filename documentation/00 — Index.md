@@ -26,7 +26,6 @@
 - [[What is DocLens AI]] — Product overview in 60 seconds
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
-- [[SQLite WASM + OPFS]] — Primary high-performance storage backend
 - [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
 - [[Escalation Matrix]] — Who to contact for what

@@ -1,20 +1,19 @@
 # IndexedDB Storage
 
 > **Category:** Browser Native Database  
-> **W3C Standard:** [IndexedDB API](https://www.w3.org/TR/IndexedDatabase-2/)  
-> **Status:** Fallback backend (since v6 migration to SQLite WASM + OPFS)
+> **W3C Standard:** [IndexedDB API](https://www.w3.org/TR/IndexedDatabase-2/)
 
 ---
 
 ## Purpose
 
-**IndexedDB** is a local database built into the browser. DocLens previously used it as the sole document storage backend. As of the SQLite WASM + OPFS migration, IndexedDB now serves as the **automatic fallback** when OPFS is unavailable (e.g., browsers lacking `SharedArrayBuffer` support or private/incognito windows).
+**IndexedDB** is a local database built into the browser. DocLens uses it to store documents, metadata, cached AI results, and downloaded neural voice models.
 
 ---
 
 ## Database Schemas
 
-### 1. Documents Database (`doclens-store`) — Fallback
+### 1. Documents Database (`doclens-store`)
 
 - `document_blobs`: Stores raw PDF file binary data as Blob assets.
 - `document_metadata`: Stores metadata details (filename, page count, file size, extraction status).
@@ -28,21 +27,16 @@
 
 ---
 
-## Current Role in the Architecture
+## Diagnostics & Management
 
-The storage layer (`src/lib/storage.ts`) implements a **dual-backend dispatcher** pattern:
-
-1. **Primary:** `SqliteOpfsBackend` — SQLite WASM running in a Web Worker, accessed via Comlink RPC. Uses OPFS for persistent file storage.
-2. **Fallback:** `IdbBackend` — The original IndexedDB implementation. Activated automatically if OPFS/SharedArrayBuffer is not available.
-
-Both backends implement the same `StorageBackend` interface, making the switch transparent to the rest of the application.
+- **Storage Statistics:** Uses `navigator.storage.estimate()` to show total storage usage on the [[General Settings Page]].
+- **Cache Clearing:** The settings page provides a clear cache option to drop the `document_ai` table, allowing users to free up space.
 
 ---
 
 ## Relationships
 
-- **Primary successor:** [[SQLite WASM + OPFS]].
-- **Feature powered:** [[Document Management]], [[Piper Neural TTS]] (voice cache fallback).
+- **Feature powered:** [[Document Management]], [[Piper Neural TTS]].
 - **Team Owner:** Jointly managed by all squads.
 
 ---

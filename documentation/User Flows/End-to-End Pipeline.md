@@ -31,8 +31,8 @@ flowchart LR
     end
 
     A --> B --> C --> D
-    D -->|"stored in SQLite/OPFS"| E --> F --> G
-    G -->|"stored in SQLite/OPFS"| H --> I --> J
+    D -->|"extraction stored in IDB"| E --> F --> G
+    G -->|"translation stored in IDB"| H --> I --> J
 ```
 
 ---
@@ -41,10 +41,10 @@ flowchart LR
 
 ### Stage 1: PDF Extraction
 
-- **Input:** PDF binary from [[SQLite WASM + OPFS]] (or [[IndexedDB Storage]] fallback)
+- **Input:** PDF binary from [[IndexedDB Storage]]
 - **Process:** [[PDF.js]] renders each page, extracts text content with position data
 - **Enhancements:** Column detection (single vs multi-column), garbage ratio filtering
-- **Output:** Per-page text + metadata stored in the active storage backend
+- **Output:** Per-page text + metadata stored in IndexedDB
 - **Team:** [[Squad A — PDF Extraction]]
 
 ### Stage 2: AI Translation
@@ -52,7 +52,7 @@ flowchart LR
 - **Input:** Extracted page text + user settings (mode, language, style, temperature)
 - **Process:** Payload built via `buildPagePayload()`, streamed via [[OpenRouter API]] using SSE
 - **Memory:** Optional previous-page context via `memoryExcerpt()`
-- **Output:** Translated/explained text stored with settings hash
+- **Output:** Translated/explained text stored in IndexedDB with settings hash
 - **Team:** [[Squad B — Translation]]
 
 ### Stage 3: Text-to-Speech
@@ -69,7 +69,7 @@ flowchart LR
 
 | Handoff                  | Format                   | Key Fields                                                      |
 | ------------------------ | ------------------------ | --------------------------------------------------------------- |
-| Upload → Extraction      | PDF binary (ArrayBuffer) | Stored as blob in SQLite OPFS (or IDB fallback)                |
+| Upload → Extraction      | PDF binary (ArrayBuffer) | Stored as blob in IDB                                           |
 | Extraction → Translation | `PageData` record        | `text`, `columns`, `pageNumber`                                 |
 | Translation → TTS        | `PageAi` record          | `result` (string), `status`, `settingsHash`                     |
 | Translation → Storage    | Settings hash            | `modelId`, `mode`, `language`, `style`, `temperature`, `memory` |
