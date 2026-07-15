@@ -4,8 +4,29 @@ import { toast } from "sonner";
 import { initVoiceCache, registerVoicePath, getCachedVoiceIds, downloadVoice as downloadVoiceFromCache, deleteCachedVoice } from "@/lib/voiceCache";
 import { getOutputLanguage } from "@/lib/openrouter";
 import { filterVoicesByLanguage, getLanguageEnglishName, LANGUAGES, type LanguageInfo } from "@/lib/voiceLanguageMap";
+import { getFriendlyErrorMessage, isOnline, OFFLINE_MESSAGE } from "@/lib/network";
 
 export type TtsSource = "original" | "ai";
+
+const TTS_VOICE_URI_LS = "doclens:tts-voice-uri";
+const TTS_ONBOARDED_LS = "doclens:tts-onboarded";
+
+/**
+ * Explicit flag set once the user has picked a language/voice through the
+ * onboarding dialog or settings. Kept separate from TTS_VOICE_URI_LS because
+ * that key can also be written by an automatic fallback (see the "Auto-switch
+ * voice when language filter excludes current selection" effect below), which
+ * would otherwise make onboarding look "complete" without any user action.
+ */
+export function hasCompletedTtsVoiceSetup(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(TTS_ONBOARDED_LS) === "true";
+}
+
+export function markTtsVoiceSetupComplete(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(TTS_ONBOARDED_LS, "true");
+}
 
 export interface TtsVoice {
   voiceURI: string;
@@ -80,8 +101,28 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     currentSentenceIndexRef.current = val;
   }, []);
 
-  const [currentTextSource, setCurrentTextSource] = useState<TtsSource | null>(null);
-  const [activePageNumber, setActivePageNumber] = useState<number | null>(null);
+  // Ref-paired like isPlaying/isPaused/etc above: play() calls setActivePageNumber
+  // and setCurrentTextSource and then synchronously invokes speakSentence in the
+  // same tick, before React re-renders — a plain useState closure inside
+  // speakSentence would therefore see the *previous* page's value for the whole
+  // recursive onended chain, never the one just set. That made the "continuous
+  // play && activePageNumber !== null" advance-to-next-page check at the bottom
+  // of speakSentence always evaluate against a stale (frequently null, always
+  // one page behind) value, so doclens:tts-next-page either never fired or fired
+  // with the wrong page number.
+  const activePageNumberRef = useRef<number | null>(null);
+  const [activePageNumber, setActivePageNumberState] = useState<number | null>(null);
+  const setActivePageNumber = useCallback((val: number | null) => {
+    setActivePageNumberState(val);
+    activePageNumberRef.current = val;
+  }, []);
+
+  const currentTextSourceRef = useRef<TtsSource | null>(null);
+  const [currentTextSource, setCurrentTextSourceState] = useState<TtsSource | null>(null);
+  const setCurrentTextSource = useCallback((val: TtsSource | null) => {
+    setCurrentTextSourceState(val);
+    currentTextSourceRef.current = val;
+  }, []);
   
   // Persist rate, voice, and continuous play to localStorage
   const [rate, setRateState] = useState<number>(() => {
@@ -94,7 +135,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   
   const [selectedVoiceUri, setSelectedVoiceUriState] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("doclens:tts-voice-uri");
+      return localStorage.getItem(TTS_VOICE_URI_LS);
     }
     return null;
   });
@@ -125,6 +166,10 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const activeAudioUrlRef = useRef<string | null>(null);
   const nextAudioUrlRef = useRef<string | null>(null);
   const nextAudioIndexRef = useRef<number | null>(null);
+  // The in-flight predict() promise backing nextAudioIndexRef, while it hasn't
+  // resolved to nextAudioUrlRef yet. Lets speakSentence await the same
+  // synthesis instead of starting a duplicate one for the same sentence.
+  const nextAudioPromiseRef = useRef<Promise<Blob> | null>(null);
   const loadingIndexRef = useRef<number | null>(null);
   const transitionTimeoutRef = useRef<any>(null);
   const ttsRef = useRef<any>(null);
@@ -214,24 +259,38 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       // Import onnxruntime-web to monkeypatch session creation
       import("onnxruntime-web").then((ort: any) => {
-        // Disable multi-threading to prevent memory issues without COOP/COEP headers
         if (ort.env && ort.env.wasm) {
+          // Run WASM inference in a Worker instead of the main thread. Without this,
+          // every predict() call synchronously blocks the UI for the full duration of
+          // synthesis (measured 10s+ stalls on a real sentence) — this is the actual
+          // cause of the "screen freezes/hangs" symptom during TTS playback.
+          ort.env.wasm.proxy = true;
+          // No COOP/COEP headers are set (removed in the storage-layer revert), so
+          // crossOriginIsolated is false and SharedArrayBuffer is unavailable —
+          // multi-threaded WASM cannot work here.
           ort.env.wasm.numThreads = 1;
         }
 
         if (!ort.InferenceSession.originalCreate) {
           ort.InferenceSession.originalCreate = ort.InferenceSession.create;
           const sessionCache = new Map<string, any>();
-          
+
           ort.InferenceSession.create = async function (model: any, options?: any) {
             const cacheKey = model instanceof ArrayBuffer
               ? `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`
               : String(model);
-            
+
             if (sessionCache.has(cacheKey)) {
               return sessionCache.get(cacheKey);
             }
-            
+
+            // vits-web's predict() resets numThreads to navigator.hardwareConcurrency
+            // and wasmPaths to a CDN URL before every single call (see its bundled
+            // N() function) — undo that right before the real session is created so
+            // it never requests multi-threaded WASM without SharedArrayBuffer support.
+            ort.env.wasm.proxy = true;
+            ort.env.wasm.numThreads = 1;
+
             const session = await ort.InferenceSession.originalCreate(model, options);
             sessionCache.set(cacheKey, session);
             return session;
@@ -286,9 +345,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const setSelectedVoiceUri = (uri: string | null) => {
     setSelectedVoiceUriState(uri);
     if (uri) {
-      localStorage.setItem("doclens:tts-voice-uri", uri);
+      localStorage.setItem(TTS_VOICE_URI_LS, uri);
     } else {
-      localStorage.removeItem("doclens:tts-voice-uri");
+      localStorage.removeItem(TTS_VOICE_URI_LS);
     }
   };
 
@@ -336,12 +395,13 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       transitionTimeoutRef.current = null;
     }
     nextAudioIndexRef.current = null;
+    nextAudioPromiseRef.current = null;
     loadingIndexRef.current = null;
   }, []);
 
   const preSynthesizeNext = useCallback((nextIndex: number, sentenceList: string[]) => {
     if (nextIndex < 0 || nextIndex >= sentenceList.length) return;
-    
+
     // If already pre-synthesized/synthesizing this index, skip
     if (nextAudioIndexRef.current === nextIndex) return;
 
@@ -355,11 +415,15 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     // Set the index to indicate background compilation in progress
     nextAudioIndexRef.current = nextIndex;
 
-    ttsRef.current.predict({
+    const promise: Promise<Blob> = ttsRef.current.predict({
       text: nextSentenceText,
       voiceId: selectedVoiceUri
-    }).then((wavBlob: Blob) => {
-      // Check if we are still on the path to play this (i.e. we haven't skipped past it)
+    });
+    nextAudioPromiseRef.current = promise;
+
+    promise.then((wavBlob: Blob) => {
+      // Check if we are still on the path to play this (i.e. we haven't skipped past it,
+      // and speakSentence hasn't already claimed this in-flight promise itself)
       if (nextAudioIndexRef.current === nextIndex) {
         if (nextAudioUrlRef.current) {
           URL.revokeObjectURL(nextAudioUrlRef.current);
@@ -370,6 +434,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       console.warn("Failed to pre-synthesize chunk:", err);
       if (nextAudioIndexRef.current === nextIndex) {
         nextAudioIndexRef.current = null;
+        nextAudioPromiseRef.current = null;
       }
     });
   }, [availableVoices, selectedVoiceUri]);
@@ -403,12 +468,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     loadingIndexRef.current = null;
 
     if (index < 0 || index >= sentenceList.length) {
-      // Completed current text source
-      if (continuousPlay && activePageNumber !== null) {
+      // Completed current text source. Read the *current* page/source off the
+      // refs (not the closure-captured state above) — see the comment on
+      // activePageNumberRef for why the plain state values are unreliable here.
+      if (continuousPlay && activePageNumberRef.current !== null) {
         // Auto-advance to next page
         window.dispatchEvent(
           new CustomEvent("doclens:tts-next-page", {
-            detail: { currentPage: activePageNumber, source: currentTextSource }
+            detail: { currentPage: activePageNumberRef.current, source: currentTextSourceRef.current }
           })
         );
       } else {
@@ -492,6 +559,44 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    // If the player was paused while this sentence's audio was being produced,
+    // set up the <audio> element without starting playback.
+    const initPausedAudio = (audioUrl: string) => {
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.playbackRate = rate;
+
+      audio.onended = () => {
+        if (isTransitioningRef.current) return;
+        isTransitioningRef.current = true;
+        if (activeAudioUrlRef.current === audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+          activeAudioUrlRef.current = null;
+        }
+        const nextIdx = index + 1;
+        if (nextIdx < sentenceList.length) {
+          setCurrentSentenceIndex(nextIdx);
+        }
+        if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = setTimeout(() => {
+          transitionTimeoutRef.current = null;
+          if (isPausedRef.current) return;
+          speakSentence(nextIdx, sentenceList);
+        }, 250);
+      };
+
+      audio.onerror = (err) => {
+        console.error("Neural playback error:", err);
+        if (activeAudioUrlRef.current === audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+          activeAudioUrlRef.current = null;
+        }
+        setIsPlaying(false);
+      };
+
+      preSynthesizeNext(index + 1, sentenceList);
+    };
+
     if (voice?.isNeural) {
       if (!ttsRef.current) {
         console.error("VITS TTS Engine not loaded yet.");
@@ -499,27 +604,79 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Check if this sentence was already pre-synthesized
       if (nextAudioUrlRef.current && nextAudioIndexRef.current === index) {
+        // Already fully pre-synthesized — use it immediately.
         const audioUrl = nextAudioUrlRef.current;
         activeAudioUrlRef.current = audioUrl;
 
-        // Reset next refs so the next index can pre-synthesize
         nextAudioUrlRef.current = null;
         nextAudioIndexRef.current = null;
+        nextAudioPromiseRef.current = null;
 
         playNeuralAudio(audioUrl);
+      } else if (nextAudioIndexRef.current === index && nextAudioPromiseRef.current) {
+        // A pre-synthesis for this exact sentence is already in flight (started
+        // ahead of time while the previous sentence was playing, but not done
+        // yet). Wait for that same synthesis instead of starting a duplicate
+        // one — starting a second predict() call here used to race with the
+        // in-flight one, producing and playing the same line twice and
+        // skipping the following line(s) once both resolved.
+        const promise = nextAudioPromiseRef.current;
+
+        // Claim the slot synchronously so preSynthesizeNext's own handler
+        // (attached earlier on the same promise) becomes a no-op when it runs.
+        nextAudioUrlRef.current = null;
+        nextAudioIndexRef.current = null;
+        nextAudioPromiseRef.current = null;
+
+        loadingIndexRef.current = index;
+        setIsNeuralLoading(true);
+
+        promise.then((wavBlob: Blob) => {
+          if (loadingIndexRef.current !== index || !isPlayingRef.current) {
+            setIsNeuralLoading(false);
+            return;
+          }
+          setIsNeuralLoading(false);
+
+          const audioUrl = URL.createObjectURL(wavBlob);
+          activeAudioUrlRef.current = audioUrl;
+
+          if (isPausedRef.current) {
+            initPausedAudio(audioUrl);
+          } else {
+            playNeuralAudio(audioUrl);
+          }
+        }).catch((err: any) => {
+          if (loadingIndexRef.current !== index) return;
+          setIsNeuralLoading(false);
+          console.error("Neural synthesis error:", err);
+          toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
+          setIsPlaying(false);
+        });
       } else {
-        // Mismatch or not pre-synthesized yet, revoke next if any and compile now
-        if (nextAudioUrlRef.current) {
-          URL.revokeObjectURL(nextAudioUrlRef.current);
+        // Nothing usable in flight for this exact index — invalidate any
+        // stale/mismatched pre-synthesis slot (e.g. left over from a skip)
+        // and compile fresh.
+        if (nextAudioIndexRef.current !== null) {
+          if (nextAudioUrlRef.current) {
+            URL.revokeObjectURL(nextAudioUrlRef.current);
+          }
           nextAudioUrlRef.current = null;
           nextAudioIndexRef.current = null;
+          nextAudioPromiseRef.current = null;
+        }
+
+        // Fail fast with a clear message instead of waiting on a doomed fetch
+        if (voice && !voice.isDownloaded && !isOnline()) {
+          setIsPlaying(false);
+          toast.error(OFFLINE_MESSAGE);
+          return;
         }
 
         loadingIndexRef.current = index;
         setIsNeuralLoading(true);
-        
+
         let toastId: string | number | undefined;
 
         ttsRef.current.predict({
@@ -538,7 +695,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           }
         }).then((wavBlob: Blob) => {
           if (toastId) toast.dismiss(toastId);
-          
+
           // Trigger refresh of voices list to mark the voice as downloaded
           if (voice && !voice.isDownloaded) {
             void refreshVoices();
@@ -556,39 +713,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
           // If player was paused, initialize audio element but do not play
           if (isPausedRef.current) {
-            const audio = new Audio(audioUrl);
-            audioRef.current = audio;
-            audio.playbackRate = rate;
-
-            audio.onended = () => {
-              if (isTransitioningRef.current) return;
-              isTransitioningRef.current = true;
-              if (activeAudioUrlRef.current === audioUrl) {
-                URL.revokeObjectURL(audioUrl);
-                activeAudioUrlRef.current = null;
-              }
-              const nextIdx = index + 1;
-              if (nextIdx < sentenceList.length) {
-                setCurrentSentenceIndex(nextIdx);
-              }
-              if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-              transitionTimeoutRef.current = setTimeout(() => {
-                transitionTimeoutRef.current = null;
-                if (isPausedRef.current) return;
-                speakSentence(nextIdx, sentenceList);
-              }, 250);
-            };
-
-            audio.onerror = (err) => {
-              console.error("Neural playback error:", err);
-              if (activeAudioUrlRef.current === audioUrl) {
-                URL.revokeObjectURL(audioUrl);
-                activeAudioUrlRef.current = null;
-              }
-              setIsPlaying(false);
-            };
-
-            preSynthesizeNext(index + 1, sentenceList);
+            initPausedAudio(audioUrl);
           } else {
             playNeuralAudio(audioUrl);
           }
@@ -597,7 +722,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           if (loadingIndexRef.current !== index) return;
           setIsNeuralLoading(false);
           console.error("Neural synthesis error:", err);
-          toast.error("Failed to generate neural speech");
+          toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
           setIsPlaying(false);
         });
       }
@@ -632,7 +757,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       window.speechSynthesis.speak(utterance);
     }
-  }, [availableVoices, selectedVoiceUri, rate, continuousPlay, activePageNumber, currentTextSource, preSynthesizeNext]);
+    // activePageNumber/currentTextSource are intentionally omitted — the
+    // completion branch above reads them via activePageNumberRef/
+    // currentTextSourceRef instead (see the comment where those refs are
+    // declared), so this callback doesn't need to be recreated when they change.
+  }, [availableVoices, selectedVoiceUri, rate, continuousPlay, preSynthesizeNext]);
 
   // Public controls
   const play = useCallback((text: string, source: TtsSource, pageNumber: number, startIndex: number = 0) => {

@@ -76,7 +76,10 @@ interface BatchRun {
   cancelled: boolean;
 }
 
-type PendingExplainAction = { type: "page"; pageNumber: number } | { type: "next" };
+type PendingExplainAction =
+  | { type: "page"; pageNumber: number }
+  | { type: "page-ensure"; pageNumber: number }
+  | { type: "next" };
 
 interface Globals {
   mode: GlobalMode;
@@ -128,6 +131,13 @@ function summarize(ai: PageAi): PageAiSummaryEntry {
     settingsHash: ai.settingsHash,
     updatedAt: ai.updatedAt,
   };
+}
+
+/** Notifies RightPanel that a page's AI content is fresh and ready to read aloud. */
+function dispatchPageReady(docId: string, pageNumber: number, result: string) {
+  window.dispatchEvent(
+    new CustomEvent("doclens:page-ready", { detail: { docId, pageNumber, result } }),
+  );
 }
 
 export function PageWorkstation({
@@ -296,11 +306,7 @@ export function PageWorkstation({
   /* ---------- Per-page execution ---------- */
 
   const runPage = useCallback(
-    async (
-      pageNumber: number,
-      prevExcerpt?: string,
-      batch?: BatchRun,
-    ): Promise<string | undefined> => {
+    async (pageNumber: number, batch?: BatchRun): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
       if (!key) {
@@ -323,6 +329,18 @@ export function PageWorkstation({
       if (selOverride) selectionOverridesRef.current.delete(pageNumber);
       const effectiveText = selOverride ?? pageRec.text;
 
+      // Derive memory context from the previous page's persisted result
+      // (rather than accepting it as a caller-supplied parameter) so that
+      // concurrent callers targeting the same page (ensure-page-ready,
+      // continuous-play prefetch, background batch) can safely share one
+      // in-flight run via runPageOnce without one caller's context silently
+      // clobbering another's.
+      let previousExcerpt: string | undefined;
+      if (eff.memory) {
+        const prevRec = await getPageData(docId, pageNumber - 1);
+        if (prevRec?.pageAi?.result) previousExcerpt = memoryExcerpt(prevRec.pageAi.result);
+      }
+
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
         payload = { ...state.customRequest, stream: true };
@@ -335,7 +353,7 @@ export function PageWorkstation({
           temperature: eff.temperature,
           pageNumber,
           pageText: effectiveText,
-          previousExcerpt: eff.memory ? prevExcerpt : undefined,
+          previousExcerpt,
         });
       }
 
@@ -448,20 +466,38 @@ export function PageWorkstation({
     [docId],
   );
 
+  // Dedupes concurrent generation requests for the same page — the manual
+  // Run button, the background pre-translate batch, and the ensure-ready /
+  // continuous-play-prefetch triggers can all target the same page number;
+  // this makes them share one in-flight run instead of racing.
+  const inFlightRuns = useRef<Map<number, Promise<string | undefined>>>(new Map());
+  const runPageOnce = useCallback(
+    (pageNumber: number, batch?: BatchRun): Promise<string | undefined> => {
+      const existing = inFlightRuns.current.get(pageNumber);
+      if (existing) return existing;
+      const p = runPage(pageNumber, batch).finally(() => {
+        inFlightRuns.current.delete(pageNumber);
+      });
+      inFlightRuns.current.set(pageNumber, p);
+      return p;
+    },
+    [runPage],
+  );
+
   const cancelPage = useCallback((pageNumber: number) => {
     abortMap.current.get(pageNumber)?.abort();
   }, []);
 
   // Listen for PDF-viewer "translate selection" events
-  const runPageRef = useRef(runPage);
-  runPageRef.current = runPage;
+  const runPageOnceRef = useRef(runPageOnce);
+  runPageOnceRef.current = runPageOnce;
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ docId: string; pageNumber: number; text: string }>;
       const d = ev.detail;
       if (!d || d.docId !== docId || !d.text) return;
       selectionOverridesRef.current.set(d.pageNumber, d.text);
-      void runPageRef.current(d.pageNumber);
+      void runPageOnceRef.current(d.pageNumber);
     };
     window.addEventListener("doclens:translate-selection", handler);
     return () => window.removeEventListener("doclens:translate-selection", handler);
@@ -474,10 +510,59 @@ export function PageWorkstation({
         setExplainSetupOpen(true);
         return;
       }
-      void runPage(pageNumber);
+      void runPageOnce(pageNumber);
     },
-    [runPage, shouldShowExplainSetup],
+    [runPageOnce, shouldShowExplainSetup],
   );
+
+  // Handle "ensure this page's AI content is ready" requests from RightPanel —
+  // driven by page navigation, continuous-play look-ahead, and AI-tab
+  // catch-up. Fast-paths to doclens:page-ready if already fresh; otherwise
+  // generates it, respecting the same explain-mode setup gate as a manual click.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ docId: string; pageNumber: number }>;
+      const d = ev.detail;
+      if (!d || d.docId !== docId) return;
+      const { pageNumber } = d;
+
+      void (async () => {
+        const pageRec = await getPageData(docId, pageNumber);
+        const state: PageAi = pageRec?.pageAi ?? { pageNumber, status: "idle" };
+
+        if (state.status === "done" && !!state.result) {
+          if (state.isCustom) {
+            dispatchPageReady(docId, pageNumber, state.result);
+            return;
+          }
+          const eff = effective(globalsRef.current, state.overrides);
+          const hash = computeSettingsHash({
+            modelId: eff.modelId,
+            mode: eff.mode,
+            language: eff.language,
+            style: eff.style,
+            temperature: eff.temperature,
+            memory: eff.memory,
+          });
+          if (state.settingsHash === hash) {
+            dispatchPageReady(docId, pageNumber, state.result);
+            return;
+          }
+        }
+
+        if (shouldShowExplainSetup()) {
+          setPendingExplainAction({ type: "page-ensure", pageNumber });
+          setExplainSetupOpen(true);
+          return;
+        }
+
+        const result = await runPageOnce(pageNumber);
+        if (result) dispatchPageReady(docId, pageNumber, result);
+      })();
+    };
+    window.addEventListener("doclens:ensure-page-ready", handler);
+    return () => window.removeEventListener("doclens:ensure-page-ready", handler);
+  }, [docId, runPageOnce, shouldShowExplainSetup]);
 
   /**
    * Background-translate the next N pages after the current `activePage`.
@@ -548,29 +633,18 @@ export function PageWorkstation({
     const total = pagesToRun.length;
     let errorCount = 0;
     let processedCount = 0;
-    let prev: string | undefined;
-
-    // Seed memory context from the current page if memory is enabled
-    const currentPageRec = await getPageData(docId, startPage);
-    const currentAi = currentPageRec?.pageAi;
-    if (currentAi?.result && freshGlobals.memory) {
-      prev = memoryExcerpt(currentAi.result);
-    }
 
     if (mountedRef.current) setBatchProgress({ current: 0, total, errors: 0 });
 
-    // Run sequentially in background — NO page navigation
+    // Run sequentially in background — NO page navigation. Each call derives
+    // its own memory context from the previous page's persisted result
+    // (see runPage), so no manual excerpt threading is needed here.
     for (const n of pagesToRun) {
       if (batch.cancelled) break;
 
       try {
-        const out = await runPage(n, prev, batch);
+        await runPageOnce(n, batch);
         if (batch.cancelled) break;
-        const currentGlobals = globalsRef.current;
-        const pageRec = await getPageData(docId, n);
-        const state: PageAi = pageRec?.pageAi ?? { pageNumber: n, status: "idle" };
-        const eff = effective(currentGlobals, state.overrides);
-        if (out && eff.memory) prev = memoryExcerpt(out);
       } catch {
         errorCount++;
       }
@@ -649,9 +723,9 @@ export function PageWorkstation({
 
     if (isIdle && !alreadyTried) {
       autoTranslatedPage1Ref.current[docId] = true;
-      void runPage(1);
+      void runPageOnce(1);
     }
-  }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPage]);
+  }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPageOnce]);
 
   // ─── Auto-trigger on page change ───
   const prevAutoPage = useRef(activePage);
@@ -693,7 +767,11 @@ export function PageWorkstation({
     const action = pendingExplainAction;
     setPendingExplainAction(null);
     if (action?.type === "next") void runNextPages();
-    else if (action?.type === "page") void runPage(action.pageNumber);
+    else if (action?.type === "page") void runPageOnce(action.pageNumber);
+    else if (action?.type === "page-ensure") {
+      const result = await runPageOnce(action.pageNumber);
+      if (result) dispatchPageReady(docId, action.pageNumber, result);
+    }
   };
 
   const cancelBatch = () => {
@@ -1068,7 +1146,9 @@ function PageCard({
     try {
       const parsed = JSON.parse(draft);
       if (typeof parsed !== "object" || !parsed) throw new Error("Not an object");
-      onUpdate({ customRequest: parsed, isCustom: true });
+      // Reset status so a stale pre-edit result is never mistaken for fresh
+      // output of this new custom request (see doclens:ensure-page-ready).
+      onUpdate({ customRequest: parsed, isCustom: true, status: "idle" });
       setEditingJson(false);
     } catch (e) {
       setDraftError(e instanceof Error ? e.message : "Invalid JSON");
@@ -1218,7 +1298,10 @@ function PageCard({
             <div className="whitespace-pre-wrap break-words">{streamBuf}</div>
           ) : (
             <div className="flex items-center justify-center py-8">
-              <LoadingLogo size={56} label={`${modeLabel === "Translate" ? "Translating" : "Generating"}…`} />
+              <LoadingLogo
+                size={56}
+                label={`${modeLabel === "Translate" ? "Translating" : "Generating"}…`}
+              />
             </div>
           )
         ) : state.result ? (

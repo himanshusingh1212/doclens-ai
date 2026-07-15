@@ -1,4 +1,9 @@
-import { useTts, type TtsSource } from "@/context/TtsContext";
+import {
+  hasCompletedTtsVoiceSetup,
+  markTtsVoiceSetupComplete,
+  useTts,
+  type TtsSource,
+} from "@/context/TtsContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Play,
@@ -17,9 +22,11 @@ interface TtsPlayerProps {
   text: string | undefined | null;
   source: TtsSource;
   pageNumber: number;
+  /** Requests the shared voice-onboarding dialog; `onReady` fires once a voice is selected/downloaded. */
+  onNeedsVoiceOnboarding: (onReady: () => void) => void;
 }
 
-export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
+export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: TtsPlayerProps) {
   const {
     isPlaying,
     isPaused,
@@ -46,9 +53,7 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
   } = useTts();
 
   const isCurrentActive =
-    isPlaying &&
-    currentTextSource === source &&
-    activePageNumber === pageNumber;
+    isPlaying && currentTextSource === source && activePageNumber === pageNumber;
 
   const progressPercent = useMemo(() => {
     if (!isCurrentActive || sentences.length === 0) return 0;
@@ -82,9 +87,15 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
       } else {
         pause();
       }
-    } else {
-      play(text, source, pageNumber, 0);
+      return;
     }
+
+    if (!hasCompletedTtsVoiceSetup()) {
+      onNeedsVoiceOnboarding(() => play(text, source, pageNumber, 0));
+      return;
+    }
+
+    play(text, source, pageNumber, 0);
   };
 
   return (
@@ -106,9 +117,7 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
             <h4 className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
               <Volume2 className="h-4 w-4 text-primary" />
               <span>
-                {isCurrentActive
-                  ? `Reading Page ${pageNumber}`
-                  : `Read Page ${pageNumber}`}
+                {isCurrentActive ? `Reading Page ${pageNumber}` : `Read Page ${pageNumber}`}
               </span>
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider bg-surface-2 px-1.5 py-0.5 rounded">
                 {source === "ai" ? "AI Summary" : "Original Text"}
@@ -215,12 +224,19 @@ export function TtsPlayer({ text, source, pageNumber }: TtsPlayerProps) {
                   </label>
                   {sortedVoices.length === 0 ? (
                     <div className="text-[11px] text-muted-foreground bg-surface-2/40 px-2 py-1.5 rounded-lg italic">
-                      No voices available for {languageLabel}. Install voices in <a href="/settings" className="text-primary underline">Settings</a>.
+                      No voices available for {languageLabel}. Install voices in{" "}
+                      <a href="/settings" className="text-primary underline">
+                        Settings
+                      </a>
+                      .
                     </div>
                   ) : (
                     <select
                       value={selectedVoiceUri || ""}
-                      onChange={(e) => setSelectedVoiceUri(e.target.value || null)}
+                      onChange={(e) => {
+                        setSelectedVoiceUri(e.target.value || null);
+                        markTtsVoiceSetupComplete();
+                      }}
                       className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
                     >
                       {sortedVoices.map((v) => (

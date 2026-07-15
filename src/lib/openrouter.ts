@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
+import { isNetworkError, OFFLINE_MESSAGE } from "./network";
 
 export interface ORModel {
   id: string;
@@ -299,7 +300,12 @@ export async function validateKey(key?: string): Promise<boolean> {
 
 export async function fetchModels(key?: string): Promise<ORModel[]> {
   const effectiveKey = key !== undefined ? key : getCustomKey();
-  return fetchServerOpenRouterModels({ data: { userKey: effectiveKey } });
+  try {
+    return await fetchServerOpenRouterModels({ data: { userKey: effectiveKey } });
+  } catch (err) {
+    if (isNetworkError(err)) throw new Error(OFFLINE_MESSAGE);
+    throw err;
+  }
 }
 
 /* -------- Friendly errors -------- */
@@ -511,10 +517,17 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       }
 
       const body = { ...opts.payload, stream: true };
-      const response = await completeWithServerOpenRouter({
-        data: { payload: body, userKey: resolvedUserKey },
-        signal,
-      });
+      let response: Awaited<ReturnType<typeof completeWithServerOpenRouter>>;
+      try {
+        response = await completeWithServerOpenRouter({
+          data: { payload: body, userKey: resolvedUserKey },
+          signal,
+        });
+      } catch (fetchErr) {
+        if (signal.aborted) throw fetchErr;
+        if (isNetworkError(fetchErr)) throw new OpenRouterError(OFFLINE_MESSAGE, 0, "network");
+        throw fetchErr;
+      }
 
       if (!response.ok) {
         const bodyText = await response.text();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 import { estimateTokens } from "@/lib/models";
@@ -12,9 +12,10 @@ import {
 } from "@/lib/storage";
 import { PageWorkstation } from "./PageWorkstation";
 import { checkTextQuality } from "@/lib/pdf";
-import { useTts, type TtsSource } from "@/context/TtsContext";
+import { hasCompletedTtsVoiceSetup, useTts, type TtsSource } from "@/context/TtsContext";
 import { TtsPlayer } from "./TtsPlayer";
 import { HighlightableText } from "./HighlightableText";
+import { VoiceOnboardingDialog } from "./VoiceOnboardingDialog";
 
 interface Props {
   docId: string;
@@ -106,7 +107,20 @@ export function RightPanel({
   const [showExport, setShowExport] = useState(false);
   const [activePageData, setActivePageData] = useState<PageDataRecord | null>(null);
 
-  const { isPlaying, activePageNumber, play, stop } = useTts();
+  const { isPlaying, activePageNumber, currentTextSource, continuousPlay, play, stop } = useTts();
+
+  // Read the current tab from a ref inside effects that shouldn't re-fire on
+  // every tab switch by themselves (only on the transitions they actually care
+  // about), while still seeing the latest value.
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+
+  const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
+  const voiceReadyCallbackRef = useRef<(() => void) | null>(null);
+  const requestVoiceOnboarding = (onReady: () => void) => {
+    voiceReadyCallbackRef.current = onReady;
+    setVoiceDialogOpen(true);
+  };
 
   const doneCount = useMemo(
     () => Object.values(aiSummary).filter((e) => e.status === "done").length,
@@ -140,20 +154,98 @@ export function RightPanel({
     };
   }, [activePage, pageCount, setActivePage]);
 
-  // Auto-play when advancing pages
+  // Auto-play when advancing pages on the "Original Text" tab. Raw extracted
+  // text needs no generation step (it's already in IDB from analysis), so
+  // this simple "play as soon as data is loaded" logic is still correct here.
+  // The "AI Assistant" tab's auto-play is handled by the
+  // doclens:ensure-page-ready / doclens:page-ready flow below instead, since
+  // that content needs to be generated first.
+  //
+  // `activePageData` is refetched on every aiSummary change, which fires
+  // repeatedly while Auto-Translate is streaming a page's AI text — without
+  // the guard below, each of those refetches would re-run this effect and
+  // call play() again for the same page (activePageNumber only catches up to
+  // activePage after React re-renders, which isn't guaranteed to happen
+  // before the next streaming update lands), resynthesizing/replaying
+  // sentence 0 and corrupting the pre-synthesis pipeline for the sentences
+  // after it.
+  const autoPlayedTransitionRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isPlaying && activePageNumber !== null && activePageNumber !== activePage) {
-      if (activePageData && activePageData.pageNumber === activePage) {
-        const textToRead = tab === "ai" ? activePageData?.pageAi?.result : activePageData?.text;
-        const source: TtsSource = tab === "ai" ? "ai" : "original";
-        if (textToRead) {
-          play(textToRead, source, activePage, 0);
-        } else {
-          stop();
-        }
+    if (tab !== "text") return;
+    const isPendingTransition =
+      isPlaying && activePageNumber !== null && activePageNumber !== activePage;
+
+    if (!isPendingTransition) {
+      autoPlayedTransitionRef.current = null;
+      return;
+    }
+
+    if (activePageData && activePageData.pageNumber === activePage) {
+      const transitionKey = `${activePage}:${tab}`;
+      if (autoPlayedTransitionRef.current === transitionKey) return;
+      autoPlayedTransitionRef.current = transitionKey;
+
+      const textToRead = activePageData?.text;
+      if (textToRead) {
+        play(textToRead, "original", activePage, 0);
+      } else {
+        stop();
       }
     }
   }, [activePage, activePageData, isPlaying, activePageNumber, tab, play, stop]);
+
+  // ─── AI-tab seamless auto-read orchestration ───
+
+  // 1. Whenever the AI tab needs a page ready — the page changed (click,
+  //    Prev/Next, page-select), or the user flipped back to "AI Assistant"
+  //    after a background translation may have finished while they were on
+  //    "Original Text" — ask PageWorkstation to ensure it's generated.
+  useEffect(() => {
+    if (tab !== "ai") return;
+    window.dispatchEvent(
+      new CustomEvent("doclens:ensure-page-ready", { detail: { docId, pageNumber: activePage } }),
+    );
+  }, [docId, activePage, tab]);
+
+  // 2. Continuous-play look-ahead: while the current page is playing, start
+  //    translating the next page in the background so it's ready by the time
+  //    doclens:tts-next-page advances to it.
+  useEffect(() => {
+    if (tab !== "ai" || !isPlaying || !continuousPlay || activePageNumber !== activePage) return;
+    const next = activePage + 1;
+    if (next <= pageCount) {
+      window.dispatchEvent(
+        new CustomEvent("doclens:ensure-page-ready", { detail: { docId, pageNumber: next } }),
+      );
+    }
+  }, [tab, isPlaying, continuousPlay, activePageNumber, activePage, pageCount, docId]);
+
+  // 3. Play a page's AI content once it's confirmed ready. Guarded so a page
+  //    that already finished auto-playing doesn't replay just because the
+  //    user tab-switched away and back.
+  const autoPlayedPagesRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    autoPlayedPagesRef.current = new Set();
+  }, [docId]);
+
+  useEffect(() => {
+    const handlePageReady = (e: Event) => {
+      const ev = e as CustomEvent<{ docId: string; pageNumber: number; result: string }>;
+      const d = ev.detail;
+      if (!d || d.docId !== docId || d.pageNumber !== activePage || tabRef.current !== "ai") return;
+      if (autoPlayedPagesRef.current.has(d.pageNumber)) return;
+      if (isPlaying && activePageNumber === d.pageNumber && currentTextSource === "ai") return;
+
+      autoPlayedPagesRef.current.add(d.pageNumber);
+      if (!hasCompletedTtsVoiceSetup()) {
+        requestVoiceOnboarding(() => play(d.result, "ai", d.pageNumber, 0));
+      } else {
+        play(d.result, "ai", d.pageNumber, 0);
+      }
+    };
+    window.addEventListener("doclens:page-ready", handlePageReady);
+    return () => window.removeEventListener("doclens:page-ready", handlePageReady);
+  }, [docId, activePage, isPlaying, activePageNumber, currentTextSource, play]);
 
   const textToRead = tab === "ai" ? activePageData?.pageAi?.result : activePageData?.text;
   const source: TtsSource = tab === "ai" ? "ai" : "original";
@@ -215,7 +307,11 @@ export function RightPanel({
 
       {/* ─── Body ─── */}
       <div className="flex-1 overflow-hidden">
-        {tab === "ai" && (
+        {/* Always mounted (CSS-hidden rather than unmounted) so background
+            generation and the doclens:ensure-page-ready listener survive
+            switching to the "Original Text" tab — see the auto-read
+            orchestration effects above. */}
+        <div className={`h-full ${tab === "ai" ? "" : "hidden"}`}>
           <PageWorkstation
             docId={docId}
             pageCount={pageCount}
@@ -224,7 +320,7 @@ export function RightPanel({
             activePage={activePage}
             setActivePage={setActivePage}
           />
-        )}
+        </div>
 
         {tab === "text" && (
           <ExtractedTextTab docId={docId} activePage={activePage} aiSummary={aiSummary} />
@@ -234,9 +330,24 @@ export function RightPanel({
       {/* Sticky bottom TTS Player */}
       {pageCount > 0 && activePageData && (
         <div className="border-t border-border bg-surface/40 px-4 pb-4 pt-2 shrink-0">
-          <TtsPlayer text={textToRead} source={source} pageNumber={activePage} />
+          <TtsPlayer
+            text={textToRead}
+            source={source}
+            pageNumber={activePage}
+            onNeedsVoiceOnboarding={requestVoiceOnboarding}
+          />
         </div>
       )}
+
+      <VoiceOnboardingDialog
+        open={voiceDialogOpen}
+        onOpenChange={setVoiceDialogOpen}
+        onReady={() => {
+          const cb = voiceReadyCallbackRef.current;
+          voiceReadyCallbackRef.current = null;
+          cb?.();
+        }}
+      />
     </div>
   );
 }

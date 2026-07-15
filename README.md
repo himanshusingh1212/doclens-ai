@@ -115,6 +115,15 @@ DocLens AI provides two TTS engines, selectable per language:
 - **Click-to-seek** — clicking any sentence jumps playback to that position
 - **Speed control** — adjustable from 0.25x to 4x
 - **Continuous reading** — automatically advances through pages, triggering translation of the next page if needed
+- **Seamless AI-tab auto-read** — switching to or navigating within the "AI Assistant" tab automatically generates (if needed) and reads each page aloud; while a page is playing with continuous reading on, the next page is pre-translated in the background so playback never stalls waiting on the LLM
+- **First-time voice onboarding** — the first time auto-read or the play button needs a voice, a one-time dialog walks the user through picking a language and voice (downloading it if it's a neural voice) before playback starts
+- **Offline-aware errors** — translation, model list, and voice download failures caused by a dropped connection surface a clear "No internet connection" message instead of a raw fetch error
+
+**Playback engine internals** (for contributors):
+
+- `TtsContext` tracks the active page/text-source in refs (not just React state) so the pre-synthesis and auto-advance logic always reads the current values, even mid-callback
+- In-flight sentence pre-synthesis is de-duplicated — if playback catches up to a sentence that's still being synthesized in the background, it awaits the same `predict()` call instead of starting a duplicate one
+- `PageWorkstation` de-dupes concurrent generation requests for the same page number (manual "Run", background pre-translate, and auto-read "ensure ready" can all target the same page) so they share one in-flight request
 
 ### 📤 Export System
 
@@ -265,6 +274,7 @@ doclens-ai/
 │   │   ├── RightPanel.tsx        # Translation output & export panel
 │   │   ├── Dropzone.tsx          # PDF file upload area
 │   │   ├── DocumentCard.tsx      # Library document thumbnails
+│   │   ├── VoiceOnboardingDialog.tsx  # First-time language/voice picker before auto-read
 │   │   └── ui/                   # shadcn/ui primitives
 │   ├── routes/              # TanStack Router file-based routes
 │   │   ├── index.tsx             # Library page — document management
@@ -280,6 +290,7 @@ doclens-ai/
 │   │   ├── storage.ts            # IndexedDB schema, CRUD operations
 │   │   ├── theme.ts              # Theme system (Deep Ocean + custom themes)
 │   │   ├── models.ts             # LLM model specs, token budgeting, chunking
+│   │   ├── network.ts            # Online/offline detection, friendly error messages
 │   │   └── neural-tts/           # Piper WASM engine, voice catalog
 │   ├── hooks/               # Custom React hooks
 │   └── types/               # TypeScript type definitions
@@ -376,7 +387,7 @@ DocLens AI supports **200+ language models** through the OpenRouter API, includi
 
 ### Does the text-to-speech work offline?
 
-Yes. DocLens AI uses Piper, an open-source neural text-to-speech system that runs entirely in the browser via WebAssembly. Voice models (ONNX format, 20–60 MB each) are downloaded once from the Piper catalog and cached in IndexedDB. After the initial download, speech synthesis works completely offline with no internet connection required. The inference runs in a dedicated Web Worker to keep the UI responsive during audio generation.
+Yes. DocLens AI uses Piper, an open-source neural text-to-speech system that runs entirely in the browser via WebAssembly. Voice models (ONNX format, 20–60 MB each) are downloaded once from the Piper catalog and cached in IndexedDB. After the initial download, speech synthesis works completely offline with no internet connection required. The inference runs in a dedicated Web Worker to keep the UI responsive during audio generation. If a voice hasn't been downloaded yet and the device is offline, DocLens AI fails fast with a clear "No internet connection" message rather than hanging on a doomed request.
 
 ---
 

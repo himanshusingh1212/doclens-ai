@@ -35,7 +35,8 @@ import {
   isOpfsSupported,
 } from "@/lib/voiceCache";
 import { filterVoicesByLanguage, getLanguageEnglishName, LANGUAGES } from "@/lib/voiceLanguageMap";
-import { useTts } from "@/context/TtsContext";
+import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
+import { getFriendlyErrorMessage } from "@/lib/network";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -119,7 +120,7 @@ function SettingsPage() {
       });
       toast.success(`Voice "${voiceId}" downloaded and cached successfully!`);
     } catch (err) {
-      toast.error(`Download failed: ${err instanceof Error ? err.message : "unknown"}`);
+      toast.error(getFriendlyErrorMessage(err, "Download failed. Please try again."));
     } finally {
       setDownloadProgress((prev) => {
         const next = { ...prev };
@@ -210,7 +211,7 @@ function SettingsPage() {
       const m = await fetchModels();
       setModels(m);
     } catch (e) {
-      setModelError(e instanceof Error ? e.message : "Failed to load models");
+      setModelError(getFriendlyErrorMessage(e, "Failed to load models"));
     } finally {
       setLoadingModels(false);
     }
@@ -239,6 +240,7 @@ function SettingsPage() {
     setLanguage(l);
     setOutputLanguage(l);
     setTtsLanguage(l);
+    markTtsVoiceSetupComplete();
   };
 
   const handleCustomLang = () => {
