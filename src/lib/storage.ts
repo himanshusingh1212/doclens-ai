@@ -42,7 +42,6 @@ export interface PageOverrides {
   modelId?: string;
   style?: string;
   temperature?: number;
-  memory?: boolean;
 }
 
 export interface StoredPage {
@@ -91,7 +90,6 @@ export function computeSettingsHash(input: {
   language: string;
   style: string;
   temperature: number;
-  memory: boolean;
 }): string {
   return [
     input.modelId,
@@ -99,7 +97,6 @@ export function computeSettingsHash(input: {
     input.language,
     input.style,
     input.temperature.toFixed(3),
-    input.memory ? "1" : "0",
   ].join("|");
 }
 

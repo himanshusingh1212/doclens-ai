@@ -10,13 +10,11 @@ import {
   hasCompletedAiPreferenceSetup,
   getKey,
   getKeyStatus,
-  getMemory,
   getMode,
   getOutputLanguage,
   getSelectedModel,
   getStyle,
   getTemperature,
-  memoryExcerpt,
   MODE_INSTRUCTIONS,
   EXPLANATION_STYLES,
   onKeyChange,
@@ -26,7 +24,6 @@ import {
   setOutputLanguage,
   setStyle as saveStyle,
   streamCompletion,
-  validateKey,
   type ExplanationStyle,
   type GlobalMode,
   type KeyStatus,
@@ -42,8 +39,6 @@ import {
   type PageOverrides,
 } from "@/lib/storage";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Info } from "lucide-react";
 import { HighlightableText } from "./HighlightableText";
 import { LoadingLogo } from "@/components/LoadingLogo";
 
@@ -72,14 +67,9 @@ const QUICK_LANGS = [
 /** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
 const STREAM_FLUSH_MS = 150;
 
-interface BatchRun {
-  cancelled: boolean;
-}
-
 type PendingExplainAction =
   | { type: "page"; pageNumber: number }
-  | { type: "page-ensure"; pageNumber: number }
-  | { type: "next" };
+  | { type: "page-ensure"; pageNumber: number };
 
 interface Globals {
   mode: GlobalMode;
@@ -87,7 +77,6 @@ interface Globals {
   modelId: string;
   style: string;
   temperature: number;
-  memory: boolean;
 }
 
 function effective(globals: Globals, ov?: PageOverrides) {
@@ -97,12 +86,8 @@ function effective(globals: Globals, ov?: PageOverrides) {
     modelId: ov?.modelId ?? globals.modelId,
     style: ov?.style ?? globals.style,
     temperature: ov?.temperature ?? globals.temperature,
-    memory: ov?.memory ?? globals.memory,
   };
 }
-
-/** How many un-translated pages to auto-process per batch. */
-const AUTO_TRANSLATE_COUNT = 3;
 
 function readGlobals(): Globals {
   return {
@@ -111,7 +96,6 @@ function readGlobals(): Globals {
     modelId: getSelectedModel(),
     style: getStyle(),
     temperature: getTemperature(),
-    memory: getMemory(),
   };
 }
 
@@ -155,31 +139,12 @@ export function PageWorkstation({
   const [streamBufs, setStreamBufs] = useState<Record<number, string>>({});
 
   const abortMap = useRef<Map<number, AbortController>>(new Map());
-  const batchRef = useRef<BatchRun | null>(null);
-  const [batchActive, setBatchActive] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{
-    current: number;
-    total: number;
-    errors: number;
-  } | null>(null);
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
     null,
   );
   const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
 
-  // ─── Auto-Translate toggle (persisted per doc) ───
-  const autoTranslateKey = `doclens.autoTranslate.${docId}`;
-  const [autoTranslate, setAutoTranslateRaw] = useState(
-    () => localStorage.getItem(`doclens.autoTranslate.${docId}`) === "1",
-  );
-  const autoTranslateRef = useRef(autoTranslate);
-  autoTranslateRef.current = autoTranslate;
-  const setAutoTranslate = (on: boolean) => {
-    setAutoTranslateRaw(on);
-    autoTranslateRef.current = on;
-    localStorage.setItem(autoTranslateKey, on ? "1" : "0");
-  };
   const mountedRef = useRef(true);
   /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
   const selectionOverridesRef = useRef<Map<number, string>>(new Map());
@@ -199,7 +164,6 @@ export function PageWorkstation({
       mountedRef.current = false;
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
-      if (batchRef.current) batchRef.current.cancelled = true;
     };
   }, []);
 
@@ -286,60 +250,28 @@ export function PageWorkstation({
     return true;
   }, []);
 
-  const ensureBatchKeyReady = useCallback(async (): Promise<boolean> => {
-    const key = getKey().trim();
-    if (!ensureKeyReady() || !key) return false;
-
-    const valid = await validateKey(key);
-    setKeyStatusState(getKeyStatus());
-    if (valid) return true;
-
-    const invalid = getKeyStatus() === "invalid";
-    const message = invalid
-      ? "The API key is invalid or expired. Batch translation stopped."
-      : "Could not verify the API key. Batch translation stopped.";
-    toast.error(message);
-    if (invalid) openApiKeyModal(message);
-    return false;
-  }, [ensureKeyReady]);
-
   /* ---------- Per-page execution ---------- */
 
   const runPage = useCallback(
-    async (pageNumber: number, batch?: BatchRun): Promise<string | undefined> => {
+    async (pageNumber: number): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
       if (!key) {
         ensureKeyReady();
         return;
       }
-      if (batch?.cancelled) return;
 
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
       if (!pageRec) return;
-      if (batch?.cancelled) return;
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       const eff = effective(currentGlobals, state.overrides);
       if (!eff.modelId) return;
-      if (batch?.cancelled) return;
 
       // One-shot selection override (from PDF text selection → "Translate")
       const selOverride = selectionOverridesRef.current.get(pageNumber);
       if (selOverride) selectionOverridesRef.current.delete(pageNumber);
       const effectiveText = selOverride ?? pageRec.text;
-
-      // Derive memory context from the previous page's persisted result
-      // (rather than accepting it as a caller-supplied parameter) so that
-      // concurrent callers targeting the same page (ensure-page-ready,
-      // continuous-play prefetch, background batch) can safely share one
-      // in-flight run via runPageOnce without one caller's context silently
-      // clobbering another's.
-      let previousExcerpt: string | undefined;
-      if (eff.memory) {
-        const prevRec = await getPageData(docId, pageNumber - 1);
-        if (prevRec?.pageAi?.result) previousExcerpt = memoryExcerpt(prevRec.pageAi.result);
-      }
 
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
@@ -353,7 +285,6 @@ export function PageWorkstation({
           temperature: eff.temperature,
           pageNumber,
           pageText: effectiveText,
-          previousExcerpt,
         });
       }
 
@@ -363,15 +294,10 @@ export function PageWorkstation({
         language: eff.language,
         style: eff.style,
         temperature: eff.temperature,
-        memory: eff.memory,
       });
 
       const ctrl = new AbortController();
       abortMap.current.set(pageNumber, ctrl);
-      if (batch?.cancelled) {
-        abortMap.current.delete(pageNumber);
-        return;
-      }
       if (mountedRef.current) {
         setRunningPages((s) => new Set(s).add(pageNumber));
         setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
@@ -399,10 +325,6 @@ export function PageWorkstation({
       const flushTimer = setInterval(flushUi, STREAM_FLUSH_MS);
 
       try {
-        if (batch?.cancelled) {
-          ctrl.abort();
-          return;
-        }
         await streamCompletion({
           key,
           payload,
@@ -467,15 +389,15 @@ export function PageWorkstation({
   );
 
   // Dedupes concurrent generation requests for the same page — the manual
-  // Run button, the background pre-translate batch, and the ensure-ready /
-  // continuous-play-prefetch triggers can all target the same page number;
-  // this makes them share one in-flight run instead of racing.
+  // Run button and the ensure-ready / continuous-play-prefetch triggers can
+  // both target the same page number; this makes them share one in-flight
+  // run instead of racing.
   const inFlightRuns = useRef<Map<number, Promise<string | undefined>>>(new Map());
   const runPageOnce = useCallback(
-    (pageNumber: number, batch?: BatchRun): Promise<string | undefined> => {
+    (pageNumber: number): Promise<string | undefined> => {
       const existing = inFlightRuns.current.get(pageNumber);
       if (existing) return existing;
-      const p = runPage(pageNumber, batch).finally(() => {
+      const p = runPage(pageNumber).finally(() => {
         inFlightRuns.current.delete(pageNumber);
       });
       inFlightRuns.current.set(pageNumber, p);
@@ -542,7 +464,6 @@ export function PageWorkstation({
             language: eff.language,
             style: eff.style,
             temperature: eff.temperature,
-            memory: eff.memory,
           });
           if (state.settingsHash === hash) {
             dispatchPageReady(docId, pageNumber, state.result);
@@ -563,147 +484,6 @@ export function PageWorkstation({
     window.addEventListener("doclens:ensure-page-ready", handler);
     return () => window.removeEventListener("doclens:ensure-page-ready", handler);
   }, [docId, runPageOnce, shouldShowExplainSetup]);
-
-  /**
-   * Background-translate the next N pages after the current `activePage`.
-   * Runs silently without changing the user's view. Skips already-done pages.
-   */
-  const runNextPages = async (count = AUTO_TRANSLATE_COUNT) => {
-    if (!(await ensureBatchKeyReady())) return;
-    const freshGlobals = await readEffectiveGlobals();
-    globalsRef.current = freshGlobals;
-    setGlobals(freshGlobals);
-
-    const startPage = activePage; // snapshot the user's current page
-
-    // Determine target pages: N+1, N+2, N+3 (clamped to pageCount)
-    const candidates: number[] = [];
-    for (let i = 1; i <= count; i++) {
-      const n = startPage + i;
-      if (n <= pageCount) candidates.push(n);
-    }
-
-    if (candidates.length === 0) {
-      toast.info("No more pages ahead to translate.", { duration: 3000 });
-      return;
-    }
-
-    // Check which pages actually need translating
-    const pagesToRun: number[] = [];
-    const skipped: number[] = [];
-    for (const n of candidates) {
-      const pageRec = await getPageData(docId, n);
-      if (!pageRec) {
-        skipped.push(n);
-        continue;
-      }
-      const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
-      const currentGlobals = globalsRef.current;
-      const eff = effective(currentGlobals, state.overrides);
-      const hash = computeSettingsHash({
-        modelId: eff.modelId,
-        mode: eff.mode,
-        language: eff.language,
-        style: eff.style,
-        temperature: eff.temperature,
-        memory: eff.memory,
-      });
-      const alreadyDone =
-        state.status === "done" && state.settingsHash === hash && !state.isCustom && !!state.result;
-      if (alreadyDone) skipped.push(n);
-      else pagesToRun.push(n);
-    }
-
-    if (pagesToRun.length === 0) {
-      const pageList = candidates.map((n) => `p${n}`).join(", ");
-      toast.info(`Pages ${pageList} are already translated.`, { duration: 3000 });
-      return;
-    }
-
-    if (skipped.length > 0) {
-      toast.info(
-        `Skipping ${skipped.length} already-translated page${skipped.length > 1 ? "s" : ""}.`,
-        { duration: 2500 },
-      );
-    }
-
-    const batch: BatchRun = { cancelled: false };
-    batchRef.current = batch;
-    setBatchActive(true);
-    const total = pagesToRun.length;
-    let errorCount = 0;
-    let processedCount = 0;
-
-    if (mountedRef.current) setBatchProgress({ current: 0, total, errors: 0 });
-
-    // Run sequentially in background — NO page navigation. Each call derives
-    // its own memory context from the previous page's persisted result
-    // (see runPage), so no manual excerpt threading is needed here.
-    for (const n of pagesToRun) {
-      if (batch.cancelled) break;
-
-      try {
-        await runPageOnce(n, batch);
-        if (batch.cancelled) break;
-      } catch {
-        errorCount++;
-      }
-      processedCount++;
-      if (mountedRef.current)
-        setBatchProgress({ current: processedCount, total, errors: errorCount });
-    }
-
-    if (batch.cancelled) {
-      // Don't toast on cancel when auto-translate just re-triggers
-    } else if (errorCount > 0) {
-      toast.warning(
-        `Background: ${processedCount - errorCount}/${total} done, ${errorCount} failed.`,
-        { duration: 4000 },
-      );
-    } else if (total > 0) {
-      toast.success(`Background: ${total} page${total > 1 ? "s" : ""} translated.`, {
-        duration: 2500,
-      });
-    }
-
-    if (mountedRef.current && batchRef.current === batch) {
-      setBatchActive(false);
-      setBatchProgress(null);
-    }
-    if (batchRef.current === batch) batchRef.current = null;
-  };
-
-  const handleRunNext = () => {
-    if (shouldShowExplainSetup()) {
-      setPendingExplainAction({ type: "next" });
-      setExplainSetupOpen(true);
-      return;
-    }
-    void runNextPages();
-  };
-
-  const toggleAutoTranslate = () => {
-    if (autoTranslate) {
-      // Turn OFF — cancel any running batch
-      setAutoTranslate(false);
-      if (batchRef.current) batchRef.current.cancelled = true;
-      abortMap.current.forEach((c) => c.abort());
-      if (mountedRef.current) {
-        setBatchActive(false);
-        setBatchProgress(null);
-      }
-    } else {
-      // Turn ON — first check setup, then start
-      if (shouldShowExplainSetup()) {
-        setPendingExplainAction({ type: "next" });
-        setExplainSetupOpen(true);
-        setAutoTranslate(true);
-        return;
-      }
-      setAutoTranslate(true);
-      void runNextPages();
-    }
-  };
 
   // ─── Auto-translate page 1 when doc is loaded and analyzed ───
   const autoTranslatedPage1Ref = useRef<Record<string, boolean>>({});
@@ -727,24 +507,6 @@ export function PageWorkstation({
     }
   }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPageOnce]);
 
-  // ─── Auto-trigger on page change ───
-  const prevAutoPage = useRef(activePage);
-  useEffect(() => {
-    if (prevAutoPage.current === activePage) return;
-    prevAutoPage.current = activePage;
-    if (!autoTranslateRef.current) return;
-    if (batchRef.current) {
-      batchRef.current.cancelled = true;
-    }
-    // Small delay so the current batch cancellation settles
-    const timer = setTimeout(() => {
-      if (!mountedRef.current || !autoTranslateRef.current) return;
-      void runNextPages();
-    }, 300);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePage]);
-
   const handleExplainSetupConfirm = async (settings: {
     language: string;
     style: ExplanationStyle;
@@ -766,21 +528,10 @@ export function PageWorkstation({
 
     const action = pendingExplainAction;
     setPendingExplainAction(null);
-    if (action?.type === "next") void runNextPages();
-    else if (action?.type === "page") void runPageOnce(action.pageNumber);
+    if (action?.type === "page") void runPageOnce(action.pageNumber);
     else if (action?.type === "page-ensure") {
       const result = await runPageOnce(action.pageNumber);
       if (result) dispatchPageReady(docId, action.pageNumber, result);
-    }
-  };
-
-  const cancelBatch = () => {
-    setAutoTranslate(false);
-    if (batchRef.current) batchRef.current.cancelled = true;
-    abortMap.current.forEach((c) => c.abort());
-    if (mountedRef.current) {
-      setBatchActive(false);
-      setBatchProgress(null);
     }
   };
 
@@ -874,64 +625,6 @@ export function PageWorkstation({
             )}
           </span>
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* Auto-Translate toggle */}
-          <button
-            onClick={toggleAutoTranslate}
-            className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 ${
-              autoTranslate
-                ? "bg-primary/15 text-primary ring-1 ring-primary/30"
-                : "bg-surface-2/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-            }`}
-            title={
-              autoTranslate
-                ? "Auto-translate is ON — pages ahead are translated in the background as you read"
-                : "Turn on auto-translate to pre-translate upcoming pages"
-            }
-          >
-            {/* Toggle pill */}
-            <span
-              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${
-                autoTranslate ? "bg-primary" : "bg-muted-foreground/30"
-              }`}
-            >
-              <span
-                className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                  autoTranslate ? "translate-x-3.5" : "translate-x-0.5"
-                }`}
-              />
-            </span>
-            Auto-Translate
-          </button>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
-                aria-label="Auto-Translate Information"
-              >
-                <Info className="h-3.5 w-3.5" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="max-w-[280px] p-3 text-xs leading-relaxed border border-border bg-popover text-popover-foreground shadow-md rounded-xl">
-              <div className="space-y-1.5">
-                <h4 className="font-bold text-[13px] text-primary flex items-center gap-1">
-                  ⚡ Auto-Translate Pipeline
-                </h4>
-                <p className="text-muted-foreground">
-                  Automatically translates the next 3 pages in the background as you read.
-                </p>
-                <p className="font-semibold text-foreground">Why it's useful:</p>
-                <p className="text-muted-foreground text-[11px]">
-                  Pre-translating upcoming pages in the background ensures a zero-latency, fluid
-                  reading experience when you click Next.
-                </p>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
       </div>
 
       {/* ─── Single page card ─── */}
@@ -958,33 +651,6 @@ export function PageWorkstation({
           onRun={() => runPageWithSetup(activePage)}
           onCancel={() => cancelPage(activePage)}
         />
-
-        {/* ─── Floating background-progress pill ─── */}
-        {batchProgress && (
-          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border border-primary/20 bg-surface/90 px-3.5 py-2 shadow-lg backdrop-blur-md">
-            <span className="inline-block h-3 w-3 rounded-full border-2 border-primary border-t-transparent spin-slow" />
-            <span className="text-xs font-medium text-foreground">
-              Pre-translating {batchProgress.current}/{batchProgress.total}
-            </span>
-            {batchProgress.errors > 0 && (
-              <span className="text-xs text-destructive">· {batchProgress.errors} err</span>
-            )}
-            <button
-              onClick={cancelBatch}
-              className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-xs text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
-              title="Stop auto-translate"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        {/* Subtle auto-translate ON indicator when idle */}
-        {autoTranslate && !batchProgress && (
-          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 rounded-full border border-primary/10 bg-surface/80 px-3 py-1.5 shadow-md backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            <span className="text-[10px] font-medium text-muted-foreground">Auto-translate on</span>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1414,15 +1080,6 @@ function OverrideControls({
             onChange={(e) => onSetOverride({ temperature: parseFloat(e.target.value) })}
             className="mt-1 w-full accent-primary"
           />
-        </label>
-        <label className="flex items-center gap-2 self-end text-[12px] text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={overrides?.memory ?? eff.memory}
-            onChange={(e) => onSetOverride({ memory: e.target.checked })}
-            className="h-3.5 w-3.5 rounded accent-primary"
-          />
-          Memory
         </label>
       </div>
       {hasOverrides && (

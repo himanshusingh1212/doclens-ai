@@ -16,8 +16,6 @@ const LANG_LS = "doclens.outputLanguage";
 const MODE_LS = "doclens.mode";
 const STYLE_LS = "doclens.style";
 const TEMP_LS = "doclens.temperature";
-const MEM_LS = "doclens.memory";
-const SEQ_LS = "doclens.sequential";
 const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
 const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
 export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
@@ -178,22 +176,6 @@ export function getTemperature(): number {
 }
 export function setTemperature(t: number) {
   localStorage.setItem(TEMP_LS, String(t));
-}
-
-export function getMemory(): boolean {
-  if (typeof window === "undefined") return true;
-  return localStorage.getItem(MEM_LS) !== "false";
-}
-export function setMemory(b: boolean) {
-  localStorage.setItem(MEM_LS, b ? "true" : "false");
-}
-
-export function getSequential(): boolean {
-  if (typeof window === "undefined") return true;
-  return localStorage.getItem(SEQ_LS) !== "false";
-}
-export function setSequential(b: boolean) {
-  localStorage.setItem(SEQ_LS, b ? "true" : "false");
 }
 
 const HEADERS_BASE = {
@@ -560,14 +542,6 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
   }
 }
 
-/** Trailing excerpt from previous page used as memory in next request. */
-export function memoryExcerpt(prev: string | undefined, maxChars = 600): string {
-  if (!prev) return "";
-  const trimmed = prev.trim();
-  if (trimmed.length <= maxChars) return trimmed;
-  return "…" + trimmed.slice(-maxChars);
-}
-
 /**
  * Negative-generation rules embedded directly into the system prompt so the
  * model produces clean, TTS-friendly plain text natively (no post-filter).
@@ -710,8 +684,6 @@ export interface BuildPagePayloadInput {
   temperature: number;
   pageNumber: number;
   pageText: string;
-  /** Optional trailing excerpt from previous page's result. */
-  previousExcerpt?: string;
 }
 
 export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
@@ -731,10 +703,7 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
     "These restrictions must influence generation natively — do not rely on post-processing.",
   ].join("\n\n");
 
-  const memoryBlock = i.previousExcerpt
-    ? `\n\n[Context from end of previous page — for continuity only, do not re-translate or re-process]:\n${i.previousExcerpt}\n`
-    : "";
-  const user = `--- Page ${i.pageNumber} ---\n${i.pageText}${memoryBlock}`;
+  const user = `--- Page ${i.pageNumber} ---\n${i.pageText}`;
 
   return {
     model: i.modelId,

@@ -162,8 +162,8 @@ export function RightPanel({
   // that content needs to be generated first.
   //
   // `activePageData` is refetched on every aiSummary change, which fires
-  // repeatedly while Auto-Translate is streaming a page's AI text — without
-  // the guard below, each of those refetches would re-run this effect and
+  // repeatedly while a page's AI text is streaming in — without the guard
+  // below, each of those refetches would re-run this effect and
   // call play() again for the same page (activePageNumber only catches up to
   // activePage after React re-renders, which isn't guaranteed to happen
   // before the next streaming update lands), resynthesizing/replaying

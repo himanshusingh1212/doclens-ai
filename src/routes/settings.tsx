@@ -5,19 +5,15 @@ import {
   fetchModels,
   getEffectiveSelectedModel,
   getKeyStatus,
-  getMemory,
   getMode,
   getOutputLanguage,
   getSelectedModel,
-  getSequential,
   getStyle,
   getTemperature,
   MODE_INSTRUCTIONS,
-  setMemory,
   setMode as saveMode,
   setOutputLanguage,
   setSelectedModel,
-  setSequential,
   setStyle as saveStyle,
   setTemperature,
   validateKey,
@@ -87,8 +83,6 @@ function SettingsPage() {
   const [mode, setModeState] = useState<GlobalMode>("explain");
   const [style, setStyleState] = useState<ExplanationStyle>("Standard");
   const [temperature, setTemp] = useState(0.3);
-  const [memory, setMemoryState] = useState(true);
-  const [sequential, setSequentialState] = useState(true);
   const [storageStats, setStorageStats] = useState<{
     usage: string;
     quota: string;
@@ -195,8 +189,6 @@ function SettingsPage() {
     setModeState(getMode());
     setStyleState(getStyle());
     setTemp(getTemperature());
-    setMemoryState(getMemory());
-    setSequentialState(getSequential());
     const savedKey = getCustomKey();
     setCustomKeyInput(savedKey);
     void handleValidate(savedKey);
@@ -382,49 +374,6 @@ function SettingsPage() {
                 <span>Creative</span>
               </div>
             </div>
-          </div>
-
-          {/* Memory & Sequential toggles */}
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
-              <span>
-                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Memory
-                </span>
-                <span className="text-sm text-foreground/80">
-                  Pass trailing excerpt of previous page into next request
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                checked={memory}
-                onChange={(e) => {
-                  setMemoryState(e.target.checked);
-                  setMemory(e.target.checked);
-                }}
-                className="h-4 w-4 accent-primary"
-              />
-            </label>
-
-            <label className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
-              <span>
-                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Sequential Execution
-                </span>
-                <span className="text-sm text-foreground/80">
-                  Run All Pages processes one at a time, in order
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                checked={sequential}
-                onChange={(e) => {
-                  setSequentialState(e.target.checked);
-                  setSequential(e.target.checked);
-                }}
-                className="h-4 w-4 accent-primary"
-              />
-            </label>
           </div>
         </section>
 
